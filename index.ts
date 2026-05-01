@@ -1,4 +1,12 @@
+import 'react-native-gesture-handler';
+import 'react-native-reanimated';
+import { LogBox } from 'react-native';
 import { registerRootComponent } from 'expo';
+
+LogBox.ignoreLogs([
+  // Emitted by some dependencies still importing SafeAreaView from react-native.
+  'SafeAreaView has been deprecated',
+]);
 
 import App from './App';
 

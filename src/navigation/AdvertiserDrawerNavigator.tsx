@@ -1,0 +1,94 @@
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
+import type { DrawerContentComponentProps } from '@react-navigation/drawer';
+import type { NavigatorScreenParams } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AdvertiserBottomTabs, type AdvertiserBottomTabParamList } from './AdvertiserBottomTabs';
+import type { SeekerDiscoverStackParamList } from '../screens/discover/SeekerDiscoverStack';
+import { drawerGradient } from '../theme/gradients';
+import { spacing } from '../theme/spacing';
+import {
+  DrawerCollapsibleSection,
+  DrawerGradientLink,
+  drawerBrandStyles,
+  drawerScrollPadding,
+} from '../components/drawer/DrawerCollapsibleSection';
+
+export type AdvertiserDrawerParamList = {
+  Main: NavigatorScreenParams<AdvertiserBottomTabParamList>;
+};
+
+const Drawer = createDrawerNavigator<AdvertiserDrawerParamList>();
+
+function AdvertiserDrawerContent(props: DrawerContentComponentProps) {
+  const { navigation } = props;
+  const insets = useSafeAreaInsets();
+
+  const goMain = (screen: keyof AdvertiserBottomTabParamList) => {
+    navigation.dispatch(CommonActions.navigate({ name: 'Main', params: { screen } }));
+    navigation.closeDrawer();
+  };
+
+  const goDiscover = (screen: keyof SeekerDiscoverStackParamList) => {
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'Discover', params: { screen } },
+      })
+    );
+    navigation.closeDrawer();
+  };
+
+  return (
+    <LinearGradient colors={[...drawerGradient]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.gradient}>
+      <DrawerContentScrollView
+        {...props}
+        contentContainerStyle={[drawerScrollPadding, { paddingTop: insets.top + spacing.md }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={drawerBrandStyles.brand}>ImmigrationKnowHow</Text>
+        <Text style={drawerBrandStyles.brandSub}>Advertiser</Text>
+
+        <DrawerCollapsibleSection title="Account" defaultOpen>
+          <DrawerGradientLink icon="compass-outline" label="Discover" onPress={() => goMain('Discover')} indent />
+          <DrawerGradientLink icon="person-circle-outline" label="Profile" onPress={() => goMain('Profile')} indent />
+        </DrawerCollapsibleSection>
+
+        <DrawerCollapsibleSection title="Discover" defaultOpen>
+          <DrawerGradientLink icon="planet-outline" label="Discover home" onPress={() => goDiscover('DiscoverHome')} indent />
+          <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
+          <DrawerGradientLink icon="sparkles-outline" label="AI Assistant" onPress={() => goDiscover('AiAssistant')} indent />
+          <DrawerGradientLink icon="library-outline" label="Library" onPress={() => goDiscover('Library')} indent />
+          <DrawerGradientLink icon="play-circle-outline" label="Videos" onPress={() => goDiscover('Videos')} indent />
+          <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goDiscover('Community')} indent />
+          <DrawerGradientLink icon="megaphone-outline" label="Sponsored ads" onPress={() => goDiscover('Ads')} indent />
+          <DrawerGradientLink icon="star-outline" label="My reviews" onPress={() => goDiscover('Reviews')} indent />
+        </DrawerCollapsibleSection>
+      </DrawerContentScrollView>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  gradient: { flex: 1 },
+});
+
+export function AdvertiserDrawerNavigator() {
+  return (
+    <Drawer.Navigator
+      id="AdvertiserRootDrawer"
+      drawerContent={(p) => <AdvertiserDrawerContent {...p} />}
+      screenOptions={{
+        headerShown: false,
+        drawerType: 'slide',
+        drawerStyle: { width: 320, backgroundColor: 'transparent' },
+        overlayColor: 'rgba(15,23,42,0.45)',
+      }}
+    >
+      <Drawer.Screen name="Main" component={AdvertiserBottomTabs} options={{ title: 'Home' }} />
+    </Drawer.Navigator>
+  );
+}
