@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -11,8 +13,10 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppScreen } from '../../components/AppScreen';
 import { colors } from '../../theme/colors';
+import { providerHeroGradient } from '../../theme/gradients';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as providerDashboardApi from '../../api/providerDashboardApi';
@@ -27,9 +31,170 @@ import {
   leadStatusStyle,
 } from '../../utils/providerUi';
 
+const styles = StyleSheet.create({
+  screenCenter: {
+    padding: spacing.xl,
+    justifyContent: 'center',
+  },
+  screenPad: {
+    padding: spacing.xl,
+  },
+  mainScreen: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xs,
+    paddingBottom: 0,
+  },
+  scrollContent: {
+    paddingBottom: spacing['3xl'],
+  },
+  hero: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.45)',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  heroGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  heroContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  heroKicker: {
+    fontSize: typography.fontSize.xs,
+    color: '#bfdbfe',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  heroTitle: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.inverse,
+  },
+  heroMeta: {
+    marginTop: spacing.xs,
+    color: '#dbeafe',
+  },
+  heroActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    flexWrap: 'wrap',
+  },
+  subBanner: {
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  subBannerText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    lineHeight: 20,
+  },
+  subBannerLink: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  sectionTitle: {
+    marginTop: spacing['2xl'],
+    marginBottom: spacing.md,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sectionTitleFirst: {
+    marginTop: 0,
+    marginBottom: spacing.md,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  empty: {
+    color: colors.text.secondary,
+    paddingVertical: spacing.md,
+  },
+  leadRow: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  leadName: {
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  leadService: {
+    marginTop: spacing.xs,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+  },
+  leadTime: {
+    marginTop: spacing.xs,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
+  },
+  reviewRow: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  reviewTitle: {
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  reviewBody: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+  },
+  statCard: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 148,
+    flexGrow: 1,
+  },
+  statLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.muted,
+  },
+  statValue: {
+    marginTop: spacing.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xl,
+  },
+  statSublabel: {
+    marginTop: 4,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  statChip: {
+    marginTop: spacing.sm,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+});
+
 type Nav = CompositeNavigationProp<
-  NativeStackNavigationProp<ProviderDashboardStackParamList, 'ProviderDashboardHome'>,
-  BottomTabNavigationProp<ProviderTabParamList>
+  BottomTabNavigationProp<ProviderTabParamList>,
+  NativeStackNavigationProp<ProviderDashboardStackParamList, 'ProviderDashboardHome'>
 >;
 
 export function ProviderDashboardScreen() {
@@ -37,8 +202,8 @@ export function ProviderDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dash, setDash] = useState<providerDashboardApi.ProviderDashboardData | null>(null);
-  const unreadNotifications = dash?.unread_notifications_count ?? 0;
+  const [dashboard, setDashboard] = useState<providerDashboardApi.ProviderDashboardData | null>(null);
+  const unreadNotifications = dashboard?.unread_notifications_count ?? 0;
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -51,7 +216,7 @@ export function ProviderDashboardScreen() {
       setError(res.message);
       return;
     }
-    setDash(res.data.dashboard);
+    setDashboard(res.data.dashboard);
   };
 
   useFocusEffect(
@@ -65,17 +230,17 @@ export function ProviderDashboardScreen() {
     navigation.setParams?.({ unreadNotificationsCount: unreadNotifications });
   }, [navigation, unreadNotifications]);
 
-  if (loading && !dash) {
+  if (loading && !dashboard) {
     return (
-      <AppScreen style={{ padding: spacing.xl, justifyContent: 'center' }}>
+      <AppScreen style={styles.screenCenter}>
         <ActivityIndicator color={colors.primary[600]} />
       </AppScreen>
     );
   }
 
-  if (error && !dash) {
+  if (error && !dashboard) {
     return (
-      <AppScreen style={{ padding: spacing.xl }}>
+      <AppScreen style={styles.screenPad}>
         <Text style={{ color: colors.danger }}>{error}</Text>
         <Pressable onPress={() => void load(false)} style={{ marginTop: spacing.lg }}>
           <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>Retry</Text>
@@ -84,51 +249,48 @@ export function ProviderDashboardScreen() {
     );
   }
 
-  const stats = dash?.stats;
-  const provider = dash?.provider;
-  const recentLeads = dash?.recent_leads ?? [];
-  const recentReviews = dash?.recent_reviews ?? [];
+  const stats = dashboard?.stats;
+  const provider = dashboard?.provider;
+  const recentLeads = dashboard?.recent_leads ?? [];
+  const recentReviews = dashboard?.recent_reviews ?? [];
   const bgStatus = provider?.background_check_status ?? undefined;
   const showBgBanner = bgStatus !== 'clear';
 
   return (
-    <AppScreen variant="gradient" style={{ padding: spacing.xl, paddingBottom: 0 }}>
+    <AppScreen variant="gradient" style={styles.mainScreen}>
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => void load(true)}
+            tintColor={Platform.OS === 'ios' ? colors.primary[600] : undefined}
+            colors={Platform.OS === 'android' ? [colors.primary[600]] : undefined}
+          />
+        }
         showsVerticalScrollIndicator={false}
-        style={{ marginTop: spacing.sm }}
+        contentContainerStyle={styles.scrollContent}
       >
-        <View
-          style={{
-            borderRadius: 20,
-            borderWidth: 1,
-            borderColor: '#1e3a8a',
-            backgroundColor: '#0f172a',
-            padding: spacing.xl,
-          }}
-        >
-          <Text style={{ fontSize: typography.fontSize.xs, color: '#bfdbfe', textTransform: 'uppercase', letterSpacing: 1.2 }}>
-            Service provider
-          </Text>
-          <Text
-            style={{
-              marginTop: spacing.xs,
-              fontSize: typography.fontSize['2xl'],
-              fontWeight: typography.fontWeight.bold,
-              color: colors.text.inverse,
-            }}
-          >
-            {provider?.business_name?.trim() || 'Dashboard'}
-          </Text>
-          {!!provider?.average_rating && (
-            <Text style={{ marginTop: spacing.xs, color: '#dbeafe' }}>
-              {Number(provider.average_rating).toFixed(1)} rating · {provider.total_reviews ?? 0} reviews
-            </Text>
-          )}
-          <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-            <QuickAction label="Leads" onPress={() => navigation.navigate('Leads')} tone="blue" />
-            <QuickAction label="Messages" onPress={() => navigation.navigate('Messages')} tone="violet" />
-            <QuickAction label="Profile" onPress={() => navigation.navigate('Profile')} tone="emerald" />
+        <View style={styles.hero}>
+          <LinearGradient
+            pointerEvents="none"
+            colors={[...providerHeroGradient]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.heroGradient}
+          />
+          <View style={styles.heroContent}>
+            <Text style={styles.heroKicker}>Service provider</Text>
+            <Text style={styles.heroTitle}>{provider?.business_name?.trim() || 'Dashboard'}</Text>
+            {!!provider?.average_rating && (
+              <Text style={styles.heroMeta}>
+                {Number(provider.average_rating).toFixed(1)} rating · {provider.total_reviews ?? 0} reviews
+              </Text>
+            )}
+            <View style={styles.heroActions}>
+              <QuickAction label="Leads" onPress={() => navigation.navigate('Leads')} tone="blue" />
+              <QuickAction label="Messages" onPress={() => navigation.navigate('Messages')} tone="violet" />
+              <QuickAction label="Profile" onPress={() => navigation.navigate('Profile')} tone="emerald" />
+            </View>
           </View>
         </View>
 
@@ -160,7 +322,7 @@ export function ProviderDashboardScreen() {
 
         {stats && (
           <View style={{ marginTop: spacing['2xl'] }}>
-            <SectionTitle title="Overview" />
+            <SectionTitle title="Overview" first />
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
               <StatCard
                 label="Total leads"
@@ -188,22 +350,13 @@ export function ProviderDashboardScreen() {
           </View>
         )}
 
-        {!dash?.subscription_checkout_configured && (
-          <View
-            style={{
-              marginTop: spacing.lg,
-              padding: spacing.lg,
-              borderRadius: 12,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Text style={{ color: colors.text.secondary, fontSize: typography.fontSize.sm, lineHeight: 20 }}>
+        {!dashboard?.subscription_checkout_configured && (
+          <View style={styles.subBanner}>
+            <Text style={styles.subBannerText}>
               Subscription billing is not fully configured. You can review your plan in the app or complete setup in the web portal.
             </Text>
             <Pressable onPress={() => navigation.navigate('ProviderSubscription')} style={{ marginTop: spacing.md }}>
-              <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>Plan & subscription</Text>
+              <Text style={styles.subBannerLink}>Plan & subscription</Text>
             </Pressable>
           </View>
         )}
@@ -211,7 +364,7 @@ export function ProviderDashboardScreen() {
         <SectionTitle title="Recent leads" />
         <Card>
           {recentLeads.length === 0 ? (
-            <Text style={{ color: colors.text.secondary }}>No recent leads yet.</Text>
+            <Text style={styles.empty}>No recent leads yet.</Text>
           ) : (
             recentLeads.map((lead) => {
               const st = leadStatusStyle(lead.status);
@@ -219,18 +372,12 @@ export function ProviderDashboardScreen() {
                 <Pressable
                   key={lead.uuid}
                   onPress={() =>
-                    navigation.navigate('Leads', { screen: 'LeadDetail', params: { uuid: lead.uuid } } as never)
+                    navigation.navigate('Leads', { screen: 'LeadDetail', params: { uuid: lead.uuid } })
                   }
-                  style={{
-                    paddingVertical: spacing.md,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                  }}
+                  style={styles.leadRow}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md }}>
-                    <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary, flex: 1 }}>
-                      {fullName(lead.user)}
-                    </Text>
+                    <Text style={styles.leadName}>{fullName(lead.user)}</Text>
                     {!!lead.status && (
                       <View
                         style={{
@@ -249,14 +396,10 @@ export function ProviderDashboardScreen() {
                     )}
                   </View>
                   {!!lead.service_type && (
-                    <Text style={{ marginTop: spacing.xs, color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
-                      {lead.service_type}
-                    </Text>
+                    <Text style={styles.leadService}>{lead.service_type}</Text>
                   )}
                   {!!lead.created_at && (
-                    <Text style={{ marginTop: spacing.xs, color: colors.text.muted, fontSize: typography.fontSize.xs }}>
-                      {formatTimeAgo(lead.created_at)}
-                    </Text>
+                    <Text style={styles.leadTime}>{formatTimeAgo(lead.created_at)}</Text>
                   )}
                 </Pressable>
               );
@@ -267,22 +410,15 @@ export function ProviderDashboardScreen() {
         <SectionTitle title="Recent reviews" />
         <Card>
           {recentReviews.length === 0 ? (
-            <Text style={{ color: colors.text.secondary }}>No reviews yet.</Text>
+            <Text style={styles.empty}>No reviews yet.</Text>
           ) : (
             recentReviews.map((rev, idx) => (
-              <View
-                key={rev.id ?? idx}
-                style={{
-                  paddingVertical: spacing.md,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border,
-                }}
-              >
-                <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>
+              <View key={rev.id ?? idx} style={styles.reviewRow}>
+                <Text style={styles.reviewTitle}>
                   {fullName(rev.user)} · {typeof rev.rating === 'number' ? `${rev.rating}/5` : '—'}
                 </Text>
                 {!!rev.comment?.trim() && (
-                  <Text style={{ marginTop: spacing.sm, color: colors.text.secondary }} numberOfLines={4}>
+                  <Text style={styles.reviewBody} numberOfLines={4}>
                     {rev.comment}
                   </Text>
                 )}
@@ -297,37 +433,12 @@ export function ProviderDashboardScreen() {
   );
 }
 
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <Text
-      style={{
-        marginTop: spacing['2xl'],
-        marginBottom: spacing.md,
-        fontSize: typography.fontSize.lg,
-        fontWeight: typography.fontWeight.semibold,
-        color: colors.text.primary,
-      }}
-    >
-      {title}
-    </Text>
-  );
+function SectionTitle({ title, first }: { title: string; first?: boolean }) {
+  return <Text style={first ? styles.sectionTitleFirst : styles.sectionTitle}>{title}</Text>;
 }
 
 function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <View
-      style={{
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surfaceElevated,
-        paddingHorizontal: spacing.lg,
-        marginBottom: spacing.md,
-      }}
-    >
-      {children}
-    </View>
-  );
+  return <View style={styles.card}>{children}</View>;
 }
 
 function QuickAction({
@@ -374,33 +485,19 @@ function StatCard({
   trendUp?: boolean;
 }) {
   return (
-    <View
-      style={{
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.lg,
-        borderRadius: 12,
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        minWidth: 148,
-        flexGrow: 1,
-      }}
-    >
-      <Text style={{ fontSize: typography.fontSize.xs, color: colors.text.muted }}>{label}</Text>
-      <Text style={{ marginTop: spacing.xs, fontWeight: typography.fontWeight.bold, color: colors.text.primary, fontSize: typography.fontSize.xl }}>
-        {value}
-      </Text>
-      {!!sublabel && (
-        <Text style={{ marginTop: 4, fontSize: typography.fontSize.xs, color: colors.text.secondary }}>{sublabel}</Text>
-      )}
+    <View style={styles.statCard}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value}</Text>
+      {!!sublabel && <Text style={styles.statSublabel}>{sublabel}</Text>}
       {!!chip && (
         <Text
-          style={{
-            marginTop: spacing.sm,
-            fontSize: typography.fontSize.xs,
-            color: trendUp === false ? colors.danger : trendUp === true ? '#047857' : colors.text.muted,
-            fontWeight: typography.fontWeight.medium,
-          }}
+          style={[
+            styles.statChip,
+            {
+              color:
+                trendUp === false ? colors.danger : trendUp === true ? '#047857' : colors.text.muted,
+            },
+          ]}
         >
           {chip}
         </Text>

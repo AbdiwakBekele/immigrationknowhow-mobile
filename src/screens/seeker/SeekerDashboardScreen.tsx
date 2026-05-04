@@ -9,11 +9,21 @@ import {
   View,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
+import type { SeekerBottomTabParamList } from '../../navigation/SeekerBottomTabs';
+import type { SeekerDashboardStackParamList } from './SeekerDashboardStack';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as seekerDashboardApi from '../../api/seekerDashboardApi';
+
+type SeekerDashboardNav = CompositeNavigationProp<
+  BottomTabNavigationProp<SeekerBottomTabParamList>,
+  NativeStackNavigationProp<SeekerDashboardStackParamList, 'SeekerDashboardHome'>
+>;
 
 type LeadRow = {
   uuid: string;
@@ -23,12 +33,13 @@ type LeadRow = {
 };
 
 export function SeekerDashboardScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<SeekerDashboardNav>();
 
   const openProviderDetail = (slug: string) => {
-    // Parent of this stack is the bottom tabs; navigate into Discover → Providers flow.
-    // @ts-expect-error: app-defined route names
-    navigation.getParent()?.navigate('Discover', { screen: 'Providers', params: { screen: 'ProviderDetail', params: { slug } } });
+    navigation.navigate('Discover', {
+      screen: 'Providers',
+      params: { screen: 'ProviderDetail', params: { slug } },
+    });
   };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

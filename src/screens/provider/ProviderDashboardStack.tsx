@@ -7,6 +7,7 @@ import { ProviderSubscriptionsScreen } from './ProviderSubscriptionsScreen';
 import { AppHeader } from '../../components/navigation/AppHeader';
 import { ProviderAnalyticsScreen } from './ProviderAnalyticsScreen';
 import { ProviderBackgroundCheckScreen } from './ProviderBackgroundCheckScreen';
+import { ProviderReviewsScreen } from './ProviderReviewsScreen';
 
 export type ProviderDashboardStackParamList = {
   ProviderDashboardHome: undefined;
@@ -15,6 +16,7 @@ export type ProviderDashboardStackParamList = {
   ProviderSubscription: undefined;
   ProviderAnalytics: undefined;
   ProviderBackgroundCheck: undefined;
+  ProviderReviews: undefined;
   Notifications: undefined;
 };
 
@@ -28,6 +30,7 @@ export function ProviderDashboardStack() {
       <Stack.Screen name="ProviderSubscription" component={ProviderSubscriptionsScreen} options={{ title: 'Plan & subscription' }} />
       <Stack.Screen name="ProviderAnalytics" component={ProviderAnalyticsScreen} options={{ title: 'Analytics' }} />
       <Stack.Screen name="ProviderBackgroundCheck" component={ProviderBackgroundCheckScreen} options={{ title: 'Background check' }} />
+      <Stack.Screen name="ProviderReviews" component={ProviderReviewsScreen} options={{ title: 'Reviews' }} />
       <Stack.Screen
         name="ProviderNotifications"
         component={ProviderNotificationsScreen}

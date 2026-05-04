@@ -1,11 +1,13 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { NativeStackHeaderProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DrawerMenuButton } from '../DrawerMenuButton';
 import { NotificationHeaderButton } from '../NotificationHeaderButton';
 import { colors } from '../../theme/colors';
+import { drawerGradient } from '../../theme/gradients';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 
@@ -16,8 +18,14 @@ export type AppHeaderProps = NativeStackHeaderProps & {
   fallbackBack?: () => void;
 };
 
+function headerCanvasVariant(options: NativeStackHeaderProps['options']): 'default' | 'drawer' {
+  const v = (options as { appHeaderVariant?: 'default' | 'drawer' }).appHeaderVariant;
+  return v === 'drawer' ? 'drawer' : 'default';
+}
+
 export function AppHeader({ fallbackBack, ...props }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
+  const canvas = headerCanvasVariant(props.options);
   const title = props.options.title ?? props.route.name;
   const canGoBack = props.navigation.canGoBack();
   const showBack = canGoBack || !!fallbackBack;
@@ -28,8 +36,26 @@ export function AppHeader({ fallbackBack, ...props }: AppHeaderProps) {
         Number((props.route.params as any).unreadNotificationsCount) || 0
       : 0;
 
+  const iconColor = canvas === 'drawer' ? '#f8fafc' : colors.text.primary;
+  const titleStyle = canvas === 'drawer' ? styles.titleDrawer : styles.title;
+
   return (
-    <View style={[styles.wrap, { paddingTop: insets.top, height: HEADER_BAR_HEIGHT + insets.top }]}>
+    <View
+      style={[
+        styles.wrap,
+        canvas === 'drawer' && styles.wrapDrawer,
+        { paddingTop: insets.top, height: HEADER_BAR_HEIGHT + insets.top },
+      ]}
+    >
+      {canvas === 'drawer' ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={[...drawerGradient]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      ) : null}
       <View style={styles.left}>
         {showBack ? (
           <Pressable
@@ -42,23 +68,24 @@ export function AppHeader({ fallbackBack, ...props }: AppHeaderProps) {
             hitSlop={12}
             style={styles.backHit}
           >
-            <Ionicons name="chevron-back" size={26} color={colors.text.primary} />
+            <Ionicons name="chevron-back" size={26} color={iconColor} />
           </Pressable>
         ) : null}
-        <DrawerMenuButton iconColor={colors.text.primary} />
-        <Text style={styles.title} numberOfLines={1}>
+        <DrawerMenuButton iconColor={iconColor} />
+        <Text style={titleStyle} numberOfLines={1}>
           {title}
         </Text>
       </View>
 
       <NotificationHeaderButton
         unreadCount={unreadCount}
+        iconColor={iconColor}
+        badgeBorderColor={canvas === 'drawer' ? '#0f172a' : colors.background}
         onPress={() => {
           // Keep navigation local to the current stack. If a screen named "Notifications"
           // exists in that stack, it will open; otherwise, this is a no-op.
           try {
-            // @ts-expect-error: route name is app-defined per-stack
-            props.navigation.navigate('Notifications');
+            props.navigation.navigate('Notifications' as never);
           } catch {
             // ignore
           }
@@ -80,6 +107,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
@@ -92,9 +120,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingRight: spacing.sm,
   },
+  wrapDrawer: {
+    backgroundColor: 'transparent',
+    borderBottomColor: 'rgba(59,130,246,0.28)',
+  },
   title: {
     flex: 1,
     color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    letterSpacing: -0.2,
+  },
+  titleDrawer: {
+    flex: 1,
+    color: '#f8fafc',
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     letterSpacing: -0.2,
