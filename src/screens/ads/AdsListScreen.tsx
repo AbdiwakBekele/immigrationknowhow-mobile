@@ -10,16 +10,18 @@ import * as adsApi from '../../api/adsApi';
 export function AdsListScreen() {
   const [loading, setLoading] = useState(true);
   const [ads, setAds] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<any | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [cta, setCta] = useState('https://');
 
   const load = async () => {
     setLoading(true);
-    const res = await adsApi.listAds();
+    const [res, ares] = await Promise.all([adsApi.listAds(), adsApi.getAdsAnalytics()]);
     setLoading(false);
     if (!res.success) return;
     setAds(res.data?.ads ?? []);
+    if (ares.success) setAnalytics(ares.data ?? null);
   };
 
   useFocusEffect(
@@ -46,7 +48,14 @@ export function AdsListScreen() {
 
   return (
     <AppScreen style={{ padding: spacing.xl }}>
-      <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>Sponsored ads</Text>
+      <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>My Ads</Text>
+
+      <View style={{ marginTop: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: 14 }}>
+        <Text style={{ color: colors.text.secondary }}>
+          Views: {analytics?.summary?.views ?? '—'} · Clicks: {analytics?.summary?.clicks ?? '—'} · CTR: {analytics?.summary?.ctr ?? '—'}%
+        </Text>
+      </View>
+
       <Text style={{ marginTop: spacing.sm, fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>New ad</Text>
       <TextInput placeholder="Title" value={title} onChangeText={setTitle} style={inp()} />
       <TextInput placeholder="Description" value={description} onChangeText={setDescription} multiline style={[inp(), { minHeight: 80 }]} />
@@ -65,6 +74,9 @@ export function AdsListScreen() {
             <View style={{ padding: spacing.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: 16 }}>
               <Text style={{ fontWeight: typography.fontWeight.semibold }}>{item.title}</Text>
               <Text style={{ marginTop: spacing.xs, color: colors.text.muted }}>{item.status}</Text>
+              <Text style={{ marginTop: spacing.xs, color: colors.text.secondary }}>
+                Views: {item.analytics?.views ?? '—'} · Clicks: {item.analytics?.clicks ?? '—'} · CTR: {item.analytics?.ctr ?? '—'}%
+              </Text>
               {item.status === 'pending_payment' && (
                 <Pressable onPress={() => void pay(item.uuid)} style={{ marginTop: spacing.sm }}>
                   <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>Pay</Text>

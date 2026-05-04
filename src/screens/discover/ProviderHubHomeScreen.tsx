@@ -17,9 +17,9 @@ type Ion = ComponentProps<typeof Ionicons>['name'];
 
 const links: Array<{ title: string; screen: keyof ProviderHubStackParamList; icon: Ion; subtitle: string }> = [
   { title: 'DV Lottery', screen: 'DvLottery', icon: 'earth-outline', subtitle: 'Program timelines & links' },
-  { title: 'Library', screen: 'Library', icon: 'library-outline', subtitle: 'Resources for your clients' },
+  { title: 'My Library', screen: 'Library', icon: 'library-outline', subtitle: 'Resources for your clients' },
   { title: 'Community', screen: 'Community', icon: 'people-outline', subtitle: 'Industry discussions' },
-  { title: 'Sponsored ads', screen: 'Ads', icon: 'megaphone-outline', subtitle: 'Manage campaigns' },
+  { title: 'My Ads', screen: 'Ads', icon: 'megaphone-outline', subtitle: 'Manage campaigns' },
 ];
 
 export function ProviderHubHomeScreen() {

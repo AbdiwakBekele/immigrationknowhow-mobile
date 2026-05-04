@@ -7,8 +7,6 @@ import { CommonActions } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProviderBottomTabs, type ProviderBottomTabParamList } from './ProviderBottomTabs';
-import { ProviderHubStack, type ProviderHubStackParamList } from '../screens/discover/ProviderHubStack';
-import { ProviderSubscriptionsScreen } from '../screens/provider/ProviderSubscriptionsScreen';
 import { drawerGradient } from '../theme/gradients';
 import { spacing } from '../theme/spacing';
 import {
@@ -20,8 +18,6 @@ import {
 
 export type ProviderDrawerParamList = {
   Main: NavigatorScreenParams<ProviderBottomTabParamList>;
-  More: undefined;
-  Subscription: undefined;
 };
 
 const Drawer = createDrawerNavigator<ProviderDrawerParamList>();
@@ -35,18 +31,46 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
     navigation.closeDrawer();
   };
 
-  const goMore = (screen: keyof ProviderHubStackParamList) => {
+  const goHub = (screen: 'DvLottery' | 'Library' | 'Ads' | 'Community') => {
     navigation.dispatch(
       CommonActions.navigate({
-        name: 'More',
-        params: { screen },
+        name: 'Main',
+        params: {
+          screen: 'Dashboard',
+          params: { screen: 'ProviderHub', params: { screen } },
+        },
       })
     );
     navigation.closeDrawer();
   };
 
   const goSubscription = () => {
-    navigation.dispatch(CommonActions.navigate({ name: 'Subscription' }));
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'Dashboard', params: { screen: 'ProviderSubscription' } },
+      })
+    );
+    navigation.closeDrawer();
+  };
+
+  const goProviderAnalytics = () => {
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'Dashboard', params: { screen: 'ProviderAnalytics' } },
+      })
+    );
+    navigation.closeDrawer();
+  };
+
+  const goProviderBackgroundCheck = () => {
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'Dashboard', params: { screen: 'ProviderBackgroundCheck' } },
+      })
+    );
     navigation.closeDrawer();
   };
 
@@ -70,23 +94,28 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
         <Text style={drawerBrandStyles.brand}>ImmigrationKnowHow</Text>
         <Text style={drawerBrandStyles.brandSub}>Service provider</Text>
 
-        <DrawerCollapsibleSection title="Main" defaultOpen>
-          <DrawerGradientLink icon="speedometer-outline" label="Dashboard" onPress={() => goMain('Dashboard')} indent />
+        <DrawerGradientLink icon="speedometer-outline" label="Dashboard" onPress={() => goMain('Dashboard')} />
+
+        <DrawerCollapsibleSection title="Account" defaultOpen>
           <DrawerGradientLink icon="mail-unread-outline" label="Leads" onPress={() => goMain('Leads')} indent />
           <DrawerGradientLink icon="chatbubbles-outline" label="Messages" onPress={goMessagesList} indent />
           <DrawerGradientLink icon="person-circle-outline" label="Profile" onPress={() => goMain('Profile')} indent />
         </DrawerCollapsibleSection>
 
         <DrawerCollapsibleSection title="Hub & tools" defaultOpen>
-          <DrawerGradientLink icon="grid-outline" label="Hub home" onPress={() => goMore('ProviderHubHome')} indent />
-          <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goMore('DvLottery')} indent />
-          <DrawerGradientLink icon="library-outline" label="Library" onPress={() => goMore('Library')} indent />
-          <DrawerGradientLink icon="megaphone-outline" label="Sponsored ads" onPress={() => goMore('Ads')} indent />
-          <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goMore('Community')} indent />
+          <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goHub('DvLottery')} indent />
+          <DrawerGradientLink icon="library-outline" label="My Library" onPress={() => goHub('Library')} indent />
+          <DrawerGradientLink icon="megaphone-outline" label="My Ads" onPress={() => goHub('Ads')} indent />
+          <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goHub('Community')} indent />
         </DrawerCollapsibleSection>
 
         <DrawerCollapsibleSection title="Billing" defaultOpen>
           <DrawerGradientLink icon="card-outline" label="Plan & subscription" onPress={goSubscription} indent />
+        </DrawerCollapsibleSection>
+
+        <DrawerCollapsibleSection title="Trust & analytics" defaultOpen>
+          <DrawerGradientLink icon="stats-chart-outline" label="Analytics" onPress={goProviderAnalytics} indent />
+          <DrawerGradientLink icon="shield-checkmark-outline" label="Background check" onPress={goProviderBackgroundCheck} indent />
         </DrawerCollapsibleSection>
       </DrawerContentScrollView>
     </LinearGradient>
@@ -110,8 +139,6 @@ export function ProviderDrawerNavigator() {
       }}
     >
       <Drawer.Screen name="Main" component={ProviderBottomTabs} options={{ title: 'Home' }} />
-      <Drawer.Screen name="More" component={ProviderHubStack} options={{ title: 'More' }} />
-      <Drawer.Screen name="Subscription" component={ProviderSubscriptionsScreen} options={{ title: 'Plan' }} />
     </Drawer.Navigator>
   );
 }

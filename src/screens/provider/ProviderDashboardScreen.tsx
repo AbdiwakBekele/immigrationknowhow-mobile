@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,8 +12,6 @@ import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
-import { DrawerMenuButton } from '../../components/DrawerMenuButton';
-import { NotificationHeaderButton } from '../../components/NotificationHeaderButton';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -32,6 +30,7 @@ export function ProviderDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dash, setDash] = useState<providerDashboardApi.ProviderDashboardData | null>(null);
+  const unreadNotifications = dash?.unread_notifications_count ?? 0;
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -52,6 +51,11 @@ export function ProviderDashboardScreen() {
       void load(false);
     }, [])
   );
+
+  useEffect(() => {
+    // @ts-expect-error: route params shape is app-defined
+    navigation.setParams?.({ unreadNotificationsCount: unreadNotifications });
+  }, [navigation, unreadNotifications]);
 
   if (loading && !dash) {
     return (
@@ -74,28 +78,9 @@ export function ProviderDashboardScreen() {
 
   const stats = dash?.stats ?? {};
   const recentLeads = dash?.recent_leads ?? [];
-  const unreadNotifications = dash?.unread_notifications_count ?? 0;
 
   return (
     <AppScreen variant="gradient" style={{ padding: spacing.xl, paddingBottom: 0 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <DrawerMenuButton />
-        <Text
-          style={{
-            fontSize: typography.fontSize.xl,
-            fontWeight: typography.fontWeight.bold,
-            color: colors.text.primary,
-            flex: 1,
-          }}
-        >
-          Dashboard
-        </Text>
-        <NotificationHeaderButton
-          unreadCount={unreadNotifications}
-          onPress={() => navigation.navigate('ProviderNotifications')}
-        />
-      </View>
-
       <ScrollView
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
         showsVerticalScrollIndicator={false}

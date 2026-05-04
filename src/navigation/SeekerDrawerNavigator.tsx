@@ -7,8 +7,6 @@ import { CommonActions } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SeekerBottomTabs, type SeekerBottomTabParamList } from './SeekerBottomTabs';
-import { ProvidersStack } from '../screens/seeker/ProvidersStack';
-import { ContractsStack } from '../screens/contracts/ContractsStack';
 import type { SeekerDiscoverStackParamList } from '../screens/discover/SeekerDiscoverStack';
 import { drawerGradient } from '../theme/gradients';
 import { spacing } from '../theme/spacing';
@@ -21,8 +19,6 @@ import {
 
 export type SeekerDrawerParamList = {
   Main: NavigatorScreenParams<SeekerBottomTabParamList>;
-  Providers: undefined;
-  Contracts: undefined;
 };
 
 const Drawer = createDrawerNavigator<SeekerDrawerParamList>();
@@ -47,12 +43,22 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
   };
 
   const goProvidersList = () => {
-    navigation.dispatch(CommonActions.navigate({ name: 'Providers', params: { screen: 'ProvidersList' } }));
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'Discover', params: { screen: 'Providers' } },
+      })
+    );
     navigation.closeDrawer();
   };
 
   const goContractsList = () => {
-    navigation.dispatch(CommonActions.navigate({ name: 'Contracts', params: { screen: 'ContractsList' } }));
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'Discover', params: { screen: 'Contracts' } },
+      })
+    );
     navigation.closeDrawer();
   };
 
@@ -76,8 +82,9 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
         <Text style={drawerBrandStyles.brand}>ImmigrationKnowHow</Text>
         <Text style={drawerBrandStyles.brandSub}>Service seeker</Text>
 
+        <DrawerGradientLink icon="home-outline" label="Dashboard" onPress={() => goMain('Dashboard')} />
+
         <DrawerCollapsibleSection title="Home & account" defaultOpen>
-          <DrawerGradientLink icon="home-outline" label="Dashboard" onPress={() => goMain('Dashboard')} indent />
           <DrawerGradientLink icon="chatbubbles-outline" label="Messages" onPress={goMessagesList} indent />
           <DrawerGradientLink icon="person-circle-outline" label="Profile" onPress={() => goMain('Profile')} indent />
         </DrawerCollapsibleSection>
@@ -86,10 +93,10 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
           <DrawerGradientLink icon="planet-outline" label="Discover home" onPress={() => goDiscover('DiscoverHome')} indent />
           <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
           <DrawerGradientLink icon="sparkles-outline" label="AI Assistant" onPress={() => goDiscover('AiAssistant')} indent />
-          <DrawerGradientLink icon="library-outline" label="Library" onPress={() => goDiscover('Library')} indent />
+          <DrawerGradientLink icon="library-outline" label="My Library" onPress={() => goDiscover('Library')} indent />
           <DrawerGradientLink icon="play-circle-outline" label="Videos" onPress={() => goDiscover('Videos')} indent />
           <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goDiscover('Community')} indent />
-          <DrawerGradientLink icon="megaphone-outline" label="Sponsored ads" onPress={() => goDiscover('Ads')} indent />
+          <DrawerGradientLink icon="megaphone-outline" label="My Ads" onPress={() => goDiscover('Ads')} indent />
           <DrawerGradientLink icon="star-outline" label="My reviews" onPress={() => goDiscover('Reviews')} indent />
         </DrawerCollapsibleSection>
 
@@ -124,8 +131,6 @@ export function SeekerDrawerNavigator() {
       }}
     >
       <Drawer.Screen name="Main" component={SeekerBottomTabs} options={{ title: 'Home' }} />
-      <Drawer.Screen name="Providers" component={ProvidersStack} options={{ title: 'Providers' }} />
-      <Drawer.Screen name="Contracts" component={ContractsStack} options={{ title: 'Contracts' }} />
     </Drawer.Navigator>
   );
 }

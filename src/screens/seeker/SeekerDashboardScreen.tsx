@@ -8,15 +8,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useNavigation, useFocusEffect, CommonActions } from '@react-navigation/native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { AppScreen } from '../../components/AppScreen';
-import { DrawerMenuButton } from '../../components/DrawerMenuButton';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as seekerDashboardApi from '../../api/seekerDashboardApi';
-import type { SeekerBottomTabParamList } from '../../navigation/SeekerBottomTabs';
 
 type LeadRow = {
   uuid: string;
@@ -26,17 +23,12 @@ type LeadRow = {
 };
 
 export function SeekerDashboardScreen() {
-  const navigation = useNavigation<BottomTabNavigationProp<SeekerBottomTabParamList>>();
+  const navigation = useNavigation();
 
   const openProviderDetail = (slug: string) => {
-    const parent = navigation.getParent();
-    if (!parent) return;
-    parent.dispatch(
-      CommonActions.navigate({
-        name: 'Providers',
-        params: { screen: 'ProviderDetail', params: { slug } },
-      })
-    );
+    // Parent of this stack is the bottom tabs; navigate into Discover → Providers flow.
+    // @ts-expect-error: app-defined route names
+    navigation.getParent()?.navigate('Discover', { screen: 'Providers', params: { screen: 'ProviderDetail', params: { slug } } });
   };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -99,20 +91,6 @@ export function SeekerDashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
-          <DrawerMenuButton />
-          <Text
-            style={{
-              flex: 1,
-              fontSize: typography.fontSize.xl,
-              fontWeight: typography.fontWeight.bold,
-              color: colors.text.primary,
-            }}
-          >
-            Dashboard
-          </Text>
-        </View>
-
         {stats && (
           <View
             style={{

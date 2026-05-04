@@ -42,11 +42,14 @@ export function DrawerGradientLink({
   label,
   onPress,
   indent = false,
+  showCaret = false,
 }: {
   icon: Ion;
   label: string;
   onPress: () => void;
   indent?: boolean;
+  /** Show right-side caret only for dropdown/nested items. */
+  showCaret?: boolean;
 }) {
   return (
     <Pressable
@@ -58,7 +61,7 @@ export function DrawerGradientLink({
         <Ionicons name={icon} size={indent ? 20 : 22} color={colors.primary[100]} />
       </View>
       <Text style={[styles.linkText, indent && styles.linkTextSub]}>{label}</Text>
-      <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.45)" />
+      {showCaret ? <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.45)" /> : null}
     </Pressable>
   );
 }

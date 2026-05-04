@@ -8,6 +8,10 @@ import { VideosStack } from '../videos/VideosStack';
 import { CommunityStack } from '../community/CommunityStack';
 import { AdsListScreen } from '../ads/AdsListScreen';
 import { ReviewsListScreen } from '../reviews/ReviewsListScreen';
+import { ProvidersStack } from '../seeker/ProvidersStack';
+import { ContractsStack } from '../contracts/ContractsStack';
+import { AppHeader } from '../../components/navigation/AppHeader';
+import { NotificationsScreen } from '../notifications/NotificationsScreen';
 
 export type SeekerDiscoverStackParamList = {
   DiscoverHome: undefined;
@@ -18,21 +22,27 @@ export type SeekerDiscoverStackParamList = {
   Community: undefined;
   Ads: undefined;
   Reviews: undefined;
+  Providers: undefined;
+  Contracts: undefined;
+  Notifications: undefined;
 };
 
 const Stack = createNativeStackNavigator<SeekerDiscoverStackParamList>();
 
 export function SeekerDiscoverStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="DiscoverHome" component={DiscoverHomeScreen} />
-      <Stack.Screen name="DvLottery" component={DvLotteryScreen} />
-      <Stack.Screen name="AiAssistant" component={AiAssistantScreen} />
-      <Stack.Screen name="Library" component={LibraryStack} />
-      <Stack.Screen name="Videos" component={VideosStack} />
-      <Stack.Screen name="Community" component={CommunityStack} />
-      <Stack.Screen name="Ads" component={AdsListScreen} />
-      <Stack.Screen name="Reviews" component={ReviewsListScreen} />
+    <Stack.Navigator screenOptions={{ header: (p) => <AppHeader {...p} /> }}>
+      <Stack.Screen name="DiscoverHome" component={DiscoverHomeScreen} options={{ title: 'Discover' }} />
+      <Stack.Screen name="Providers" component={ProvidersStack} options={{ title: 'Providers' }} />
+      <Stack.Screen name="Contracts" component={ContractsStack} options={{ title: 'Contracts' }} />
+      <Stack.Screen name="DvLottery" component={DvLotteryScreen} options={{ title: 'DV Lottery' }} />
+      <Stack.Screen name="AiAssistant" component={AiAssistantScreen} options={{ title: 'AI Assistant' }} />
+      <Stack.Screen name="Library" component={LibraryStack} options={{ title: 'My Library' }} />
+      <Stack.Screen name="Videos" component={VideosStack} options={{ title: 'Videos' }} />
+      <Stack.Screen name="Community" component={CommunityStack} options={{ title: 'Community' }} />
+      <Stack.Screen name="Ads" component={AdsListScreen} options={{ title: 'My Ads' }} />
+      <Stack.Screen name="Reviews" component={ReviewsListScreen} options={{ title: 'My reviews' }} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
     </Stack.Navigator>
   );
 }

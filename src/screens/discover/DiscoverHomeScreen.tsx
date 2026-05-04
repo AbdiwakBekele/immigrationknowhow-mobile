@@ -5,7 +5,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { AppScreen } from '../../components/AppScreen';
-import { DrawerMenuButton } from '../../components/DrawerMenuButton';
 import { colors } from '../../theme/colors';
 import { radii, screenPaddingX } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
@@ -18,10 +17,10 @@ type Ion = ComponentProps<typeof Ionicons>['name'];
 const links: Array<{ title: string; screen: keyof SeekerDiscoverStackParamList; icon: Ion; subtitle: string }> = [
   { title: 'DV Lottery', screen: 'DvLottery', icon: 'earth-outline', subtitle: 'Official program info' },
   { title: 'AI Assistant', screen: 'AiAssistant', icon: 'sparkles-outline', subtitle: 'Ask immigration questions' },
-  { title: 'Library', screen: 'Library', icon: 'library-outline', subtitle: 'Guides & resources' },
+  { title: 'My Library', screen: 'Library', icon: 'library-outline', subtitle: 'Guides & resources' },
   { title: 'Videos', screen: 'Videos', icon: 'play-circle-outline', subtitle: 'Watch expert content' },
   { title: 'Community', screen: 'Community', icon: 'people-outline', subtitle: 'Posts & discussions' },
-  { title: 'Sponsored ads', screen: 'Ads', icon: 'megaphone-outline', subtitle: 'Promote your services' },
+  { title: 'My Ads', screen: 'Ads', icon: 'megaphone-outline', subtitle: 'Promote your services' },
   { title: 'My reviews', screen: 'Reviews', icon: 'star-outline', subtitle: 'Your provider feedback' },
 ];
 
@@ -30,10 +29,6 @@ export function DiscoverHomeScreen() {
 
   return (
     <AppScreen variant="gradient" style={styles.screen}>
-      <View style={styles.titleRow}>
-        <DrawerMenuButton />
-        <Text style={styles.title}>Discover</Text>
-      </View>
       <Text style={styles.lead}>Tools and content to support your immigration journey.</Text>
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
         {links.map((l) => (
@@ -61,18 +56,6 @@ const styles = StyleSheet.create({
   screen: {
     paddingHorizontal: screenPaddingX,
     paddingTop: spacing.md,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  title: {
-    flex: 1,
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    letterSpacing: -0.3,
   },
   lead: {
     marginTop: spacing.sm,

@@ -1,7 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
 import { AppScreen } from '../../components/AppScreen';
-import { DrawerMenuButton } from '../../components/DrawerMenuButton';
 import { AppButton } from '../../components/AppButton';
 import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
@@ -13,19 +12,6 @@ export function ProfileScreen() {
 
   return (
     <AppScreen variant="gradient" style={{ padding: spacing.xl }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <DrawerMenuButton />
-        <Text
-          style={{
-            flex: 1,
-            fontSize: typography.fontSize.xl,
-            fontWeight: typography.fontWeight.bold,
-            color: colors.text.primary,
-          }}
-        >
-          Profile
-        </Text>
-      </View>
       <Text style={{ marginTop: spacing.sm, color: colors.text.secondary }}>
         {user?.first_name} {user?.last_name} ({user?.email})
       </Text>

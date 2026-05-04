@@ -3,7 +3,6 @@ import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
-import { DrawerMenuButton } from '../../components/DrawerMenuButton';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -67,12 +66,6 @@ export function ProvidersListScreen() {
 
   return (
     <AppScreen variant="gradient" style={{ padding: spacing.xl }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <DrawerMenuButton />
-        <Text style={{ flex: 1, fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
-          Providers
-        </Text>
-      </View>
       <Text style={{ marginTop: spacing.xs, color: colors.text.secondary }}>
         Browse service providers from the marketplace.
       </Text>

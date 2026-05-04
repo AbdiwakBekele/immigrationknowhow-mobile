@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppScreen } from '../../components/AppScreen';
-import { DrawerMenuButton } from '../../components/DrawerMenuButton';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -112,13 +111,6 @@ export function ProviderSubscriptionsScreen() {
 
   return (
     <AppScreen variant="gradient" style={{ padding: spacing.xl, paddingBottom: 0 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <DrawerMenuButton />
-        <Text style={{ flex: 1, fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
-          Subscription
-        </Text>
-      </View>
-
       {!payload?.stripe_billing_configured && (
         <Text style={{ marginTop: spacing.md, color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
           Stripe billing is not configured on the server.
