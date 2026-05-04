@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import { DvLotteryProvider } from '../context/DvLotteryContext';
 import { SplashScreen } from '../screens/common/SplashScreen';
 import { AuthStack } from './AuthStack';
 import { OnboardingStack } from './OnboardingStack';
@@ -21,12 +22,16 @@ export function RootNavigator() {
         <AuthStack />
       ) : needsOnboarding ? (
         <OnboardingStack />
-      ) : role === 'provider' ? (
-        <ProviderTabs />
-      ) : role === 'advertiser' ? (
-        <AdvertiserTabs />
       ) : (
-        <SeekerTabs />
+        <DvLotteryProvider>
+          {role === 'provider' ? (
+            <ProviderTabs />
+          ) : role === 'advertiser' ? (
+            <AdvertiserTabs />
+          ) : (
+            <SeekerTabs />
+          )}
+        </DvLotteryProvider>
       )}
     </NavigationContainer>
   );

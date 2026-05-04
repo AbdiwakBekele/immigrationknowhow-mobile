@@ -16,6 +16,7 @@ import {
   drawerBrandStyles,
   drawerScrollPadding,
 } from '../components/drawer/DrawerCollapsibleSection';
+import { useDvLottery } from '../context/DvLotteryContext';
 
 export type AdvertiserDrawerParamList = {
   Main: NavigatorScreenParams<AdvertiserBottomTabParamList>;
@@ -26,6 +27,7 @@ const Drawer = createDrawerNavigator<AdvertiserDrawerParamList>();
 function AdvertiserDrawerContent(props: DrawerContentComponentProps) {
   const { navigation } = props;
   const insets = useSafeAreaInsets();
+  const { showInMenu: dvInMenu } = useDvLottery();
 
   const goMain = (screen: keyof AdvertiserBottomTabParamList) => {
     navigation.dispatch(CommonActions.navigate({ name: 'Main', params: { screen } }));
@@ -59,7 +61,9 @@ function AdvertiserDrawerContent(props: DrawerContentComponentProps) {
 
         <DrawerCollapsibleSection title="Discover" defaultOpen>
           <DrawerGradientLink icon="planet-outline" label="Discover home" onPress={() => goDiscover('DiscoverHome')} indent />
-          <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
+          {dvInMenu ? (
+            <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
+          ) : null}
           <DrawerGradientLink icon="sparkles-outline" label="AI Assistant" onPress={() => goDiscover('AiAssistant')} indent />
           <DrawerGradientLink icon="library-outline" label="My Library" onPress={() => goDiscover('Library')} indent />
           <DrawerGradientLink icon="play-circle-outline" label="Videos" onPress={() => goDiscover('Videos')} indent />
