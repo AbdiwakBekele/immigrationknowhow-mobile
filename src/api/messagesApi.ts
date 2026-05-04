@@ -7,9 +7,9 @@ export type ConversationItem = {
   last_message_at: string | null;
   unread_count: number;
   latest_message?: { body: string; created_at: string } | null;
-  user?: any;
-  provider_user?: any;
-  lead?: any;
+  user?: { first_name?: string | null; last_name?: string | null; avatar_url?: string | null } | null;
+  provider_user?: { first_name?: string | null; last_name?: string | null; avatar_url?: string | null } | null;
+  lead?: { uuid?: string; service_type?: string; service_type_label?: string; status?: string } | null;
 };
 
 export type MessageItem = {
@@ -23,6 +23,15 @@ export type MessageItem = {
 export async function listConversations(): Promise<ApiResponse<{ conversations: ConversationItem[] }>> {
   try {
     const res = await apiClient.get('/api/mobile/messages');
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function listArchivedConversations(): Promise<ApiResponse<{ conversations: ConversationItem[] }>> {
+  try {
+    const res = await apiClient.get('/api/mobile/messages/archived');
     return res.data;
   } catch (e) {
     return normalizeApiError(e);
@@ -50,6 +59,42 @@ export async function sendMessage(uuid: string, body: string): Promise<ApiRespon
 export async function unreadCount(): Promise<ApiResponse<{ count: number }>> {
   try {
     const res = await apiClient.get('/api/mobile/messages/unread-count');
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function markConversationRead(uuid: string): Promise<ApiResponse<Record<string, never>>> {
+  try {
+    const res = await apiClient.post(`/api/mobile/messages/${encodeURIComponent(uuid)}/read`);
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function archiveConversation(uuid: string): Promise<ApiResponse<Record<string, never>>> {
+  try {
+    const res = await apiClient.post(`/api/mobile/messages/${encodeURIComponent(uuid)}/archive`);
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function unarchiveConversation(uuid: string): Promise<ApiResponse<Record<string, never>>> {
+  try {
+    const res = await apiClient.post(`/api/mobile/messages/${encodeURIComponent(uuid)}/unarchive`);
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function deleteConversation(uuid: string): Promise<ApiResponse<Record<string, never>>> {
+  try {
+    const res = await apiClient.delete(`/api/mobile/messages/${encodeURIComponent(uuid)}`);
     return res.data;
   } catch (e) {
     return normalizeApiError(e);

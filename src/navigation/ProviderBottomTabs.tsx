@@ -4,12 +4,12 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import { ProfileStack } from '../screens/account/ProfileStack';
 import { MessagesStack, type MessagesStackParamList } from '../screens/messages/MessagesStack';
 import { LeadsStack } from '../screens/provider/LeadsStack';
-import { ProviderDashboardStack } from '../screens/provider/ProviderDashboardStack';
+import { ProviderDashboardStack, type ProviderDashboardStackParamList } from '../screens/provider/ProviderDashboardStack';
 import { tabBarIcon, useModernTabBarOptions } from './tabBar';
 
 /** Primary provider destinations in the bottom bar; hub & billing live in the drawer. */
 export type ProviderBottomTabParamList = {
-  Dashboard: undefined;
+  Dashboard: NavigatorScreenParams<ProviderDashboardStackParamList> | undefined;
   Leads: undefined;
   Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
   Profile: undefined;
