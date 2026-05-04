@@ -27,6 +27,7 @@ import { shadows } from '../../theme/shadows';
 import * as communityApi from '../../api/communityApi';
 import type { CommunityCommentPayload, CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
+import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 function mergeReactions(prev: string[] | undefined, type: 'like' | 'share' | 'bookmark', active: boolean): string[] {
   const set = new Set(prev ?? []);
@@ -151,7 +152,7 @@ export function CommunityPostScreen() {
           {!!post?.tag && <Text style={styles.tag}>{post.tag}</Text>}
 
           {!!post?.image_url && (
-            <AppImage uri={post.image_url} height={220} style={styles.heroImage} contentFit="cover" />
+            <AppImage uri={resolveMediaUrl(post.image_url)} height={220} style={styles.heroImage} contentFit="cover" />
           )}
 
           {!!post?.video_url && (

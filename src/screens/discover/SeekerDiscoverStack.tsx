@@ -6,7 +6,7 @@ import { AiAssistantScreen } from './AiAssistantScreen';
 import { LibraryStack } from '../library/LibraryStack';
 import { VideosStack } from '../videos/VideosStack';
 import { CommunityStack } from '../community/CommunityStack';
-import { AdsListScreen } from '../ads/AdsListScreen';
+import { AdsStack } from '../ads/AdsStack';
 import { ReviewsListScreen } from '../reviews/ReviewsListScreen';
 import { ProvidersStack } from '../seeker/ProvidersStack';
 import { ContractsStack } from '../contracts/ContractsStack';
@@ -37,10 +37,10 @@ export function SeekerDiscoverStack() {
       <Stack.Screen name="Contracts" component={ContractsStack} options={{ title: 'Contracts' }} />
       <Stack.Screen name="DvLottery" component={DvLotteryScreen} options={{ title: 'DV Lottery' }} />
       <Stack.Screen name="AiAssistant" component={AiAssistantScreen} options={{ title: 'AI Assistant' }} />
-      <Stack.Screen name="Library" component={LibraryStack} options={{ title: 'My Library' }} />
+      <Stack.Screen name="Library" component={LibraryStack} options={{ headerShown: false }} />
       <Stack.Screen name="Videos" component={VideosStack} options={{ title: 'Videos' }} />
-      <Stack.Screen name="Community" component={CommunityStack} options={{ title: 'Community' }} />
-      <Stack.Screen name="Ads" component={AdsListScreen} options={{ title: 'My Ads' }} />
+      <Stack.Screen name="Community" component={CommunityStack} options={{ headerShown: false }} />
+      <Stack.Screen name="Ads" component={AdsStack} options={{ headerShown: false }} />
       <Stack.Screen name="Reviews" component={ReviewsListScreen} options={{ title: 'My reviews' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
     </Stack.Navigator>

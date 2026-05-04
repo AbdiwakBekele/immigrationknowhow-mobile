@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
-import { useRoute, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
 import { AppScreen } from '../../components/AppScreen';
@@ -11,6 +11,7 @@ import * as libraryApi from '../../api/libraryApi';
 import type { LibraryStackParamList } from './LibraryStack';
 
 export function LibraryDetailScreen() {
+  const navigation = useNavigation();
   const route = useRoute<RouteProp<LibraryStackParamList, 'LibraryDetail'>>();
   const { slug } = route.params;
   const [loading, setLoading] = useState(true);
@@ -29,6 +30,12 @@ export function LibraryDetailScreen() {
       void load();
     }, [slug])
   );
+
+  useLayoutEffect(() => {
+    const it = data?.item;
+    const t = typeof it?.title === 'string' && it.title.trim() !== '' ? it.title : slug;
+    navigation.setOptions({ title: t });
+  }, [navigation, data, slug]);
 
   const pay = async () => {
     const res = await libraryApi.libraryStripeCheckout(slug);
@@ -80,10 +87,7 @@ export function LibraryDetailScreen() {
   return (
     <AppScreen style={{ padding: spacing.xl }}>
       <ScrollView>
-        <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
-          {item?.title ?? slug}
-        </Text>
-        <Text style={{ marginTop: spacing.md, color: colors.text.secondary }}>{item?.description}</Text>
+        <Text style={{ color: colors.text.secondary }}>{item?.description}</Text>
         {!hasAccess && (
           <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
             {data?.requires_paid_access ? (

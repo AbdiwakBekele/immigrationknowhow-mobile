@@ -3,11 +3,13 @@ import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
+import { LibraryCover } from '../../components/library/LibraryCover';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as libraryApi from '../../api/libraryApi';
 import type { LibraryStackParamList } from './LibraryStack';
+import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 export function LibraryMyScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
@@ -33,13 +35,7 @@ export function LibraryMyScreen() {
 
   return (
     <AppScreen style={{ padding: spacing.xl }}>
-      <Pressable onPress={() => navigation.goBack()} style={{ marginBottom: spacing.md }}>
-        <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>← Back</Text>
-      </Pressable>
-      <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
-        My library
-      </Text>
-      <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg }}>
+      <View style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xs }}>
         <Pressable onPress={() => setTab('purchased')}>
           <Text style={{ fontWeight: tab === 'purchased' ? typography.fontWeight.bold : typography.fontWeight.regular, color: colors.primary[600] }}>
             Purchased
@@ -58,21 +54,35 @@ export function LibraryMyScreen() {
           style={{ marginTop: spacing.lg }}
           data={items}
           keyExtractor={(it) => String(it.slug ?? it.id)}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => item.slug && navigation.navigate('LibraryDetail', { slug: item.slug })}
-              style={{
-                padding: spacing.lg,
-                marginBottom: spacing.md,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-              }}
-            >
-              <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>{item.title}</Text>
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            const cover = resolveMediaUrl(item.cover_image_url);
+            return (
+              <Pressable
+                onPress={() => item.slug && navigation.navigate('LibraryDetail', { slug: item.slug })}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: spacing.md,
+                  marginBottom: spacing.md,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  gap: spacing.md,
+                }}
+              >
+                <LibraryCover uri={cover} width={56} height={76} borderRadius={10} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  {!!item.type && (
+                    <Text style={{ marginTop: spacing.xs, color: colors.text.muted, fontSize: typography.fontSize.sm }}>{item.type}</Text>
+                  )}
+                </View>
+              </Pressable>
+            );
+          }}
         />
       )}
     </AppScreen>

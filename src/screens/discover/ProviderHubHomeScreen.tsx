@@ -5,19 +5,18 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { AppScreen } from '../../components/AppScreen';
-import { DrawerMenuButton } from '../../components/DrawerMenuButton';
 import { colors } from '../../theme/colors';
 import { radii, screenPaddingX } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import type { ProviderHubStackParamList } from './ProviderHubStack';
+import { MyLibraryEntryCard } from '../../components/discover/MyLibraryEntryCard';
 
 type Ion = ComponentProps<typeof Ionicons>['name'];
 
 const links: Array<{ title: string; screen: keyof ProviderHubStackParamList; icon: Ion; subtitle: string }> = [
   { title: 'DV Lottery', screen: 'DvLottery', icon: 'earth-outline', subtitle: 'Program timelines & links' },
-  { title: 'My Library', screen: 'Library', icon: 'library-outline', subtitle: 'Resources for your clients' },
   { title: 'Community', screen: 'Community', icon: 'people-outline', subtitle: 'Industry discussions' },
   { title: 'My Ads', screen: 'Ads', icon: 'megaphone-outline', subtitle: 'Manage campaigns' },
 ];
@@ -27,28 +26,50 @@ export function ProviderHubHomeScreen() {
 
   return (
     <AppScreen variant="gradient" style={styles.screen}>
-      <View style={styles.titleRow}>
-        <DrawerMenuButton />
-        <Text style={styles.title}>More</Text>
-      </View>
       <Text style={styles.lead}>Extras beyond your provider dashboard.</Text>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {links.map((l) => (
-          <Pressable
-            key={l.screen}
-            onPress={() => navigation.navigate(l.screen as never)}
-            style={({ pressed }) => [styles.card, pressed && { opacity: 0.92 }]}
-          >
-            <View style={styles.iconWrap}>
-              <Ionicons name={l.icon} size={24} color={colors.primary[600]} />
-            </View>
-            <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>{l.title}</Text>
-              <Text style={styles.cardSubtitle}>{l.subtitle}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.text.muted} />
-          </Pressable>
-        ))}
+        {(() => {
+          const [dv, ...rest] = links;
+          return (
+            <>
+              <Pressable
+                key={dv.screen}
+                onPress={() => navigation.navigate(dv.screen as never)}
+                style={({ pressed }) => [styles.card, pressed && { opacity: 0.92 }]}
+              >
+                <View style={styles.iconWrap}>
+                  <Ionicons name={dv.icon} size={24} color={colors.primary[600]} />
+                </View>
+                <View style={styles.cardText}>
+                  <Text style={styles.cardTitle}>{dv.title}</Text>
+                  <Text style={styles.cardSubtitle}>{dv.subtitle}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color={colors.text.muted} />
+              </Pressable>
+              <MyLibraryEntryCard
+                onPress={() => navigation.navigate('Library')}
+                title="My Library"
+                subtitle="Resources for your clients — tap to open"
+              />
+              {rest.map((l) => (
+                <Pressable
+                  key={l.screen}
+                  onPress={() => navigation.navigate(l.screen as never)}
+                  style={({ pressed }) => [styles.card, pressed && { opacity: 0.92 }]}
+                >
+                  <View style={styles.iconWrap}>
+                    <Ionicons name={l.icon} size={24} color={colors.primary[600]} />
+                  </View>
+                  <View style={styles.cardText}>
+                    <Text style={styles.cardTitle}>{l.title}</Text>
+                    <Text style={styles.cardSubtitle}>{l.subtitle}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={22} color={colors.text.muted} />
+                </Pressable>
+              ))}
+            </>
+          );
+        })()}
       </ScrollView>
     </AppScreen>
   );
@@ -58,18 +79,6 @@ const styles = StyleSheet.create({
   screen: {
     paddingHorizontal: screenPaddingX,
     paddingTop: spacing.md,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  title: {
-    flex: 1,
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    letterSpacing: -0.3,
   },
   lead: {
     marginTop: spacing.sm,
