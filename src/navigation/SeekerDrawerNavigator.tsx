@@ -16,6 +16,7 @@ import {
   drawerBrandStyles,
   drawerScrollPadding,
 } from '../components/drawer/DrawerCollapsibleSection';
+import { useDvLottery } from '../context/DvLotteryContext';
 
 export type SeekerDrawerParamList = {
   Main: NavigatorScreenParams<SeekerBottomTabParamList>;
@@ -26,6 +27,7 @@ const Drawer = createDrawerNavigator<SeekerDrawerParamList>();
 function SeekerDrawerContent(props: DrawerContentComponentProps) {
   const { navigation } = props;
   const insets = useSafeAreaInsets();
+  const { showInMenu: dvInMenu } = useDvLottery();
 
   const goMain = (screen: keyof SeekerBottomTabParamList) => {
     navigation.dispatch(CommonActions.navigate({ name: 'Main', params: { screen } }));
@@ -91,7 +93,9 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
 
         <DrawerCollapsibleSection title="Discover" defaultOpen>
           <DrawerGradientLink icon="planet-outline" label="Discover home" onPress={() => goDiscover('DiscoverHome')} indent />
-          <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
+          {dvInMenu ? (
+            <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
+          ) : null}
           <DrawerGradientLink icon="sparkles-outline" label="AI Assistant" onPress={() => goDiscover('AiAssistant')} indent />
           <DrawerGradientLink icon="library-outline" label="My Library" onPress={() => goDiscover('Library')} indent />
           <DrawerGradientLink icon="play-circle-outline" label="Videos" onPress={() => goDiscover('Videos')} indent />
