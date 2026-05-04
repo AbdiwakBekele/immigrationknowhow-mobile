@@ -3,11 +3,13 @@ import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
+import { LibraryCover } from '../../components/library/LibraryCover';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as libraryApi from '../../api/libraryApi';
 import type { LibraryStackParamList } from './LibraryStack';
+import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 export function LibraryBrowseScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
@@ -34,12 +36,9 @@ export function LibraryBrowseScreen() {
 
   return (
     <AppScreen style={{ padding: spacing.xl }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
-          Library
-        </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
         <Pressable onPress={() => navigation.navigate('LibraryMy')}>
-          <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>My library</Text>
+          <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>Purchased</Text>
         </Pressable>
       </View>
       {loading ? (
@@ -51,24 +50,35 @@ export function LibraryBrowseScreen() {
           style={{ marginTop: spacing.lg }}
           data={items}
           keyExtractor={(it) => String(it.slug)}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => navigation.navigate('LibraryDetail', { slug: item.slug })}
-              style={{
-                padding: spacing.lg,
-                marginBottom: spacing.md,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-              }}
-            >
-              <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>{item.title}</Text>
-              <Text style={{ marginTop: spacing.xs, color: colors.text.muted, fontSize: typography.fontSize.sm }}>
-                {item.type} · {item.has_access ? 'Unlocked' : item.price != null ? `${item.currency} ${item.price}` : 'Free'}
-              </Text>
-            </Pressable>
-          )}
+          renderItem={({ item }) => {
+            const cover = resolveMediaUrl(item.cover_image_url);
+            return (
+              <Pressable
+                onPress={() => navigation.navigate('LibraryDetail', { slug: item.slug })}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: spacing.md,
+                  marginBottom: spacing.md,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  gap: spacing.md,
+                }}
+              >
+                <LibraryCover uri={cover} width={56} height={76} borderRadius={10} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  <Text style={{ marginTop: spacing.xs, color: colors.text.muted, fontSize: typography.fontSize.sm }}>
+                    {item.type} · {item.has_access ? 'Unlocked' : item.price != null ? `${item.currency} ${item.price}` : 'Free'}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          }}
         />
       )}
     </AppScreen>

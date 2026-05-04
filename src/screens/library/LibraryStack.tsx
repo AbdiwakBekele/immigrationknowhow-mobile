@@ -19,7 +19,7 @@ export function LibraryStack() {
   return (
     <Stack.Navigator screenOptions={{ header: (p) => <AppHeader {...p} /> }}>
       <Stack.Screen name="LibraryBrowse" component={LibraryBrowseScreen} options={{ title: 'My Library' }} />
-      <Stack.Screen name="LibraryMy" component={LibraryMyScreen} options={{ title: 'My library' }} />
+      <Stack.Screen name="LibraryMy" component={LibraryMyScreen} options={{ title: 'My Library' }} />
       <Stack.Screen name="LibraryDetail" component={LibraryDetailScreen} options={{ title: 'My Library' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
     </Stack.Navigator>

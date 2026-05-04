@@ -24,7 +24,7 @@ export function ProviderDashboardStack() {
   return (
     <Stack.Navigator screenOptions={{ header: (p) => <AppHeader {...p} /> }}>
       <Stack.Screen name="ProviderDashboardHome" component={ProviderDashboardScreen} options={{ title: 'Dashboard' }} />
-      <Stack.Screen name="ProviderHub" component={ProviderHubStack} options={{ title: 'Hub' }} />
+      <Stack.Screen name="ProviderHub" component={ProviderHubStack} options={{ headerShown: false }} />
       <Stack.Screen name="ProviderSubscription" component={ProviderSubscriptionsScreen} options={{ title: 'Plan & subscription' }} />
       <Stack.Screen name="ProviderAnalytics" component={ProviderAnalyticsScreen} options={{ title: 'Analytics' }} />
       <Stack.Screen name="ProviderBackgroundCheck" component={ProviderBackgroundCheckScreen} options={{ title: 'Background check' }} />

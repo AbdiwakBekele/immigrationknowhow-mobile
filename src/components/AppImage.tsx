@@ -9,12 +9,13 @@ type Props = {
   style?: StyleProp<ImageStyle>;
   contentFit?: ImageProps['contentFit'];
   height?: number;
+  onError?: ImageProps['onError'];
 };
 
 /**
  * Remote images with caching and smooth decode (prefer over RN Image for URLs).
  */
-export function AppImage({ uri, style, contentFit = 'cover', height }: Props) {
+export function AppImage({ uri, style, contentFit = 'cover', height, onError }: Props) {
   const trimmed = typeof uri === 'string' ? uri.trim() : '';
   if (!trimmed) return null;
 
@@ -26,6 +27,7 @@ export function AppImage({ uri, style, contentFit = 'cover', height }: Props) {
       transition={220}
       cachePolicy="memory-disk"
       accessibilityIgnoresInvertColors
+      onError={onError}
     />
   );
 }
