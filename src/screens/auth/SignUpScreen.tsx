@@ -114,6 +114,19 @@ export function SignUpScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {navigation.canGoBack() ? (
+            <View style={styles.backRow}>
+              <Pressable
+                onPress={() => navigation.goBack()}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                hitSlop={12}
+                style={styles.backHit}
+              >
+                <Ionicons name="chevron-back" size={26} color={colors.text.primary} />
+              </Pressable>
+            </View>
+          ) : null}
           <View style={styles.header}>
             <BrandWordmark width={248} />
             <Text style={styles.title}>Create your account</Text>
@@ -226,6 +239,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: screenPaddingX,
     paddingBottom: spacing['3xl'],
     paddingTop: spacing.md,
+  },
+  backRow: {
+    alignSelf: 'stretch',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  backHit: {
+    paddingVertical: 4,
+    paddingRight: 2,
+    marginLeft: -spacing.xs,
+    justifyContent: 'center',
   },
   header: {
     marginBottom: spacing.xl,

@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
 import { AppButton } from '../../components/AppButton';
 import { AppInput } from '../../components/AppInput';
@@ -8,8 +11,10 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { useAuth } from '../../context/AuthContext';
 import * as onboardingApi from '../../api/onboardingApi';
+import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
 
 export function OnboardingHomeScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
   const { refreshMe } = useAuth();
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
@@ -64,6 +69,19 @@ export function OnboardingHomeScreen() {
 
   return (
     <AppScreen style={{ padding: spacing.xl }}>
+      {navigation.canGoBack() ? (
+        <View style={{ marginBottom: spacing.md, alignSelf: 'flex-start' }}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={12}
+            style={{ paddingVertical: 4, marginLeft: -spacing.xs }}
+          >
+            <Ionicons name="chevron-back" size={26} color={colors.text.primary} />
+          </Pressable>
+        </View>
+      ) : null}
       <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
         Complete onboarding
       </Text>
