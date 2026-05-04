@@ -1,19 +1,19 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Linking, Pressable, Text, TextInput, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { ActivityIndicator, Alert, FlatList, Linking, Pressable, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as adsApi from '../../api/adsApi';
+import type { AdsStackParamList } from './AdsStack';
 
 export function AdsListScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<AdsStackParamList>>();
   const [loading, setLoading] = useState(true);
   const [ads, setAds] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any | null>(null);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [cta, setCta] = useState('https://');
 
   const load = async () => {
     setLoading(true);
@@ -30,16 +30,6 @@ export function AdsListScreen() {
     }, [])
   );
 
-  const create = async () => {
-    const res = await adsApi.createAd({ title, description, cta_url: cta });
-    if (!res.success) Alert.alert('Ads', res.message);
-    else {
-      setTitle('');
-      setDescription('');
-      void load();
-    }
-  };
-
   const pay = async (uuid: string) => {
     const res = await adsApi.checkoutAd(uuid);
     if (!res.success) Alert.alert('Ads', res.message);
@@ -48,21 +38,11 @@ export function AdsListScreen() {
 
   return (
     <AppScreen style={{ padding: spacing.xl }}>
-      <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>My Ads</Text>
-
       <View style={{ marginTop: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: 14 }}>
         <Text style={{ color: colors.text.secondary }}>
           Views: {analytics?.summary?.views ?? '—'} · Clicks: {analytics?.summary?.clicks ?? '—'} · CTR: {analytics?.summary?.ctr ?? '—'}%
         </Text>
       </View>
-
-      <Text style={{ marginTop: spacing.sm, fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>New ad</Text>
-      <TextInput placeholder="Title" value={title} onChangeText={setTitle} style={inp()} />
-      <TextInput placeholder="Description" value={description} onChangeText={setDescription} multiline style={[inp(), { minHeight: 80 }]} />
-      <TextInput placeholder="CTA URL" value={cta} onChangeText={setCta} style={inp()} />
-      <Pressable onPress={() => void create()} style={{ marginTop: spacing.md, backgroundColor: colors.primary[600], padding: spacing.md, borderRadius: 12 }}>
-        <Text style={{ color: colors.text.inverse, textAlign: 'center', fontWeight: typography.fontWeight.semibold }}>Create</Text>
-      </Pressable>
       {loading ? (
         <ActivityIndicator style={{ marginTop: spacing['3xl'] }} color={colors.primary[600]} />
       ) : (
@@ -70,6 +50,20 @@ export function AdsListScreen() {
           style={{ marginTop: spacing.xl }}
           data={ads}
           keyExtractor={(a) => a.uuid}
+          ListEmptyComponent={<Text style={{ color: colors.text.secondary }}>No ads yet.</Text>}
+          ListFooterComponent={
+            <Pressable
+              onPress={() => navigation.navigate('AdsCreate')}
+              style={{
+                marginTop: spacing.lg,
+                backgroundColor: colors.primary[600],
+                padding: spacing.md,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{ color: colors.text.inverse, textAlign: 'center', fontWeight: typography.fontWeight.semibold }}>Create Ad</Text>
+            </Pressable>
+          }
           renderItem={({ item }) => (
             <View style={{ padding: spacing.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: 16 }}>
               <Text style={{ fontWeight: typography.fontWeight.semibold }}>{item.title}</Text>
@@ -88,15 +82,4 @@ export function AdsListScreen() {
       )}
     </AppScreen>
   );
-}
-
-function inp() {
-  return {
-    marginTop: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    padding: spacing.md,
-    color: colors.text.primary,
-  };
 }

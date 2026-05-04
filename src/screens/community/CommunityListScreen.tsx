@@ -23,6 +23,7 @@ import { shadows } from '../../theme/shadows';
 import * as communityApi from '../../api/communityApi';
 import type { CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
+import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const SECTIONS: Array<{ key: string; label: string }> = [
   { key: 'feed', label: 'Feed' },
@@ -134,7 +135,7 @@ export function CommunityListScreen() {
             <View style={styles.postRow}>
               {item.image_url ? (
                 <AppImage
-                  uri={item.image_url}
+                  uri={resolveMediaUrl(item.image_url)}
                   style={styles.thumb}
                   contentFit="cover"
                   height={THUMB}
