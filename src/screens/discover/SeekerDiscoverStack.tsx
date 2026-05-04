@@ -8,10 +8,11 @@ import { VideosStack } from '../videos/VideosStack';
 import { CommunityStack } from '../community/CommunityStack';
 import { AdsStack } from '../ads/AdsStack';
 import { ReviewsListScreen } from '../reviews/ReviewsListScreen';
-import { ProvidersStack } from '../seeker/ProvidersStack';
+import { ProvidersStack, type ProvidersStackParamList } from '../seeker/ProvidersStack';
 import { ContractsStack } from '../contracts/ContractsStack';
 import { AppHeader } from '../../components/navigation/AppHeader';
 import { NotificationsScreen } from '../notifications/NotificationsScreen';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 
 export type SeekerDiscoverStackParamList = {
   DiscoverHome: undefined;
@@ -22,7 +23,7 @@ export type SeekerDiscoverStackParamList = {
   Community: undefined;
   Ads: undefined;
   Reviews: undefined;
-  Providers: undefined;
+  Providers: NavigatorScreenParams<ProvidersStackParamList> | undefined;
   Contracts: undefined;
   Notifications: undefined;
 };

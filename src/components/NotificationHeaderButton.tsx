@@ -6,12 +6,21 @@ import { colors } from '../theme/colors';
 type Props = {
   unreadCount: number;
   onPress: () => void;
+  /** Defaults to primary blue (light headers). */
+  iconColor?: string;
+  /** Badge ring color; defaults to app background. */
+  badgeBorderColor?: string;
 };
 
 /**
  * Header control: notification bell + red badge when there are unread items.
  */
-export function NotificationHeaderButton({ unreadCount, onPress }: Props) {
+export function NotificationHeaderButton({
+  unreadCount,
+  onPress,
+  iconColor = colors.primary[600],
+  badgeBorderColor = colors.background,
+}: Props) {
   const n = Math.max(0, Math.floor(unreadCount));
   const label = n > 99 ? '99+' : String(n);
   const showBadge = n > 0;
@@ -25,9 +34,9 @@ export function NotificationHeaderButton({ unreadCount, onPress }: Props) {
       accessibilityLabel={showBadge ? `Notifications, ${n} unread` : 'Notifications'}
     >
       <View style={styles.wrap}>
-        <Ionicons name="notifications-outline" size={26} color={colors.primary[600]} />
+        <Ionicons name="notifications-outline" size={26} color={iconColor} />
         {showBadge ? (
-          <View style={[styles.badge, label.length > 1 ? styles.badgeWide : null]}>
+          <View style={[styles.badge, { borderColor: badgeBorderColor }, label.length > 1 ? styles.badgeWide : null]}>
             <Text style={styles.badgeText} numberOfLines={1}>
               {label}
             </Text>
@@ -62,7 +71,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.background,
   },
   badgeWide: {
     minWidth: 22,

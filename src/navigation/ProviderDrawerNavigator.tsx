@@ -76,6 +76,16 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
     navigation.closeDrawer();
   };
 
+  const goProviderReviews = () => {
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'Dashboard', params: { screen: 'ProviderReviews' } },
+      })
+    );
+    navigation.closeDrawer();
+  };
+
   const goMessagesList = () => {
     navigation.dispatch(
       CommonActions.navigate({
@@ -119,6 +129,7 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
 
         <DrawerCollapsibleSection title="Trust & analytics" defaultOpen>
           <DrawerGradientLink icon="stats-chart-outline" label="Analytics" onPress={goProviderAnalytics} indent />
+          <DrawerGradientLink icon="star-outline" label="Review" onPress={goProviderReviews} indent />
           <DrawerGradientLink icon="shield-checkmark-outline" label="Background check" onPress={goProviderBackgroundCheck} indent />
         </DrawerCollapsibleSection>
       </DrawerContentScrollView>

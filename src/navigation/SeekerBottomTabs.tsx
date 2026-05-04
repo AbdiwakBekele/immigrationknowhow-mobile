@@ -4,14 +4,14 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import { ProfileStack } from '../screens/account/ProfileStack';
 import { SeekerDashboardStack } from '../screens/seeker/SeekerDashboardStack';
 import { MessagesStack, type MessagesStackParamList } from '../screens/messages/MessagesStack';
-import { SeekerDiscoverStack } from '../screens/discover/SeekerDiscoverStack';
+import { SeekerDiscoverStack, type SeekerDiscoverStackParamList } from '../screens/discover/SeekerDiscoverStack';
 import { tabBarIcon, useModernTabBarOptions } from './tabBar';
 import { AiAssistantFab } from '../components/AiAssistantFab';
 
 /** Primary destinations in the bottom bar; other flows live in the drawer. */
 export type SeekerBottomTabParamList = {
   Dashboard: undefined;
-  Discover: undefined;
+  Discover: NavigatorScreenParams<SeekerDiscoverStackParamList> | undefined;
   Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
   Profile: undefined;
 };

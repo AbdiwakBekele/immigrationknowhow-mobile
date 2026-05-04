@@ -1,9 +1,89 @@
-import axios, { AxiosError, isAxiosError } from 'axios';
-import { BASE_URL } from '../config/api';
+import axios, { AxiosError, isAxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { API_DETAILED_LOGS, BASE_URL } from '../config/api';
 import type { ApiError } from './types';
 import { getToken } from '../services/tokenStorage';
 
+type ConfigWithTimer = InternalAxiosRequestConfig & { __apiLogStart?: number };
+
 let unauthorizedHandler: (() => void) | null = null;
+
+function summarizeForLog(value: unknown, maxLen = 600): string {
+  if (value === undefined || value === null || value === '') return '—';
+  if (typeof value === 'string') {
+    const oneLine = value.replace(/\s+/g, ' ').trim();
+    return oneLine.length > maxLen ? `${oneLine.slice(0, maxLen)}… (${value.length} chars)` : oneLine;
+  }
+  try {
+    const s = JSON.stringify(value);
+    return s.length > maxLen ? `${s.slice(0, maxLen)}… (${s.length} chars)` : s;
+  } catch {
+    return String(value).slice(0, maxLen);
+  }
+}
+
+function requestUrl(cfg: InternalAxiosRequestConfig): string {
+  const base = cfg.baseURL ?? '';
+  const path = cfg.url ?? '';
+  if (!base) return path;
+  const b = base.endsWith('/') ? base.slice(0, -1) : base;
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${b}${p}`;
+}
+
+function logRequestDetail(cfg: ConfigWithTimer, hasAuth: boolean) {
+  const method = String(cfg.method ?? 'get').toUpperCase();
+  const url = requestUrl(cfg);
+  const params = cfg.params && typeof cfg.params === 'object' && Object.keys(cfg.params as object).length > 0
+    ? summarizeForLog(cfg.params, 400)
+    : '—';
+  const body = cfg.data != null && cfg.data !== '' ? summarizeForLog(cfg.data, 500) : '—';
+  console.log(
+    `[API] ┌── ${method} ${url}\n` +
+      `│ baseURL: ${cfg.baseURL ?? '(none)'}\n` +
+      `│ path:    ${cfg.url ?? '(none)'}\n` +
+      `│ params:  ${params}\n` +
+      `│ body:    ${body}\n` +
+      `│ auth:    ${hasAuth ? 'Bearer <present>' : 'none'}`
+  );
+}
+
+function logResponseOk(cfg: ConfigWithTimer, status: number, contentType: string | undefined) {
+  const url = requestUrl(cfg);
+  const start = cfg.__apiLogStart;
+  const ms = typeof start === 'number' ? Date.now() - start : undefined;
+  console.log(
+    `[API] └── ${status} ${url}${ms != null ? ` | ${ms}ms` : ''}${contentType ? ` | ${contentType}` : ''}`
+  );
+}
+
+function logResponseError(err: AxiosError) {
+  const cfg = err.config as ConfigWithTimer | undefined;
+  const url = cfg ? requestUrl(cfg) : '(unknown url)';
+  const start = cfg?.__apiLogStart;
+  const ms = typeof start === 'number' ? Date.now() - start : undefined;
+  const status = err.response?.status;
+  const code = err.code;
+  const msg = err.message;
+  const raw = err.response?.data;
+  let preview = '';
+  if (raw !== undefined) {
+    if (typeof raw === 'string') {
+      preview = summarizeForLog(raw, 800);
+    } else if (typeof raw === 'object') {
+      preview = summarizeForLog(raw, 800);
+    } else {
+      preview = String(raw);
+    }
+  } else {
+    preview = '(no response body)';
+  }
+  console.error(
+    `[API] └── ERROR ${status ?? '??'} ${url}${ms != null ? ` | ${ms}ms` : ''}\n` +
+      `│ code:    ${code ?? '—'}\n` +
+      `│ message: ${msg}\n` +
+      `│ body:    ${preview}`
+  );
+}
 
 export function setUnauthorizedHandler(handler: (() => void) | null) {
   unauthorizedHandler = handler;
@@ -24,8 +104,15 @@ apiClient.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   if (__DEV__) {
-    const u = `${config.baseURL ?? ''}${config.url ?? ''}`;
-    console.log(`[API] → ${String(config.method ?? 'get').toUpperCase()} ${u}`);
+    const c = config as ConfigWithTimer;
+    c.__apiLogStart = Date.now();
+    const u = requestUrl(c);
+    const method = String(c.method ?? 'get').toUpperCase();
+    if (API_DETAILED_LOGS) {
+      logRequestDetail(c, !!token);
+    } else {
+      console.log(`[API] → ${method} ${u}`);
+    }
   }
   return config;
 });
@@ -33,19 +120,27 @@ apiClient.interceptors.request.use(async (config) => {
 apiClient.interceptors.response.use(
   (res) => {
     if (__DEV__) {
-      const cfg = res.config;
-      const u = `${cfg.baseURL ?? ''}${cfg.url ?? ''}`;
-      console.log(`[API] ← ${res.status} ${u}`);
+      const cfg = res.config as ConfigWithTimer;
+      if (API_DETAILED_LOGS) {
+        const ct = res.headers['content-type'];
+        logResponseOk(cfg, res.status, typeof ct === 'string' ? ct : undefined);
+      } else {
+        console.log(`[API] ← ${res.status} ${requestUrl(cfg)}`);
+      }
     }
     return res;
   },
   async (error) => {
     if (__DEV__ && isAxiosError(error)) {
-      const cfg = error.config;
-      const u = cfg ? `${cfg.baseURL ?? ''}${cfg.url ?? ''}` : '';
-      const status = error.response?.status;
-      const data = error.response?.data;
-      console.error(`[API] ✗ ${status ?? '??'} ${u}`, data ?? error.message);
+      if (API_DETAILED_LOGS) {
+        logResponseError(error);
+      } else {
+        const cfg = error.config;
+        const u = cfg ? requestUrl(cfg as ConfigWithTimer) : '';
+        const status = error.response?.status;
+        const data = error.response?.data;
+        console.error(`[API] ✗ ${status ?? '??'} ${u}`, data ?? error.message);
+      }
     }
     const status = error?.response?.status;
     const reqPath = String(error?.config?.url ?? '');
