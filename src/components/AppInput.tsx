@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { colors } from '../theme/colors';
@@ -74,13 +74,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     borderRadius: radii.md,
     minHeight: 52,
-    ...{
-      shadowColor: '#0F172A',
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 1,
-    },
+    ...(Platform.OS === 'web'
+      ? {
+          boxShadow: '0px 2px 6px rgba(15, 23, 42, 0.04)',
+        }
+      : {
+          shadowColor: '#0F172A',
+          shadowOpacity: 0.04,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 1,
+        }),
   },
   fieldError: {
     borderColor: colors.danger,

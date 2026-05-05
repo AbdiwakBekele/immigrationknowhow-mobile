@@ -67,9 +67,16 @@ export function CommunityListScreen() {
     <View style={styles.headerBlock}>
       <View style={styles.topRow}>
         <Text style={styles.screenTitle}>Community</Text>
-        <Pressable onPress={() => navigation.navigate('CommunityNews')} style={styles.newsBtn} hitSlop={8}>
-          <Ionicons name="newspaper-outline" size={18} color={colors.primary[600]} />
+        <Pressable
+          onPress={() => navigation.navigate('CommunityNews')}
+          style={({ pressed }) => [styles.newsBtn, pressed && styles.newsBtnPressed]}
+          hitSlop={8}
+        >
+          <View style={styles.newsBtnIconWrap}>
+            <Ionicons name="newspaper-outline" size={16} color={colors.primary[700]} />
+          </View>
           <Text style={styles.newsBtnText}>News</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.primary[500]} />
         </Pressable>
       </View>
 
@@ -81,7 +88,11 @@ export function CommunityListScreen() {
               <Pressable
                 key={s.key}
                 onPress={() => setCategory(s.key)}
-                style={[styles.sectionChip, active ? styles.sectionChipActive : null]}
+                style={({ pressed }) => [
+                  styles.sectionChip,
+                  active ? styles.sectionChipActive : null,
+                  pressed && (active ? styles.sectionChipPressedActive : styles.sectionChipPressed),
+                ]}
               >
                 <Text style={[styles.sectionChipText, active ? styles.sectionChipTextActive : null]}>{s.label}</Text>
               </Pressable>
@@ -90,22 +101,24 @@ export function CommunityListScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.searchRow}>
-        <Ionicons name="search-outline" size={20} color={colors.text.muted} style={styles.searchIcon} />
-        <TextInput
-          placeholder="Search posts…"
-          placeholderTextColor={colors.text.muted}
-          value={search}
-          onChangeText={setSearch}
-          onSubmitEditing={onSearchSubmit}
-          returnKeyType="search"
-          style={styles.searchInput}
-        />
+      <View style={styles.searchActionsRow}>
+        <View style={styles.searchRow}>
+          <Ionicons name="search-outline" size={20} color={colors.text.muted} style={styles.searchIcon} />
+          <TextInput
+            placeholder="Search posts…"
+            placeholderTextColor={colors.text.muted}
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={onSearchSubmit}
+            returnKeyType="search"
+            style={styles.searchInput}
+          />
+        </View>
+        <Pressable onPress={onSearchSubmit} style={({ pressed }) => [styles.searchButton, pressed && styles.searchButtonPressed]}>
+          <Text style={styles.searchButtonText}>Search</Text>
+          <Ionicons name="arrow-forward" size={18} color={colors.text.inverse} />
+        </Pressable>
       </View>
-      <Pressable onPress={onSearchSubmit} style={styles.searchButton}>
-        <Text style={styles.searchButtonText}>Search</Text>
-        <Ionicons name="arrow-forward" size={18} color={colors.text.inverse} />
-      </Pressable>
       {loading && <ActivityIndicator style={{ marginBottom: spacing.lg }} color={colors.primary[600]} />}
     </View>
   );
@@ -205,13 +218,26 @@ const styles = StyleSheet.create({
   newsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm + 2,
     borderRadius: radii.full,
-    backgroundColor: colors.primary[50],
+    backgroundColor: '#EEF4FF',
     borderWidth: 1,
-    borderColor: colors.primary[200],
+    borderColor: '#C7D7FE',
+    ...shadows.soft,
+  },
+  newsBtnPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.98 }],
+  },
+  newsBtnIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DBE8FF',
   },
   newsBtnText: {
     color: colors.primary[700],
@@ -227,29 +253,43 @@ const styles = StyleSheet.create({
     paddingRight: spacing.xl,
   },
   sectionChip: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 6,
     paddingHorizontal: spacing.md,
     borderRadius: radii.full,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
+    borderColor: '#D9E2F0',
+    backgroundColor: '#F8FAFC',
+    ...shadows.soft,
   },
   sectionChipActive: {
-    borderColor: colors.primary[600],
-    backgroundColor: colors.primary[50],
+    borderColor: '#A7C4FE',
+    backgroundColor: '#E9F1FF',
+  },
+  sectionChipPressed: {
+    opacity: 0.88,
+  },
+  sectionChipPressedActive: {
+    opacity: 0.94,
   },
   sectionChipText: {
-    color: colors.text.primary,
+    color: colors.text.secondary,
     fontWeight: typography.fontWeight.medium,
     fontSize: typography.fontSize.sm,
   },
   sectionChipTextActive: {
     color: colors.primary[800],
   },
-  searchRow: {
+  searchActionsRow: {
     marginTop: spacing.md,
+    marginBottom: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceElevated,
@@ -268,17 +308,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   searchButton: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radii.md,
+    minHeight: 48,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.full,
     backgroundColor: colors.primary[600],
     ...shadows.soft,
+  },
+  searchButtonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.985 }],
   },
   searchButtonText: {
     color: colors.text.inverse,

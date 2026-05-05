@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
 import { AppImage } from '../../components/AppImage';
@@ -12,12 +11,10 @@ import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import * as communityApi from '../../api/communityApi';
 import type { CommunityNewsItem } from '../../api/communityApi';
-import type { CommunityStackParamList } from './CommunityStack';
 
 const COUNTRIES = ['US', 'EU', 'CA', 'GB'] as const;
 
 export function CommunityNewsScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<CommunityStackParamList>>();
   const [country, setCountry] = useState<(typeof COUNTRIES)[number]>('US');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<CommunityNewsItem[]>([]);
@@ -45,10 +42,6 @@ export function CommunityNewsScreen() {
 
   return (
     <AppScreen style={styles.screen}>
-      <Pressable onPress={() => navigation.goBack()} style={styles.backRow} hitSlop={12}>
-        <Ionicons name="chevron-back" size={22} color={colors.primary[600]} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
       <Text style={styles.title}>Immigration news</Text>
       <Text style={styles.subtitle}>Headlines from trusted sources for your region.</Text>
 
@@ -113,17 +106,6 @@ const styles = StyleSheet.create({
   screen: {
     paddingHorizontal: screenPaddingX,
     paddingTop: spacing.sm,
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    color: colors.primary[600],
-    fontWeight: typography.fontWeight.semibold,
-    fontSize: typography.fontSize.md,
   },
   title: {
     fontSize: typography.fontSize.xl,

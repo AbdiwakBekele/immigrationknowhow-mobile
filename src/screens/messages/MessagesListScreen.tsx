@@ -115,39 +115,41 @@ export function MessagesListScreen() {
                 {role === 'provider' ? 'Client messages' : 'Messages'}
               </Text>
               <Text style={{ marginTop: spacing.sm, color: colors.text.secondary }}>{headerSubtitle}</Text>
-              <Pressable
-                onPress={() => navigation.navigate('ArchivedMessages')}
-                style={{
-                  marginTop: spacing.md,
-                  alignSelf: 'flex-start',
-                  paddingVertical: spacing.sm,
-                  paddingHorizontal: spacing.lg,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: '#bfdbfe',
-                  backgroundColor: '#eff6ff',
-                }}
-              >
-                <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.primary[700] }}>
-                  Archived
-                </Text>
-              </Pressable>
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder={role === 'provider' ? 'Search by client name…' : 'Search by name…'}
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  marginTop: spacing.lg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 12,
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.md,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                }}
-              />
+              <View style={{ marginTop: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder={role === 'provider' ? 'Search by client name…' : 'Search by name…'}
+                  placeholderTextColor={colors.text.muted}
+                  style={{
+                    flex: 1,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    borderRadius: 12,
+                    paddingHorizontal: spacing.lg,
+                    paddingVertical: spacing.md,
+                    color: colors.text.primary,
+                    backgroundColor: colors.surface,
+                  }}
+                />
+                <Pressable
+                  onPress={() => navigation.navigate('ArchivedMessages')}
+                  style={{
+                    minHeight: 48,
+                    justifyContent: 'center',
+                    paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.lg,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#bfdbfe',
+                    backgroundColor: '#eff6ff',
+                  }}
+                >
+                  <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.primary[700] }}>
+                    Archived
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           }
           ListEmptyComponent={

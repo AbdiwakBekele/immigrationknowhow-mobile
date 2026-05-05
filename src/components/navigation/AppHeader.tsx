@@ -77,20 +77,69 @@ export function AppHeader({ fallbackBack, ...props }: AppHeaderProps) {
         </Text>
       </View>
 
-      <NotificationHeaderButton
-        unreadCount={unreadCount}
-        iconColor={iconColor}
-        badgeBorderColor={canvas === 'drawer' ? '#0f172a' : colors.background}
-        onPress={() => {
-          // Keep navigation local to the current stack. If a screen named "Notifications"
-          // exists in that stack, it will open; otherwise, this is a no-op.
-          try {
-            props.navigation.navigate('Notifications' as never);
-          } catch {
-            // ignore
-          }
-        }}
-      />
+      <View style={styles.right}>
+        <Pressable
+          onPress={() => {
+            const parent = props.navigation.getParent();
+            const grandParent = parent?.getParent?.();
+
+            // 1) Current stack has AiAssistant route
+            try {
+              props.navigation.navigate('AiAssistant' as never);
+              return;
+            } catch {
+              // continue
+            }
+
+            // 2) Parent stack has AiAssistant route (e.g. inside Discover stack)
+            try {
+              parent?.navigate('AiAssistant' as never);
+              return;
+            } catch {
+              // continue
+            }
+
+            // 3) Parent is tabs; go through Discover tab
+            try {
+              parent?.navigate('Discover' as never, { screen: 'AiAssistant' } as never);
+              return;
+            } catch {
+              // continue
+            }
+
+            // 4) Drawer root -> Main tabs -> Discover stack -> AiAssistant
+            try {
+              grandParent?.navigate('Main' as never, {
+                screen: 'Discover',
+                params: { screen: 'AiAssistant' },
+              } as never);
+            } catch {
+              // ignore when route tree differs
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open AI Assistant"
+          hitSlop={10}
+          style={styles.aiHit}
+        >
+          <Ionicons name="sparkles-outline" size={24} color={iconColor} />
+        </Pressable>
+
+        <NotificationHeaderButton
+          unreadCount={unreadCount}
+          iconColor={iconColor}
+          badgeBorderColor={canvas === 'drawer' ? '#0f172a' : colors.background}
+          onPress={() => {
+            // Keep navigation local to the current stack. If a screen named "Notifications"
+            // exists in that stack, it will open; otherwise, this is a no-op.
+            try {
+              props.navigation.navigate('Notifications' as never);
+            } catch {
+              // ignore
+            }
+          }}
+        />
+      </View>
     </View>
   );
 }
@@ -119,6 +168,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingRight: spacing.sm,
+  },
+  right: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  aiHit: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
   },
   wrapDrawer: {
     backgroundColor: 'transparent',

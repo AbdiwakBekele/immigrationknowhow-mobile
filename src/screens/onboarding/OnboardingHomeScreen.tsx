@@ -15,7 +15,7 @@ import type { OnboardingStackParamList } from '../../navigation/OnboardingStack'
 
 export function OnboardingHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
-  const { refreshMe } = useAuth();
+  const { refreshMe, signOut, role } = useAuth();
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +59,14 @@ export function OnboardingHomeScreen() {
     // Next: we’ll implement the full multi-step onboarding UI.
   }
 
+  async function onBackPress() {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    await signOut();
+  }
+
   if (loading) {
     return (
       <AppScreen style={{ padding: spacing.xl, justifyContent: 'center' }}>
@@ -69,10 +77,12 @@ export function OnboardingHomeScreen() {
 
   return (
     <AppScreen style={{ padding: spacing.xl }}>
-      {navigation.canGoBack() ? (
+      {role === 'user' ? (
         <View style={{ marginBottom: spacing.md, alignSelf: 'flex-start' }}>
           <Pressable
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              void onBackPress();
+            }}
             accessibilityRole="button"
             accessibilityLabel="Go back"
             hitSlop={12}

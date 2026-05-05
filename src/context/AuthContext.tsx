@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { AuthUser, UserRole } from '../types/user';
 import * as authApi from '../api/authApi';
+import { friendlyApiErrorMessage } from '../api/userFriendlyMessage';
 import { clearToken, getToken, setToken } from '../services/tokenStorage';
 import { setUnauthorizedHandler } from '../api/client';
 
@@ -61,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const res = await authApi.login({ email, password });
-    if (!res.success) return { ok: false as const, message: res.message };
+    if (!res.success) return { ok: false as const, message: friendlyApiErrorMessage(res) };
 
     await setToken(res.data.token);
     setTokenState(res.data.token);
@@ -71,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = useCallback(async (payload: authApi.RegisterPayload) => {
     const res = await authApi.register(payload);
-    if (!res.success) return { ok: false as const, message: res.message };
+    if (!res.success) return { ok: false as const, message: friendlyApiErrorMessage(res) };
 
     await setToken(res.data.token);
     setTokenState(res.data.token);

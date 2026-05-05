@@ -1,10 +1,11 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -12,6 +13,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppScreen } from '../../components/AppScreen';
 import type { SeekerBottomTabParamList } from '../../navigation/SeekerBottomTabs';
 import type { SeekerDashboardStackParamList } from './SeekerDashboardStack';
@@ -19,6 +21,7 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as seekerDashboardApi from '../../api/seekerDashboardApi';
+import { useAuth } from '../../context/AuthContext';
 
 type SeekerDashboardNav = CompositeNavigationProp<
   BottomTabNavigationProp<SeekerBottomTabParamList>,
@@ -27,13 +30,215 @@ type SeekerDashboardNav = CompositeNavigationProp<
 
 type LeadRow = {
   uuid: string;
+  message?: string | null;
+  status?: string | null;
+  created_at?: string | null;
   service_type?: string;
   service_provider?: { slug?: string; business_name?: string | null };
   conversation?: { uuid: string } | null;
 };
 
+const styles = StyleSheet.create({
+  loadingScreen: {
+    padding: spacing.xl,
+    justifyContent: 'center',
+  },
+  errorScreen: {
+    padding: spacing.xl,
+  },
+  screen: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xs,
+    paddingBottom: 0,
+  },
+  scrollContent: {
+    paddingBottom: spacing['3xl'],
+  },
+  hero: {
+    marginTop: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(147,197,253,0.35)',
+    overflow: 'hidden',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.16,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  heroKicker: {
+    fontSize: typography.fontSize.xs,
+    color: '#bfdbfe',
+    fontWeight: typography.fontWeight.semibold,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+  },
+  heroTitle: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.inverse,
+  },
+  heroBody: {
+    marginTop: spacing.xs,
+    color: '#dbeafe',
+    lineHeight: 20,
+  },
+  heroChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  chip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  chipText: {
+    color: '#eff6ff',
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  actionGrid: {
+    marginTop: spacing.lg,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+  },
+  actionCard: {
+    width: '47.8%',
+    padding: spacing.lg,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#dbe2ef',
+    backgroundColor: colors.surfaceElevated,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.07,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  actionTitle: {
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.md,
+  },
+  actionBody: {
+    marginTop: spacing.xs,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+  },
+  sectionTitle: {
+    marginTop: spacing['2xl'],
+    marginBottom: spacing.md,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  statPill: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#dbe2ef',
+    minWidth: 102,
+    flexGrow: 1,
+  },
+  statLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.muted,
+  },
+  statValue: {
+    marginTop: spacing.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  card: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#dbe2ef',
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: spacing.lg,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 5 },
+    shadowRadius: 12,
+    elevation: 1,
+  },
+  row: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  rowLast: {
+    borderBottomWidth: 0,
+  },
+  rowTitle: {
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  rowBody: {
+    marginTop: spacing.xs,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+  },
+  rowMeta: {
+    marginTop: spacing.xs,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
+  },
+  empty: {
+    color: colors.text.secondary,
+    paddingVertical: spacing.lg,
+  },
+  statusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    textTransform: 'capitalize',
+  },
+  providerCard: {
+    width: 228,
+    padding: spacing.lg,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#dbe2ef',
+    backgroundColor: colors.surfaceElevated,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  providerCardTitle: {
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  providerCardBody: {
+    marginTop: spacing.xs,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm,
+  },
+});
+
 export function SeekerDashboardScreen() {
   const navigation = useNavigation<SeekerDashboardNav>();
+  const { user } = useAuth();
 
   const openProviderDetail = (slug: string) => {
     navigation.navigate('Discover', {
@@ -70,7 +275,7 @@ export function SeekerDashboardScreen() {
 
   if (loading && !dash) {
     return (
-      <AppScreen style={{ padding: spacing.xl, justifyContent: 'center' }}>
+      <AppScreen style={styles.loadingScreen}>
         <ActivityIndicator color={colors.primary[600]} />
       </AppScreen>
     );
@@ -78,7 +283,7 @@ export function SeekerDashboardScreen() {
 
   if (error && !dash) {
     return (
-      <AppScreen style={{ padding: spacing.xl }}>
+      <AppScreen style={styles.errorScreen}>
         <Text style={{ color: colors.danger }}>{error}</Text>
         <Pressable onPress={() => void load(false)} style={{ marginTop: spacing.lg }}>
           <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>Retry</Text>
@@ -95,169 +300,167 @@ export function SeekerDashboardScreen() {
   const purchasedItems = (dash?.purchased_items ?? []) as Array<{
     item?: { title?: string; uuid?: string };
   }>;
+  const firstName = user?.first_name?.trim() || 'there';
+  const profileCompletion = stats?.profileCompletion ?? 0;
+  const profileTone = profileCompletion >= 90 ? 'Almost done' : profileCompletion >= 60 ? 'Great progress' : 'Keep going';
 
   return (
-    <AppScreen variant="gradient" style={{ padding: spacing.xl, paddingBottom: 0 }}>
+    <AppScreen variant="gradient" style={styles.screen}>
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
-        {stats && (
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: spacing.md,
-              marginTop: spacing.lg,
-            }}
-          >
-            <StatPill label="Leads" value={String(stats.totalLeads)} />
-            <StatPill label="Unread" value={String(stats.unreadMessages)} />
-            <StatPill label="Profile" value={`${stats.profileCompletion}%`} />
-          </View>
-        )}
-
-        <SectionTitle title="Recommended providers" />
-        {recommended.length === 0 ? (
-          <Text style={{ color: colors.text.secondary }}>Browse the marketplace to find providers.</Text>
-        ) : (
-          <FlatList
-            horizontal
-            data={recommended}
-            keyExtractor={(p) => p.slug}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.sm }}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => openProviderDetail(item.slug)}
-                style={{
-                  width: 220,
-                  padding: spacing.lg,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.surface,
-                }}
-              >
-                <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }} numberOfLines={2}>
-                  {item.business_name ?? 'Provider'}
-                </Text>
-                <Text style={{ marginTop: spacing.xs, color: colors.text.muted, fontSize: typography.fontSize.sm }} numberOfLines={1}>
-                  {item.location_display}
-                </Text>
-              </Pressable>
-            )}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Platform.OS === 'ios' ? colors.primary[600] : undefined}
+            colors={Platform.OS === 'android' ? [colors.primary[600]] : undefined}
           />
+        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.hero}>
+          <LinearGradient
+            colors={['#1d4ed8', '#2563eb', '#0f172a']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          <Text style={styles.heroKicker}>Seeker dashboard</Text>
+          <Text style={styles.heroTitle}>Welcome back, {firstName}!</Text>
+          <Text style={styles.heroBody}>Here is what is happening with your immigration journey.</Text>
+          <View style={styles.heroChips}>
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{profileCompletion}% complete</Text>
+            </View>
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{profileTone}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.actionGrid}>
+          <ActionCard
+            title="Find providers"
+            subtitle="Search for services"
+            onPress={() => navigation.navigate('Discover', { screen: 'Providers' })}
+          />
+          <ActionCard title="Messages" subtitle={`${stats?.unreadMessages ?? 0} unread`} onPress={() => navigation.navigate('Messages')} />
+          <ActionCard title="Library" subtitle="E-books & audiobooks" onPress={() => navigation.navigate('Discover', { screen: 'Library' })} />
+          <ActionCard title="Community" subtitle="Join discussions" onPress={() => navigation.navigate('Discover', { screen: 'Community' })} />
+        </View>
+
+        {stats && (
+          <>
+            <SectionTitle title="Overview" />
+            <View style={styles.statsGrid}>
+              <StatPill label="Leads" value={String(stats.totalLeads)} />
+              <StatPill label="Unread" value={String(stats.unreadMessages)} />
+              <StatPill label="Profile" value={`${stats.profileCompletion}%`} />
+            </View>
+          </>
         )}
 
-        <SectionTitle title="Recent leads" />
-        {recentLeads.length === 0 ? (
-          <Text style={{ color: colors.text.secondary }}>No leads yet.</Text>
+        <SectionTitle title="Recommended for you" />
+        {recommended.length === 0 ? (
+          <Text style={styles.empty}>Browse the marketplace to find providers.</Text>
         ) : (
-          recentLeads.map((lead) => (
-            <Pressable
-              key={lead.uuid}
-              onPress={() => {
-                const slug = lead.service_provider?.slug;
-                if (slug) {
-                  openProviderDetail(slug);
-                }
-              }}
-              style={{
-                padding: spacing.lg,
-                marginBottom: spacing.md,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-              }}
-            >
-              <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>
-                {lead.service_provider?.business_name ?? 'Lead'}
-              </Text>
-              {!!lead.service_type && (
-                <Text style={{ marginTop: spacing.xs, color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
-                  {lead.service_type}
-                </Text>
-              )}
-            </Pressable>
-          ))
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.sm }}>
+            {recommended.map((item) => (
+              <ProviderCard
+                key={item.slug}
+                title={item.business_name ?? 'Provider'}
+                subtitle={item.location_display ?? ''}
+                onPress={() => openProviderDetail(item.slug)}
+              />
+            ))}
+          </ScrollView>
         )}
+
+        <SectionTitle title="Your inquiries" />
+        <Card>
+          {recentLeads.length === 0 ? (
+            <Text style={styles.empty}>No inquiries yet.</Text>
+          ) : (
+            recentLeads.map((lead, idx) => {
+              const st = statusStyle(lead.status);
+              return (
+                <Pressable key={lead.uuid} onPress={() => lead.service_provider?.slug && openProviderDetail(lead.service_provider.slug)} style={[styles.row, idx === recentLeads.length - 1 ? styles.rowLast : null]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md }}>
+                    <Text style={[styles.rowTitle, { flex: 1 }]} numberOfLines={1}>
+                      {lead.service_provider?.business_name ?? 'Inquiry'}
+                    </Text>
+                    {!!lead.status && (
+                      <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
+                        <Text style={[styles.statusText, { color: st.text }]}>{lead.status}</Text>
+                      </View>
+                    )}
+                  </View>
+                  {!!lead.message?.trim() && (
+                    <Text style={styles.rowBody} numberOfLines={2}>
+                      {lead.message}
+                    </Text>
+                  )}
+                  {!!lead.service_type && (
+                    <Text style={styles.rowBody} numberOfLines={1}>
+                      {lead.service_type}
+                    </Text>
+                  )}
+                  {!!lead.created_at && <Text style={styles.rowMeta}>{formatTimeAgo(lead.created_at)}</Text>}
+                </Pressable>
+              );
+            })
+          )}
+        </Card>
 
         {libraryItems.length > 0 && (
           <>
-            <SectionTitle title="Featured library" />
-            {libraryItems.map((item) => (
-              <View
-                key={item.uuid}
-                style={{
-                  padding: spacing.lg,
-                  marginBottom: spacing.md,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.surface,
-                }}
-              >
-                <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>{item.title ?? 'Item'}</Text>
-                {!!item.type && (
-                  <Text style={{ marginTop: spacing.xs, color: colors.text.muted, fontSize: typography.fontSize.sm }}>{item.type}</Text>
-                )}
-              </View>
-            ))}
+            <SectionTitle title="From the library" />
+            <Card>
+              {libraryItems.map((item, idx) => (
+                <SimpleRow key={item.uuid} title={item.title ?? 'Item'} subtitle={item.type} isLast={idx === libraryItems.length - 1} />
+              ))}
+            </Card>
           </>
         )}
 
         {purchasedItems.length > 0 && (
           <>
-            <SectionTitle title="Your library" />
-            {purchasedItems.map((row, idx) => (
-              <View
-                key={row.item?.uuid ?? String(idx)}
-                style={{
-                  padding: spacing.lg,
-                  marginBottom: spacing.md,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.surface,
-                }}
-              >
-                <Text style={{ color: colors.text.primary }}>{row.item?.title ?? 'Purchase'}</Text>
-              </View>
-            ))}
+            <SectionTitle title="Your purchases" />
+            <Card>
+              {purchasedItems.map((row, idx) => (
+                <SimpleRow
+                  key={row.item?.uuid ?? String(idx)}
+                  title={row.item?.title ?? 'Purchase'}
+                  isLast={idx === purchasedItems.length - 1}
+                />
+              ))}
+            </Card>
           </>
         )}
 
         <SectionTitle title="Recent messages" />
-        {recentMessages.length === 0 ? (
-          <Text style={{ color: colors.text.secondary }}>No messages yet.</Text>
-        ) : (
-          recentMessages.map((m) => (
-            <Pressable
-              key={m.uuid}
-              onPress={() => {
-                if (m.conversation_uuid) {
-                  navigation.navigate('Messages', { screen: 'Chat', params: { uuid: m.conversation_uuid } });
+        <Card>
+          {recentMessages.length === 0 ? (
+            <Text style={styles.empty}>No messages yet.</Text>
+          ) : (
+            recentMessages.map((m, idx) => (
+              <SimpleRow
+                key={m.uuid}
+                title={
+                  m.sender && typeof m.sender === 'object' && 'first_name' in m.sender
+                    ? String(m.sender.first_name ?? 'Message')
+                    : 'Message'
                 }
-              }}
-              style={{
-                padding: spacing.lg,
-                marginBottom: spacing.md,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-              }}
-            >
-              <Text style={{ color: colors.text.primary }} numberOfLines={3}>
-                {m.body ?? ''}
-              </Text>
-            </Pressable>
-          ))
-        )}
-
-        <View style={{ height: spacing['3xl'] }} />
+                subtitle={m.body ?? ''}
+                meta={m.created_at ? formatTimeAgo(m.created_at) : undefined}
+                isLast={idx === recentMessages.length - 1}
+                onPress={() => {
+                  if (m.conversation_uuid) navigation.navigate('Messages', { screen: 'Chat', params: { uuid: m.conversation_uuid } });
+                }}
+              />
+            ))
+          )}
+        </Card>
       </ScrollView>
     </AppScreen>
   );
@@ -265,19 +468,9 @@ export function SeekerDashboardScreen() {
 
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
-    <View
-      style={{
-        paddingVertical: spacing.md,
-        paddingHorizontal: spacing.lg,
-        borderRadius: 12,
-        backgroundColor: colors.surfaceElevated,
-        borderWidth: 1,
-        borderColor: colors.border,
-        minWidth: 100,
-      }}
-    >
-      <Text style={{ fontSize: typography.fontSize.xs, color: colors.text.muted }}>{label}</Text>
-      <Text style={{ marginTop: spacing.xs, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>{value}</Text>
+    <View style={styles.statPill}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value}</Text>
     </View>
   );
 }
@@ -296,4 +489,87 @@ function SectionTitle({ title }: { title: string }) {
       {title}
     </Text>
   );
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return <View style={styles.card}>{children}</View>;
+}
+
+function ActionCard({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.actionCard}>
+      <Text style={styles.actionTitle}>{title}</Text>
+      <Text style={styles.actionBody}>{subtitle}</Text>
+    </Pressable>
+  );
+}
+
+function ProviderCard({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.providerCard}>
+      <Text style={styles.providerCardTitle} numberOfLines={2}>
+        {title}
+      </Text>
+      <Text style={styles.providerCardBody} numberOfLines={1}>
+        {subtitle}
+      </Text>
+    </Pressable>
+  );
+}
+
+function SimpleRow({
+  title,
+  subtitle,
+  meta,
+  onPress,
+  isLast,
+}: {
+  title: string;
+  subtitle?: string;
+  meta?: string;
+  onPress?: () => void;
+  isLast?: boolean;
+}) {
+  const body = (
+    <View style={[styles.row, isLast ? styles.rowLast : null]}>
+      <Text style={styles.rowTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      {!!subtitle && (
+        <Text style={styles.rowBody} numberOfLines={3}>
+          {subtitle}
+        </Text>
+      )}
+      {!!meta && <Text style={styles.rowMeta}>{meta}</Text>}
+    </View>
+  );
+  if (!onPress) return body;
+  return <Pressable onPress={onPress}>{body}</Pressable>;
+}
+
+function statusStyle(status?: string | null) {
+  switch ((status ?? '').toLowerCase()) {
+    case 'new':
+      return { bg: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' };
+    case 'contacted':
+      return { bg: '#fef9c3', border: '#fde68a', text: '#a16207' };
+    case 'in_progress':
+      return { bg: '#ede9fe', border: '#c4b5fd', text: '#6d28d9' };
+    case 'converted':
+      return { bg: '#dcfce7', border: '#86efac', text: '#166534' };
+    case 'declined':
+      return { bg: '#fee2e2', border: '#fca5a5', text: '#b91c1c' };
+    default:
+      return { bg: '#f1f5f9', border: '#cbd5e1', text: '#475569' };
+  }
+}
+
+function formatTimeAgo(date: string) {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  const diff = Date.now() - d.getTime();
+  if (diff < 60_000) return 'Just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return d.toLocaleDateString();
 }
