@@ -92,7 +92,6 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
         </DrawerCollapsibleSection>
 
         <DrawerCollapsibleSection title="Discover" defaultOpen>
-          <DrawerGradientLink icon="planet-outline" label="Discover home" onPress={() => goDiscover('DiscoverHome')} indent />
           {dvInMenu ? (
             <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
           ) : null}

@@ -9,9 +9,10 @@ import { spacing } from '../theme/spacing';
 export function AiAssistantFab() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = 64 + 10 + insets.bottom;
 
   return (
-    <View pointerEvents="box-none" style={[styles.wrap, { bottom: spacing.lg + insets.bottom }]}>
+    <View pointerEvents="box-none" style={[styles.wrap, { bottom: tabBarHeight + spacing.md }]}>
       <Pressable
         onPress={() => {
           // @ts-expect-error: app-defined route names
@@ -31,7 +32,7 @@ export function AiAssistantFab() {
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    right: spacing.lg,
+    alignSelf: 'center',
   },
   fab: {
     flexDirection: 'row',

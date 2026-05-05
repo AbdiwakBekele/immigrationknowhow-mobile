@@ -34,12 +34,12 @@ export function SeekerDiscoverStack() {
   return (
     <Stack.Navigator screenOptions={{ header: (p) => <AppHeader {...p} /> }}>
       <Stack.Screen name="DiscoverHome" component={DiscoverHomeScreen} options={{ title: 'Discover' }} />
-      <Stack.Screen name="Providers" component={ProvidersStack} options={{ title: 'Providers' }} />
-      <Stack.Screen name="Contracts" component={ContractsStack} options={{ title: 'Contracts' }} />
+      <Stack.Screen name="Providers" component={ProvidersStack} options={{ headerShown: false }} />
+      <Stack.Screen name="Contracts" component={ContractsStack} options={{ headerShown: false }} />
       <Stack.Screen name="DvLottery" component={DvLotteryScreen} options={{ title: 'DV Lottery' }} />
       <Stack.Screen name="AiAssistant" component={AiAssistantScreen} options={{ title: 'AI Assistant' }} />
       <Stack.Screen name="Library" component={LibraryStack} options={{ headerShown: false }} />
-      <Stack.Screen name="Videos" component={VideosStack} options={{ title: 'Videos' }} />
+      <Stack.Screen name="Videos" component={VideosStack} options={{ headerShown: false }} />
       <Stack.Screen name="Community" component={CommunityStack} options={{ headerShown: false }} />
       <Stack.Screen name="Ads" component={AdsStack} options={{ headerShown: false }} />
       <Stack.Screen name="Reviews" component={ReviewsListScreen} options={{ title: 'My reviews' }} />

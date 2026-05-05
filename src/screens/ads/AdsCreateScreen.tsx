@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import { AppScreen } from '../../components/AppScreen';
 import { colors } from '../../theme/colors';
@@ -13,7 +15,25 @@ export function AdsCreateScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [cta, setCta] = useState('https://');
-  const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.length) {
+      return;
+    }
+    const asset = result.assets[0];
+    const filename = asset.fileName?.trim() || `ad-${Date.now()}.jpg`;
+    const mime = asset.mimeType?.trim() || 'image/jpeg';
+    setImageFile({
+      uri: asset.uri,
+      name: filename,
+      type: mime,
+    });
+  };
 
   const submit = async () => {
     const t = title.trim();
@@ -24,7 +44,12 @@ export function AdsCreateScreen() {
       return;
     }
     setBusy(true);
-    const res = await adsApi.createAd({ title: t, description: d, cta_url: u, image_url: imageUrl.trim() || null });
+    const res = await adsApi.createAd({
+      title: t,
+      description: d,
+      cta_url: u,
+      image: imageFile,
+    });
     setBusy(false);
     if (!res.success) {
       Alert.alert('Create ad', res.message);
@@ -54,8 +79,34 @@ export function AdsCreateScreen() {
         <Text style={label()}>CTA URL</Text>
         <TextInput placeholder="https://…" value={cta} onChangeText={setCta} style={inp()} autoCapitalize="none" />
 
-        <Text style={label()}>Image URL (optional)</Text>
-        <TextInput placeholder="https://… or /storage/…" value={imageUrl} onChangeText={setImageUrl} style={inp()} autoCapitalize="none" />
+        <Text style={label()}>Ad image (optional)</Text>
+        <Pressable
+          onPress={() => void pickImage()}
+          style={{
+            marginTop: spacing.sm,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: 12,
+            padding: spacing.md,
+            backgroundColor: colors.surface,
+          }}
+        >
+          <Text style={{ color: colors.primary[700], fontWeight: typography.fontWeight.semibold }}>
+            {imageFile ? 'Change image' : 'Upload image'}
+          </Text>
+        </Pressable>
+        {imageFile ? (
+          <View style={{ marginTop: spacing.sm }}>
+            <Image
+              source={{ uri: imageFile.uri }}
+              style={{ width: '100%', height: 170, borderRadius: 12, backgroundColor: colors.surfaceElevated }}
+              contentFit="cover"
+            />
+            <Pressable onPress={() => setImageFile(null)} style={{ marginTop: spacing.sm }}>
+              <Text style={{ color: colors.text.muted }}>Remove image</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <Pressable
           onPress={() => void submit()}
