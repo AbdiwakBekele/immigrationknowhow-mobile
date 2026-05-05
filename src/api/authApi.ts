@@ -22,6 +22,20 @@ export type AuthTokenResponse = {
   user: AuthUser;
 };
 
+export type RegisterMeta = {
+  service_types_user: Array<{ value: string; label: string }>;
+  service_types_provider: Array<{ value: string; label: string }>;
+};
+
+export async function registerMeta(): Promise<ApiResponse<RegisterMeta>> {
+  try {
+    const res = await apiClient.get('/api/mobile/auth/register-meta');
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
 export async function login(payload: LoginPayload): Promise<ApiResponse<AuthTokenResponse>> {
   try {
     const res = await apiClient.post('/api/mobile/auth/login', payload);

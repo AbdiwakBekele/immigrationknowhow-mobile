@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,7 +20,9 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import { useAuth } from '../../context/AuthContext';
+import * as authApi from '../../api/authApi';
 import type { RegisterPayload } from '../../api/authApi';
+import { PicklistField } from '../onboarding/components/PicklistField';
 import type { AuthStackParamList } from '../../navigation/AuthStack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { IonIconName } from '../../navigation/tabBar';
@@ -60,8 +62,23 @@ export function SignUpScreen() {
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
 
+  const [providerServiceOptions, setProviderServiceOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [metaLoading, setMetaLoading] = useState(true);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await authApi.registerMeta();
+      setMetaLoading(false);
+      if (res.success) {
+        setProviderServiceOptions(
+          res.data.service_types_provider.map((o) => ({ value: o.value, label: o.label })),
+        );
+      }
+    })();
+  }, []);
 
   const payload: RegisterPayload = useMemo(
     () => ({
@@ -92,7 +109,11 @@ export function SignUpScreen() {
       return;
     }
     if (role === 'provider' && !payload.service_type) {
-      setError('Please enter your service type (required for providers).');
+      setError('Please choose the service you provide.');
+      return;
+    }
+    if (role === 'provider' && !metaLoading && providerServiceOptions.length === 0) {
+      setError('Service types could not be loaded. Try again in a moment.');
       return;
     }
 
@@ -140,7 +161,13 @@ export function SignUpScreen() {
               return (
                 <Pressable
                   key={r.value}
-                  onPress={() => setRole(r.value)}
+                  onPress={() => {
+                    setRole(r.value);
+                    if (r.value !== 'provider') {
+                      setServiceType('');
+                    }
+                    setError(null);
+                  }}
                   style={[styles.roleCard, active ? styles.roleCardActive : null]}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: active }}
@@ -156,6 +183,26 @@ export function SignUpScreen() {
           </View>
 
           <View style={styles.card}>
+            {role === 'provider' ? (
+              metaLoading ? (
+                <Text style={styles.metaLoading}>Loading service options…</Text>
+              ) : providerServiceOptions.length > 0 ? (
+                <PicklistField
+                  label="Service you provide"
+                  value={serviceType}
+                  options={providerServiceOptions}
+                  onChange={(v) => {
+                    setServiceType(v);
+                    setError(null);
+                  }}
+                  placeholder="Choose the service you provide"
+                  required
+                />
+              ) : (
+                <Text style={styles.metaError}>Could not load service types. Check your connection and try again.</Text>
+              )
+            ) : null}
+
             <AppInput
               label="First name"
               value={firstName}
@@ -181,17 +228,6 @@ export function SignUpScreen() {
               leftIcon="mail-outline"
             />
 
-            {role === 'provider' && (
-              <AppInput
-                label="Service type"
-                value={serviceType}
-                onChangeText={setServiceType}
-                placeholder="e.g. Immigration attorney"
-                autoCapitalize="sentences"
-                leftIcon="pricetag-outline"
-              />
-            )}
-
             <AppInput
               label="Password"
               value={password}
@@ -216,7 +252,15 @@ export function SignUpScreen() {
               </View>
             )}
 
-            <AppButton title="Create account" onPress={onSubmit} loading={loading} />
+            <AppButton
+              title="Create account"
+              onPress={onSubmit}
+              loading={loading}
+              disabled={
+                loading ||
+                (role === 'provider' && (metaLoading || providerServiceOptions.length === 0))
+              }
+            />
           </View>
 
           <Pressable onPress={() => navigation.navigate('SignIn')} style={styles.footerLink} hitSlop={12}>
@@ -356,5 +400,16 @@ const styles = StyleSheet.create({
   footerBold: {
     color: colors.primary[700],
     fontWeight: typography.fontWeight.semibold,
+  },
+  metaLoading: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.lg,
+  },
+  metaError: {
+    color: colors.danger,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
   },
 });
