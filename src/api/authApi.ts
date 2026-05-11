@@ -63,6 +63,15 @@ export async function me(): Promise<ApiResponse<{ user: AuthUser }>> {
   }
 }
 
+export async function sendVerificationEmail(): Promise<ApiResponse<{ already_verified: boolean }>> {
+  try {
+    const res = await apiClient.post('/api/mobile/auth/send-verification-email');
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
 export async function logout(): Promise<ApiResponse<Record<string, never>>> {
   try {
     const res = await apiClient.post('/api/mobile/auth/logout');

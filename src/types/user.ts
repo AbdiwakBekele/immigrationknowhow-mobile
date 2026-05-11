@@ -5,6 +5,7 @@ export type AuthUser = {
   first_name: string;
   last_name: string;
   email: string;
+  email_verified_at?: string | null;
   phone?: string | null;
   country?: string | null;
   state?: string | null;
@@ -12,5 +13,6 @@ export type AuthUser = {
   onboarding_completed?: boolean;
   phone_verified_at?: string | null;
   roles?: UserRole[];
+  requires_background_check?: boolean;
 };
 

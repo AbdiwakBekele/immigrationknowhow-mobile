@@ -181,7 +181,7 @@ export function ProviderProfileScreen() {
           </View>
         ) : null}
 
-        {bg && bg !== 'clear' ? (
+        {user?.requires_background_check && bg && bg !== 'clear' ? (
           <View
             style={{
               marginTop: spacing.lg,

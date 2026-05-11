@@ -1,11 +1,19 @@
 import { apiClient, normalizeApiError } from './client';
 import type { ApiResponse } from './types';
 
+export type ChatMessage = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  ts: string | null;
+};
+
 export type AiAssistantState = {
   subscription: unknown;
   is_addon_active: boolean;
   monthly_price: string;
   currency: string;
+  chat_messages: ChatMessage[];
 };
 
 export async function getAiAssistant(params?: { checkout?: string; session_id?: string }): Promise<

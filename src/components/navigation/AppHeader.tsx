@@ -1,6 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { NativeStackHeaderProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,22 +12,17 @@ import { typography } from '../../theme/typography';
 
 const HEADER_BAR_HEIGHT = 56;
 
-export type AppHeaderProps = NativeStackHeaderProps & {
-  /** Used when `canGoBack()` is false (e.g. deep-linked tab roots or nested cross-tab jumps). */
-  fallbackBack?: () => void;
-};
+export type AppHeaderProps = NativeStackHeaderProps;
 
 function headerCanvasVariant(options: NativeStackHeaderProps['options']): 'default' | 'drawer' {
   const v = (options as { appHeaderVariant?: 'default' | 'drawer' }).appHeaderVariant;
   return v === 'drawer' ? 'drawer' : 'default';
 }
 
-export function AppHeader({ fallbackBack, ...props }: AppHeaderProps) {
+export function AppHeader(props: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const canvas = headerCanvasVariant(props.options);
   const title = props.options.title ?? props.route.name;
-  const canGoBack = props.navigation.canGoBack();
-  const showBack = canGoBack || !!fallbackBack;
   const unreadCount =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (props.route.params as any)?.unreadNotificationsCount != null
@@ -57,20 +51,6 @@ export function AppHeader({ fallbackBack, ...props }: AppHeaderProps) {
         />
       ) : null}
       <View style={styles.left}>
-        {showBack ? (
-          <Pressable
-            onPress={() => {
-              if (props.navigation.canGoBack()) props.navigation.goBack();
-              else fallbackBack?.();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={12}
-            style={styles.backHit}
-          >
-            <Ionicons name="chevron-back" size={26} color={iconColor} />
-          </Pressable>
-        ) : null}
         <DrawerMenuButton iconColor={iconColor} />
         <Text style={titleStyle} numberOfLines={1}>
           {title}
@@ -78,53 +58,6 @@ export function AppHeader({ fallbackBack, ...props }: AppHeaderProps) {
       </View>
 
       <View style={styles.right}>
-        <Pressable
-          onPress={() => {
-            const parent = props.navigation.getParent();
-            const grandParent = parent?.getParent?.();
-
-            // 1) Current stack has AiAssistant route
-            try {
-              props.navigation.navigate('AiAssistant' as never);
-              return;
-            } catch {
-              // continue
-            }
-
-            // 2) Parent stack has AiAssistant route (e.g. inside Discover stack)
-            try {
-              parent?.navigate('AiAssistant' as never);
-              return;
-            } catch {
-              // continue
-            }
-
-            // 3) Parent is tabs; go through Discover tab
-            try {
-              parent?.navigate('Discover' as never, { screen: 'AiAssistant' } as never);
-              return;
-            } catch {
-              // continue
-            }
-
-            // 4) Drawer root -> Main tabs -> Discover stack -> AiAssistant
-            try {
-              grandParent?.navigate('Main' as never, {
-                screen: 'Discover',
-                params: { screen: 'AiAssistant' },
-              } as never);
-            } catch {
-              // ignore when route tree differs
-            }
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Open AI Assistant"
-          hitSlop={10}
-          style={styles.aiHit}
-        >
-          <Ionicons name="sparkles-outline" size={24} color={iconColor} />
-        </Pressable>
-
         <NotificationHeaderButton
           unreadCount={unreadCount}
           iconColor={iconColor}
@@ -145,12 +78,6 @@ export function AppHeader({ fallbackBack, ...props }: AppHeaderProps) {
 }
 
 const styles = StyleSheet.create({
-  backHit: {
-    marginRight: -spacing.xs,
-    paddingVertical: 4,
-    paddingRight: 2,
-    justifyContent: 'center',
-  },
   wrap: {
     paddingHorizontal: spacing.md,
     backgroundColor: colors.background,
@@ -173,10 +100,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-  },
-  aiHit: {
-    paddingVertical: 4,
-    paddingHorizontal: 6,
   },
   wrapDrawer: {
     backgroundColor: 'transparent',

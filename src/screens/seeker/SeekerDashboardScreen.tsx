@@ -21,6 +21,7 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as seekerDashboardApi from '../../api/seekerDashboardApi';
+import * as authApi from '../../api/authApi';
 import { useAuth } from '../../context/AuthContext';
 
 type SeekerDashboardNav = CompositeNavigationProp<
@@ -238,7 +239,7 @@ const styles = StyleSheet.create({
 
 export function SeekerDashboardScreen() {
   const navigation = useNavigation<SeekerDashboardNav>();
-  const { user } = useAuth();
+  const { user, refreshMe } = useAuth();
 
   const openProviderDetail = (slug: string) => {
     navigation.navigate('Discover', {
@@ -250,6 +251,9 @@ export function SeekerDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dash, setDash] = useState<seekerDashboardApi.SeekerDashboardData | null>(null);
+  const [sendingVerification, setSendingVerification] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const emailNotVerified = !user?.email_verified_at;
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -272,6 +276,19 @@ export function SeekerDashboardScreen() {
   );
 
   const onRefresh = () => void load(true);
+
+  const handleSendVerification = async () => {
+    setSendingVerification(true);
+    const res = await authApi.sendVerificationEmail();
+    setSendingVerification(false);
+    if (res.success) {
+      if (res.data.already_verified) {
+        await refreshMe();
+      } else {
+        setVerificationSent(true);
+      }
+    }
+  };
 
   if (loading && !dash) {
     return (
@@ -337,6 +354,44 @@ export function SeekerDashboardScreen() {
             </View>
           </View>
         </View>
+
+        {emailNotVerified && (
+          <View
+            style={{
+              marginTop: spacing.lg,
+              padding: spacing.lg,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#fde68a',
+              backgroundColor: '#fffbeb',
+            }}
+          >
+            <Text style={{ fontWeight: typography.fontWeight.semibold, color: '#92400e' }}>
+              Verify your email address
+            </Text>
+            <Text style={{ marginTop: spacing.sm, color: '#a16207', lineHeight: 20 }}>
+              Please verify {user?.email} to access all features.
+              {verificationSent ? ' Check your inbox for the verification link.' : ''}
+            </Text>
+            <Pressable
+              onPress={handleSendVerification}
+              disabled={sendingVerification || verificationSent}
+              style={{
+                marginTop: spacing.md,
+                alignSelf: 'flex-start',
+                backgroundColor: verificationSent ? '#86efac' : '#b45309',
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.lg,
+                borderRadius: 12,
+                opacity: sendingVerification ? 0.6 : 1,
+              }}
+            >
+              <Text style={{ color: verificationSent ? '#065f46' : colors.text.inverse, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
+                {sendingVerification ? 'Sending…' : verificationSent ? 'Email sent' : 'Send verification email'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.actionGrid}>
           <ActionCard

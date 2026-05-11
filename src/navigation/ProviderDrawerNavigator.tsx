@@ -16,6 +16,7 @@ import {
   drawerScrollPadding,
 } from '../components/drawer/DrawerCollapsibleSection';
 import { useDvLottery } from '../context/DvLotteryContext';
+import { useAuth } from '../context/AuthContext';
 
 export type ProviderDrawerParamList = {
   Main: NavigatorScreenParams<ProviderBottomTabParamList>;
@@ -27,10 +28,29 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
   const { navigation } = props;
   const insets = useSafeAreaInsets();
   const { showInMenu: dvInMenu } = useDvLottery();
+  const { user } = useAuth();
 
   const goMain = (screen: keyof ProviderBottomTabParamList) => {
-    navigation.dispatch(CommonActions.navigate({ name: 'Main', params: { screen } }));
     navigation.closeDrawer();
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'Main',
+            state: {
+              index: ['Dashboard', 'Leads', 'Messages', 'Profile'].indexOf(screen),
+              routes: [
+                { name: 'Dashboard' },
+                { name: 'Leads' },
+                { name: 'Messages' },
+                { name: 'Profile' },
+              ],
+            },
+          },
+        ],
+      })
+    );
   };
 
   const goHub = (screen: 'DvLottery' | 'Library' | 'Ads' | 'Community') => {
@@ -130,7 +150,9 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
         <DrawerCollapsibleSection title="Trust & analytics" defaultOpen>
           <DrawerGradientLink icon="stats-chart-outline" label="Analytics" onPress={goProviderAnalytics} indent />
           <DrawerGradientLink icon="star-outline" label="Review" onPress={goProviderReviews} indent />
-          <DrawerGradientLink icon="shield-checkmark-outline" label="Background check" onPress={goProviderBackgroundCheck} indent />
+          {user?.requires_background_check ? (
+            <DrawerGradientLink icon="shield-checkmark-outline" label="Background check" onPress={goProviderBackgroundCheck} indent />
+          ) : null}
         </DrawerCollapsibleSection>
       </DrawerContentScrollView>
     </LinearGradient>
