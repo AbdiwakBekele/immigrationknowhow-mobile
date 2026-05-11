@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppScreen } from '../../components/AppScreen';
 import { AppButton } from '../../components/AppButton';
@@ -10,6 +12,8 @@ import { spacing } from '../../theme/spacing';
 import { ProviderProfileScreen } from './ProviderProfileScreen';
 import { typography } from '../../theme/typography';
 import * as onboardingApi from '../../api/onboardingApi';
+import * as profileApi from '../../api/profileApi';
+import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import { shadows } from '../../theme/shadows';
 
 export function ProfileScreen() {
@@ -21,6 +25,7 @@ export function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -59,7 +64,7 @@ export function ProfileScreen() {
       setPreferredLanguage((String((user as { preferred_language?: string } | null)?.preferred_language ?? '').trim() || 'en').toLowerCase());
       formLoadedRef.current = true;
     }
-  }, []);
+  }, [user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -68,6 +73,13 @@ export function ProfileScreen() {
   );
 
   const name = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || 'Profile';
+  const initials = useMemo(() => {
+    const parts = [user?.first_name, user?.last_name]
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean);
+    if (!parts.length) return 'P';
+    return parts.slice(0, 2).map((value) => value[0]?.toUpperCase() ?? '').join('') || 'P';
+  }, [user?.first_name, user?.last_name]);
   const hasDirtyFields = useMemo(
     () =>
       firstName.trim() !== (user?.first_name ?? '').trim() ||
@@ -86,20 +98,90 @@ export function ProfileScreen() {
     setSaving(true);
     setSaveMessage(null);
     setError(null);
-    const res = await onboardingApi.sendOtp({
-      address: '',
-      city: city.trim(),
-      state: state.trim(),
-      country: country.trim().toUpperCase(),
+    const payload = {
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      email: email.trim(),
+      phone: phone.trim() || null,
+      city: city.trim() || null,
+      state: state.trim() || null,
+      country: country.trim().toUpperCase() || null,
       postal_code: postalCode.trim() || null,
       preferred_language: preferredLanguage.trim().toLowerCase() || 'en',
-    });
+    };
+    const res = await profileApi.updateProfile(payload);
     setSaving(false);
     if (!res.success) {
-      setError(res.message);
+      setError(friendlyApiErrorMessage(res));
       return;
     }
+    setMeta((current) => {
+      if (!current) return current;
+      const existing = (current.existingData ?? {}) as Record<string, unknown>;
+      const location = ((existing.location ?? {}) as Record<string, unknown>);
+      return {
+        ...current,
+        existingData: {
+          ...existing,
+          location: {
+            ...location,
+            postal_code: payload.postal_code ?? '',
+          },
+        },
+      };
+    });
     setSaveMessage('Saved');
+    await refreshMe();
+  };
+
+  const onPickAvatar = async () => {
+    setAvatarBusy(true);
+    setSaveMessage(null);
+    setError(null);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.length) {
+        setAvatarBusy(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const res = await profileApi.uploadAvatar({
+        uri: asset.uri,
+        name: asset.fileName?.trim() || `avatar-${Date.now()}.jpg`,
+        type: asset.mimeType?.trim() || 'image/jpeg',
+        file: (asset as { file?: Blob }).file,
+      });
+      setAvatarBusy(false);
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setSaveMessage('Profile photo updated');
+      await refreshMe();
+    } catch (err) {
+      setAvatarBusy(false);
+      const message = err instanceof Error ? err.message : 'Unable to pick a photo right now.';
+      setError(message);
+    }
+  };
+
+  const onRemoveAvatar = async () => {
+    setAvatarBusy(true);
+    setSaveMessage(null);
+    setError(null);
+    const res = await profileApi.deleteAvatar();
+    setAvatarBusy(false);
+    if (!res.success) {
+      setError(friendlyApiErrorMessage(res));
+      return;
+    }
+    setSaveMessage('Profile photo removed');
     await refreshMe();
   };
 
@@ -111,10 +193,35 @@ export function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroCard}>
-          <Text style={styles.heroEyebrow}>PROFILE</Text>
-          <Text style={styles.heroTitle}>Profile</Text>
-          <Text style={styles.heroName}>{name}</Text>
-          {!!user?.email && <Text style={styles.heroEmail}>{user.email}</Text>}
+          <View style={styles.heroTopRow}>
+            {user?.avatar_url ? (
+              <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} contentFit="cover" />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarInitials}>{initials}</Text>
+              </View>
+            )}
+            <View style={styles.heroTextWrap}>
+              <Text style={styles.heroEyebrow}>PROFILE</Text>
+              <Text style={styles.heroTitle}>Profile</Text>
+              <Text style={styles.heroName}>{name}</Text>
+              {!!user?.email && <Text style={styles.heroEmail}>{user.email}</Text>}
+            </View>
+          </View>
+          <View style={styles.heroActions}>
+            <Pressable style={[styles.avatarAction, avatarBusy && styles.avatarActionDisabled]} onPress={() => void onPickAvatar()} disabled={avatarBusy}>
+              <Text style={styles.avatarActionText}>{user?.avatar_url ? 'Change photo' : 'Upload photo'}</Text>
+            </Pressable>
+            {user?.avatar_url ? (
+              <Pressable
+                style={[styles.avatarGhostAction, avatarBusy && styles.avatarActionDisabled]}
+                onPress={() => void onRemoveAvatar()}
+                disabled={avatarBusy}
+              >
+                <Text style={styles.avatarGhostActionText}>Remove</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -211,6 +318,14 @@ const styles = StyleSheet.create({
     borderColor: '#D4E2FF',
     ...shadows.soft,
   },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  heroTextWrap: {
+    flex: 1,
+  },
   heroEyebrow: {
     fontSize: typography.fontSize.xs,
     color: colors.primary[700],
@@ -233,6 +348,58 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
+  },
+  avatarImage: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: colors.surface,
+  },
+  avatarFallback: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary[600],
+  },
+  avatarInitials: {
+    color: colors.text.inverse,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+  },
+  heroActions: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  avatarAction: {
+    borderRadius: 999,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primary[600],
+  },
+  avatarGhostAction: {
+    borderRadius: 999,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: '#D4E2FF',
+  },
+  avatarActionDisabled: {
+    opacity: 0.6,
+  },
+  avatarActionText: {
+    color: colors.text.inverse,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  avatarGhostActionText: {
+    color: colors.primary[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
   errorText: {
     marginTop: spacing.md,

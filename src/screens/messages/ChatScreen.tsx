@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -10,12 +11,15 @@ import { AppInput } from '../../components/AppInput';
 import type { SeekerBottomTabParamList } from '../../navigation/SeekerBottomTabs';
 import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
+import { radii } from '../../theme/layout';
+import { shadows } from '../../theme/shadows';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as contractsApi from '../../api/contractsApi';
 import * as messagesApi from '../../api/messagesApi';
 import type { MessagesStackParamList } from './MessagesStack';
 import { formatConversationListTime, fullName, leadStatusLabel, leadStatusStyle } from '../../utils/providerUi';
+
 type ChatRoute = RouteProp<MessagesStackParamList, 'Chat'>;
 type ChatNav = CompositeNavigationProp<
   NativeStackNavigationProp<MessagesStackParamList, 'Chat'>,
@@ -29,11 +33,19 @@ function formatDateDivider(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   const today = new Date();
-  const yday = new Date();
-  yday.setDate(today.getDate() - 1);
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
   if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === yday.toDateString()) return 'Yesterday';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+function participantInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const second = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : parts[0]?.[1] ?? '';
+  return `${first}${second}`.toUpperCase() || '?';
 }
 
 export function ChatScreen() {
@@ -54,6 +66,7 @@ export function ChatScreen() {
 
   const loadConversation = useCallback(
     async (first = false) => {
+      if (first) setLoading(true);
       const res = await messagesApi.getConversation(uuid);
       if (first) setLoading(false);
       if (!res.success) {
@@ -79,17 +92,17 @@ export function ChatScreen() {
   }, [loadConversation]);
 
   const rows = useMemo<Row[]>(() => {
-    const out: Row[] = [];
+    const output: Row[] = [];
     let lastDateKey = '';
     for (const msg of messages) {
       const dateKey = new Date(msg.created_at || '').toDateString();
       if (dateKey !== lastDateKey) {
         lastDateKey = dateKey;
-        out.push({ type: 'date', key: `d-${msg.uuid}`, label: formatDateDivider(msg.created_at) });
+        output.push({ type: 'date', key: `d-${msg.uuid}`, label: formatDateDivider(msg.created_at) });
       }
-      out.push({ type: 'msg', key: msg.uuid, item: msg });
+      output.push({ type: 'msg', key: msg.uuid, item: msg });
     }
-    return out;
+    return output;
   }, [messages]);
 
   async function onSend() {
@@ -97,6 +110,7 @@ export function ChatScreen() {
     if (!body) return;
     setDraft('');
     setSending(true);
+    setError(null);
     const res = await messagesApi.sendMessage(uuid, body);
     setSending(false);
     if (!res.success) {
@@ -104,6 +118,18 @@ export function ChatScreen() {
       return;
     }
     setMessages((prev) => [...prev, res.data.message]);
+    setConversation((prev) =>
+      prev
+        ? {
+            ...prev,
+            last_message_at: res.data.message.created_at ?? prev.last_message_at,
+            latest_message: {
+              body: res.data.message.body,
+              created_at: res.data.message.created_at ?? prev.latest_message?.created_at ?? null,
+            },
+          }
+        : prev
+    );
   }
 
   async function onSendContractOffer() {
@@ -153,9 +179,9 @@ export function ChatScreen() {
     });
   }
 
+  const participant = role === 'provider' ? fullName(conversation?.user) : fullName(conversation?.provider_user);
   const leadStatus = conversation?.lead?.status;
   const leadPill = leadStatusStyle(leadStatus);
-  const participant = role === 'provider' ? fullName(conversation?.user) : fullName(conversation?.provider_user);
   const leadContractUuid = conversation?.lead?.contract_uuid ?? null;
   const canSendOffer =
     role === 'user' &&
@@ -169,186 +195,457 @@ export function ChatScreen() {
       ? 'Contract offer pending'
       : '';
 
+  if (loading) {
+    return (
+      <AppScreen variant="gradient" style={styles.centered}>
+        <ActivityIndicator size="large" color={colors.primary[600]} />
+        <Text style={styles.loadingText}>Loading conversation…</Text>
+      </AppScreen>
+    );
+  }
+
+  if (error && !conversation) {
+    return (
+      <AppScreen variant="gradient" style={styles.centered}>
+        <View style={styles.fullErrorCard}>
+          <Ionicons name="alert-circle-outline" size={28} color={colors.danger} />
+          <Text style={styles.fullErrorTitle}>Unable to open chat</Text>
+          <Text style={styles.fullErrorText}>{error}</Text>
+          <Pressable onPress={() => void loadConversation(true)} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </Pressable>
+        </View>
+      </AppScreen>
+    );
+  }
+
   return (
-    <AppScreen style={{ flex: 1 }}>
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: 'center', padding: spacing.xl }}>
-          <ActivityIndicator color={colors.primary[600]} />
-        </View>
-      ) : error && !conversation ? (
-        <View style={{ flex: 1, padding: spacing.xl, justifyContent: 'center' }}>
-          <Text style={{ color: colors.danger }}>{error}</Text>
-        </View>
-      ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View
-            style={{
-              paddingHorizontal: spacing.lg,
-              paddingTop: spacing.md,
-              paddingBottom: spacing.sm,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border,
-              backgroundColor: colors.surfaceElevated,
-            }}
-          >
-            <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>{participant}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs, flexWrap: 'wrap' }}>
-              {!!conversation?.lead?.service_type && (
-                <View style={{ paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: 8, backgroundColor: colors.backgroundMuted }}>
-                  <Text style={{ fontSize: typography.fontSize.xs, color: colors.text.secondary }}>{conversation.lead.service_type}</Text>
-                </View>
-              )}
-              {!!leadStatus && (
-                <View
-                  style={{
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: 3,
-                    borderRadius: 8,
-                    backgroundColor: leadPill.bg,
-                    borderWidth: 1,
-                    borderColor: leadPill.border,
-                  }}
-                >
-                  <Text style={{ fontSize: typography.fontSize.xs, color: leadPill.text }}>{leadStatusLabel(leadStatus)}</Text>
-                </View>
-              )}
-              {!!conversation?.last_message_at && (
-                <Text style={{ fontSize: typography.fontSize.xs, color: colors.text.muted }}>
-                  Last: {formatConversationListTime(conversation.last_message_at)}
-                </Text>
-              )}
-              <Pressable onPress={() => setMetaOpen((v) => !v)} style={{ marginLeft: 'auto' }}>
-                <Text style={{ color: colors.primary[700], fontSize: typography.fontSize.xs }}>
-                  {metaOpen ? 'Hide info' : 'Lead info'}
-                </Text>
-              </Pressable>
+    <AppScreen variant="gradient" style={styles.screen}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
+        <View style={styles.threadCard}>
+          <View style={styles.threadTopRow}>
+            <View style={styles.avatarWrap}>
+              <Text style={styles.avatarText}>{participantInitials(participant)}</Text>
             </View>
-            {metaOpen && (
-              <View style={{ marginTop: spacing.xs }}>
-                <Text style={{ color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
-                  One-on-one thread linked to a service inquiry. Only this client and provider can see this conversation.
-                </Text>
-                {!!contractStateText && (
-                  <Text style={{ marginTop: spacing.xs, color: colors.primary[700], fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium }}>
-                    {contractStateText}
-                  </Text>
-                )}
-                {role === 'user' && (canSendOffer || !!leadContractUuid) ? (
-                  <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-                    {canSendOffer ? (
-                      <>
-                        <AppInput
-                          label="Offer rate (optional)"
-                          value={offerRate}
-                          onChangeText={setOfferRate}
-                          placeholder="e.g. 150"
-                          keyboardType="numeric"
-                        />
-                        <AppButton title="Send contract offer" onPress={() => void onSendContractOffer()} loading={contractBusy} variant="secondary" />
-                      </>
-                    ) : null}
-                    {!!leadContractUuid && (
-                      <AppButton
-                        title={conversation?.lead?.contract_accepted_at ? 'Open contract' : 'Open offer'}
-                        onPress={() => openContract(leadContractUuid)}
-                        variant="ghost"
-                      />
-                    )}
-                  </View>
-                ) : null}
+            <View style={styles.threadTextWrap}>
+              <Text style={styles.participantName}>{participant}</Text>
+              <Text style={styles.threadSubtitle}>Secure one-on-one conversation linked to a service inquiry.</Text>
+            </View>
+            <Pressable style={styles.infoToggle} onPress={() => setMetaOpen((value) => !value)}>
+              <Ionicons name={metaOpen ? 'chevron-up' : 'information-circle-outline'} size={18} color={colors.primary[700]} />
+              <Text style={styles.infoToggleText}>{metaOpen ? 'Hide info' : 'Lead info'}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.chipRow}>
+            {!!conversation?.lead?.service_type && (
+              <View style={styles.infoChip}>
+                <Text style={styles.infoChipText}>{conversation.lead.service_type}</Text>
+              </View>
+            )}
+            {!!leadStatus && (
+              <View style={[styles.infoChip, { backgroundColor: leadPill.bg, borderWidth: 1, borderColor: leadPill.border }]}>
+                <Text style={[styles.infoChipText, { color: leadPill.text }]}>{leadStatusLabel(leadStatus)}</Text>
+              </View>
+            )}
+            {!!conversation?.last_message_at && (
+              <View style={styles.infoChip}>
+                <Text style={styles.infoChipText}>Last active {formatConversationListTime(conversation.last_message_at)}</Text>
               </View>
             )}
           </View>
-          {!!error && (
-            <Text style={{ color: colors.danger, paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
-              {error}
-            </Text>
-          )}
-          <FlatList
-            contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing['3xl'] }}
-            data={rows}
-            keyExtractor={(r) => r.key}
-            renderItem={({ item }) =>
-              item.type === 'date' ? (
-                <View style={{ alignItems: 'center', marginBottom: spacing.md }}>
-                  <Text style={{ fontSize: typography.fontSize.xs, color: colors.text.muted }}>{item.label}</Text>
-                </View>
-              ) : (
-                <View style={{ alignItems: item.item.is_mine ? 'flex-end' : 'flex-start', marginBottom: spacing.md }}>
-                  <View
-                    style={{
-                      maxWidth: '85%',
-                      backgroundColor: item.item.is_mine ? colors.primary[600] : colors.surface,
-                      borderColor: item.item.is_mine ? colors.primary[600] : colors.border,
-                      borderWidth: 1,
-                      borderRadius: 16,
-                      padding: spacing.md,
-                    }}
-                  >
-                    <Text style={{ color: item.item.is_mine ? colors.text.inverse : colors.text.primary, fontSize: typography.fontSize.md }}>
-                      {item.item.body}
-                    </Text>
-                    <Text
-                      style={{
-                        marginTop: spacing.xs,
-                        fontSize: typography.fontSize.xs,
-                        color: item.item.is_mine ? '#dbeafe' : colors.text.muted,
-                        textAlign: 'right',
-                      }}
-                    >
-                      {formatConversationListTime(item.item.created_at)}
-                    </Text>
-                  </View>
-                </View>
-              )
-            }
-          />
 
-          <View
-            style={{
-              flexDirection: 'row',
-              gap: spacing.sm,
-              padding: spacing.lg,
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-              backgroundColor: colors.background,
-            }}
-          >
+          {metaOpen && (
+            <View style={styles.metaPanel}>
+              <Text style={styles.metaText}>Only this client and provider can see this conversation thread.</Text>
+              {!!contractStateText && <Text style={styles.contractStateText}>{contractStateText}</Text>}
+              {role === 'user' && (canSendOffer || !!leadContractUuid) ? (
+                <View style={styles.contractActionWrap}>
+                  {canSendOffer ? (
+                    <>
+                      <AppInput
+                        label="Offer rate (optional)"
+                        value={offerRate}
+                        onChangeText={setOfferRate}
+                        placeholder="e.g. 150"
+                        keyboardType="numeric"
+                      />
+                      <AppButton title="Send contract offer" onPress={() => void onSendContractOffer()} loading={contractBusy} variant="secondary" />
+                    </>
+                  ) : null}
+                  {!!leadContractUuid && (
+                    <AppButton
+                      title={conversation?.lead?.contract_accepted_at ? 'Open contract' : 'Open offer'}
+                      onPress={() => openContract(leadContractUuid)}
+                      variant="ghost"
+                    />
+                  )}
+                </View>
+              ) : null}
+            </View>
+          )}
+        </View>
+
+        {!!error && (
+          <View style={styles.inlineErrorBanner}>
+            <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+            <Text style={styles.inlineErrorText}>{error}</Text>
+          </View>
+        )}
+
+        <FlatList
+          data={rows}
+          keyExtractor={(item) => item.key}
+          style={styles.messageList}
+          contentContainerStyle={[styles.messageListContent, rows.length === 0 && styles.messageListEmpty]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyMessagesWrap}>
+              <Ionicons name="chatbubble-ellipses-outline" size={46} color={colors.text.muted} />
+              <Text style={styles.emptyMessagesTitle}>No messages yet</Text>
+              <Text style={styles.emptyMessagesText}>Send the first message to start this conversation.</Text>
+            </View>
+          }
+          renderItem={({ item }) =>
+            item.type === 'date' ? (
+              <View style={styles.dateWrap}>
+                <Text style={styles.dateText}>{item.label}</Text>
+              </View>
+            ) : (
+              <View style={[styles.bubbleRow, item.item.is_mine ? styles.bubbleRowMine : styles.bubbleRowOther]}>
+                <View style={[styles.bubble, item.item.is_mine ? styles.bubbleMine : styles.bubbleOther]}>
+                  <Text style={[styles.bubbleText, item.item.is_mine ? styles.bubbleTextMine : styles.bubbleTextOther]}>{item.item.body}</Text>
+                  <Text style={[styles.bubbleTime, item.item.is_mine ? styles.bubbleTimeMine : styles.bubbleTimeOther]}>
+                    {formatConversationListTime(item.item.created_at)}
+                  </Text>
+                </View>
+              </View>
+            )
+          }
+        />
+
+        <View style={styles.composerBar}>
+          <View style={styles.composerInputWrap}>
             <TextInput
               value={draft}
               onChangeText={setDraft}
               placeholder="Write a message…"
               placeholderTextColor={colors.text.muted}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
-                borderRadius: 16,
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.md,
-                color: colors.text.primary,
-              }}
+              multiline
+              textAlignVertical="top"
+              style={styles.composerInput}
             />
-            <Pressable
-              onPress={onSend}
-              disabled={sending}
-              style={{
-                backgroundColor: colors.primary[600],
-                paddingHorizontal: spacing.lg,
-                borderRadius: 16,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ color: colors.text.inverse, fontWeight: typography.fontWeight.semibold }}>
-                Send
-              </Text>
-            </Pressable>
           </View>
-        </KeyboardAvoidingView>
-      )}
+          <Pressable
+            onPress={onSend}
+            disabled={sending || !draft.trim()}
+            style={[styles.sendButton, (sending || !draft.trim()) && styles.sendButtonDisabled]}
+          >
+            {sending ? (
+              <ActivityIndicator color={colors.text.inverse} />
+            ) : (
+              <Ionicons name="send" size={18} color={colors.text.inverse} />
+            )}
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </AppScreen>
   );
 }
 
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
+  screen: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: 0,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+  },
+  fullErrorCard: {
+    width: '100%',
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.xl,
+    alignItems: 'center',
+    ...shadows.softLg,
+  },
+  fullErrorTitle: {
+    marginTop: spacing.md,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  fullErrorText: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  retryButtonText: {
+    color: colors.text.inverse,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  threadCard: {
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    backgroundColor: colors.surfaceElevated,
+    padding: spacing.lg,
+    ...shadows.softLg,
+  },
+  threadTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  avatarWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary[600],
+  },
+  avatarText: {
+    color: colors.text.inverse,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+  },
+  threadTextWrap: {
+    flex: 1,
+  },
+  participantName: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+  },
+  threadSubtitle: {
+    marginTop: spacing.xs,
+    color: colors.text.secondary,
+    lineHeight: 20,
+  },
+  infoToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radii.full,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  infoToggleText: {
+    color: colors.primary[700],
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    alignItems: 'center',
+  },
+  infoChip: {
+    borderRadius: radii.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    backgroundColor: colors.backgroundMuted,
+  },
+  infoChipText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  metaPanel: {
+    marginTop: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  metaText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    lineHeight: 20,
+  },
+  contractStateText: {
+    color: colors.primary[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  contractActionWrap: {
+    marginTop: spacing.xs,
+    gap: spacing.sm,
+  },
+  inlineErrorBanner: {
+    marginTop: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
+  },
+  inlineErrorText: {
+    flex: 1,
+    color: colors.danger,
+    fontSize: typography.fontSize.sm,
+  },
+  messageList: {
+    flex: 1,
+    marginTop: spacing.md,
+  },
+  messageListContent: {
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.xs,
+  },
+  messageListEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  emptyMessagesWrap: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  emptyMessagesTitle: {
+    marginTop: spacing.md,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  emptyMessagesText: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  dateWrap: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  dateText: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    overflow: 'hidden',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.full,
+  },
+  bubbleRow: {
+    marginBottom: spacing.md,
+    flexDirection: 'row',
+  },
+  bubbleRowMine: {
+    justifyContent: 'flex-end',
+  },
+  bubbleRowOther: {
+    justifyContent: 'flex-start',
+  },
+  bubble: {
+    maxWidth: '82%',
+    borderRadius: 22,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  bubbleMine: {
+    backgroundColor: colors.primary[600],
+    borderTopRightRadius: 8,
+  },
+  bubbleOther: {
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderTopLeftRadius: 8,
+    ...shadows.soft,
+  },
+  bubbleText: {
+    fontSize: typography.fontSize.md,
+    lineHeight: 22,
+  },
+  bubbleTextMine: {
+    color: colors.text.inverse,
+  },
+  bubbleTextOther: {
+    color: colors.text.primary,
+  },
+  bubbleTime: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.xs,
+    textAlign: 'right',
+  },
+  bubbleTimeMine: {
+    color: '#DBEAFE',
+  },
+  bubbleTimeOther: {
+    color: colors.text.muted,
+  },
+  composerBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingBottom: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  composerInputWrap: {
+    flex: 1,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...shadows.soft,
+  },
+  composerInput: {
+    minHeight: 24,
+    maxHeight: 120,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  sendButton: {
+    width: 50,
+    height: 50,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary[600],
+    ...shadows.soft,
+  },
+  sendButtonDisabled: {
+    opacity: 0.6,
+  },
+});

@@ -39,6 +39,8 @@ type LeadRow = {
   conversation?: { uuid: string } | null;
 };
 
+type ConversationPreviewRow = seekerDashboardApi.SeekerDashboardData['recent_messages'][number];
+
 const styles = StyleSheet.create({
   loadingScreen: {
     padding: spacing.xl,
@@ -531,16 +533,12 @@ export function SeekerDashboardScreen() {
             recentMessages.map((m, idx) => (
               <SimpleRow
                 key={m.uuid}
-                title={
-                  m.sender && typeof m.sender === 'object' && 'first_name' in m.sender
-                    ? String(m.sender.first_name ?? 'Message')
-                    : 'Message'
-                }
-                subtitle={m.body ?? ''}
-                meta={m.created_at ? formatTimeAgo(m.created_at) : undefined}
+                title={messagePreviewTitle(m)}
+                subtitle={m.latest_message?.body ?? ''}
+                meta={m.last_message_at ? formatTimeAgo(m.last_message_at) : undefined}
                 isLast={idx === recentMessages.length - 1}
                 onPress={() => {
-                  if (m.conversation_uuid) navigation.navigate('Messages', { screen: 'Chat', params: { uuid: m.conversation_uuid } });
+                  navigation.navigate('Messages', { screen: 'Chat', params: { uuid: m.uuid } });
                 }}
               />
             ))
@@ -647,6 +645,12 @@ function statusStyle(status?: string | null) {
     default:
       return { bg: '#f1f5f9', border: '#cbd5e1', text: '#475569' };
   }
+}
+
+function messagePreviewTitle(row: ConversationPreviewRow) {
+  const firstName = row.provider_user?.first_name?.trim() ?? '';
+  const lastName = row.provider_user?.last_name?.trim() ?? '';
+  return [firstName, lastName].filter(Boolean).join(' ') || (row.subject ?? '').trim() || 'Conversation';
 }
 
 function formatTimeAgo(date: string) {

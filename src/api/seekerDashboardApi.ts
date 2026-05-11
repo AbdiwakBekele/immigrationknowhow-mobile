@@ -11,10 +11,17 @@ export type SeekerDashboardData = {
   recent_leads: unknown[];
   recent_messages: Array<{
     uuid: string;
-    conversation_uuid: string | null;
-    sender: unknown;
-    body: string | null;
-    created_at: string | null;
+    subject: string | null;
+    last_message_at: string | null;
+    latest_message?: {
+      body: string;
+      created_at: string | null;
+    } | null;
+    provider_user?: {
+      first_name?: string | null;
+      last_name?: string | null;
+      avatar_url?: string | null;
+    } | null;
   }>;
   recommended_providers: ProviderListItem[];
   saved_providers: ProviderListItem[];

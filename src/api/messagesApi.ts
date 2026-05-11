@@ -7,8 +7,8 @@ export type ConversationItem = {
   last_message_at: string | null;
   unread_count: number;
   latest_message?: { body: string; created_at: string } | null;
-  user?: { first_name?: string | null; last_name?: string | null; avatar_url?: string | null } | null;
-  provider_user?: { first_name?: string | null; last_name?: string | null; avatar_url?: string | null } | null;
+  user?: { id?: number; first_name?: string | null; last_name?: string | null; avatar_url?: string | null } | null;
+  provider_user?: { id?: number; first_name?: string | null; last_name?: string | null; avatar_url?: string | null } | null;
   lead?: {
     uuid?: string;
     service_type?: string;

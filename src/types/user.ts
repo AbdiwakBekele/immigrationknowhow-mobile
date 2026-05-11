@@ -10,6 +10,9 @@ export type AuthUser = {
   country?: string | null;
   state?: string | null;
   city?: string | null;
+  postal_code?: string | null;
+  preferred_language?: string | null;
+  avatar_url?: string | null;
   onboarding_completed?: boolean;
   phone_verified_at?: string | null;
   roles?: UserRole[];
