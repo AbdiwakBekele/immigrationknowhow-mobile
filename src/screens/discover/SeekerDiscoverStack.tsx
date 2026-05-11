@@ -9,7 +9,7 @@ import { CommunityStack } from '../community/CommunityStack';
 import { AdsStack } from '../ads/AdsStack';
 import { ReviewsListScreen } from '../reviews/ReviewsListScreen';
 import { ProvidersStack, type ProvidersStackParamList } from '../seeker/ProvidersStack';
-import { ContractsStack } from '../contracts/ContractsStack';
+import { ContractsStack, type ContractsStackParamList } from '../contracts/ContractsStack';
 import { AppHeader } from '../../components/navigation/AppHeader';
 import { NotificationsScreen } from '../notifications/NotificationsScreen';
 import type { NavigatorScreenParams } from '@react-navigation/native';
@@ -24,7 +24,7 @@ export type SeekerDiscoverStackParamList = {
   Ads: undefined;
   Reviews: undefined;
   Providers: NavigatorScreenParams<ProvidersStackParamList> | undefined;
-  Contracts: undefined;
+  Contracts: NavigatorScreenParams<ContractsStackParamList> | undefined;
   Notifications: undefined;
 };
 

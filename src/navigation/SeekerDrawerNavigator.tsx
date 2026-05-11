@@ -54,6 +54,19 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
     navigation.closeDrawer();
   };
 
+  const goSavedProviders = () => {
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: {
+          screen: 'Discover',
+          params: { screen: 'Providers', params: { screen: 'ProvidersList', params: { favoritesOnly: true } } },
+        },
+      })
+    );
+    navigation.closeDrawer();
+  };
+
   const goContractsList = () => {
     navigation.dispatch(
       CommonActions.navigate({
@@ -105,6 +118,7 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
 
         <DrawerCollapsibleSection title="Providers" defaultOpen>
           <DrawerGradientLink icon="search-outline" label="Browse providers" onPress={goProvidersList} indent />
+          <DrawerGradientLink icon="heart-outline" label="Saved providers" onPress={goSavedProviders} indent />
         </DrawerCollapsibleSection>
 
         <DrawerCollapsibleSection title="Contracts" defaultOpen>

@@ -9,7 +9,17 @@ export type ConversationItem = {
   latest_message?: { body: string; created_at: string } | null;
   user?: { first_name?: string | null; last_name?: string | null; avatar_url?: string | null } | null;
   provider_user?: { first_name?: string | null; last_name?: string | null; avatar_url?: string | null } | null;
-  lead?: { uuid?: string; service_type?: string; service_type_label?: string; status?: string } | null;
+  lead?: {
+    uuid?: string;
+    service_type?: string;
+    service_type_label?: string;
+    status?: string;
+    urgency?: string | null;
+    created_at?: string | null;
+    contract_sent_at?: string | null;
+    contract_accepted_at?: string | null;
+    contract_uuid?: string | null;
+  } | null;
 };
 
 export type MessageItem = {

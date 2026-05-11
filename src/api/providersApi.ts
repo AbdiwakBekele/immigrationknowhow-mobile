@@ -7,6 +7,7 @@ export type ProvidersQuery = {
   language?: string;
   location?: string;
   search?: string;
+  favorites?: boolean;
   remote_only?: boolean;
   free_consultation?: boolean;
   sort?: 'rating' | 'reviews' | 'newest' | 'experience';
@@ -38,10 +39,21 @@ export async function getProvider(slug: string): Promise<
     provider: ProviderDetail;
     canContactProvider: boolean;
     isOwnListingPreview: boolean;
+    canFavoriteProvider: boolean;
+    isFavorited: boolean;
   }>
 > {
   try {
     const res = await apiClient.get(`/api/mobile/providers/${encodeURIComponent(slug)}`);
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function toggleFavorite(slug: string): Promise<ApiResponse<{ favorited: boolean }>> {
+  try {
+    const res = await apiClient.post(`/api/mobile/providers/${encodeURIComponent(slug)}/favorite`);
     return res.data;
   } catch (e) {
     return normalizeApiError(e);

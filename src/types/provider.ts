@@ -7,6 +7,7 @@ export type ProviderListItem = {
   languages_offered: string[];
   average_rating: number | null;
   total_reviews: number | null;
+  is_favorited?: boolean;
   location_display: string;
   free_consultation: boolean;
   serves_remote: boolean;
