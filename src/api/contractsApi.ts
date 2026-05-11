@@ -45,7 +45,7 @@ export async function getContract(uuid: string): Promise<ApiResponse<{ contract:
   }
 }
 
-export async function sendContract(leadUuid: string, offered_rate?: number): Promise<ApiResponse<Record<string, never>>> {
+export async function sendContract(leadUuid: string, offered_rate?: number): Promise<ApiResponse<{ contract_uuid?: string | null }>> {
   try {
     const res = await apiClient.post(`/api/mobile/contracts/lead/${encodeURIComponent(leadUuid)}/send`, {
       offered_rate,

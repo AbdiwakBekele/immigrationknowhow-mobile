@@ -17,6 +17,7 @@ export type SeekerDashboardData = {
     created_at: string | null;
   }>;
   recommended_providers: ProviderListItem[];
+  saved_providers: ProviderListItem[];
   library_items: unknown[];
   purchased_items: unknown[];
 };

@@ -16,6 +16,7 @@ export type CreateLeadPayload = {
 export async function createLead(providerSlug: string, payload: CreateLeadPayload): Promise<
   ApiResponse<{
     lead_uuid: string;
+    contract_uuid?: string | null;
     conversation: any | null;
   }>
 > {

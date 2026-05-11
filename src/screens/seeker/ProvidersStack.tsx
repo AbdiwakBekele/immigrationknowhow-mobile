@@ -7,7 +7,7 @@ import { AppHeader } from '../../components/navigation/AppHeader';
 import { NotificationsScreen } from '../notifications/NotificationsScreen';
 
 export type ProvidersStackParamList = {
-  ProvidersList: undefined;
+  ProvidersList: { favoritesOnly?: boolean } | undefined;
   ProviderDetail: { slug: string };
   ContactProvider: { slug: string };
   Notifications: undefined;

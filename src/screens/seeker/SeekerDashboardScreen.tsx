@@ -240,6 +240,17 @@ export function SeekerDashboardScreen() {
   const navigation = useNavigation<SeekerDashboardNav>();
   const { user } = useAuth();
 
+  const openProvidersList = () => {
+    navigation.navigate('Discover', { screen: 'Providers' });
+  };
+
+  const openSavedProviders = () => {
+    navigation.navigate('Discover', {
+      screen: 'Providers',
+      params: { screen: 'ProvidersList', params: { favoritesOnly: true } },
+    });
+  };
+
   const openProviderDetail = (slug: string) => {
     navigation.navigate('Discover', {
       screen: 'Providers',
@@ -296,6 +307,7 @@ export function SeekerDashboardScreen() {
   const recentLeads = (dash?.recent_leads ?? []) as LeadRow[];
   const recentMessages = dash?.recent_messages ?? [];
   const recommended = dash?.recommended_providers ?? [];
+  const savedProviders = dash?.saved_providers ?? [];
   const libraryItems = (dash?.library_items ?? []) as Array<{ uuid: string; title?: string; type?: string }>;
   const purchasedItems = (dash?.purchased_items ?? []) as Array<{
     item?: { title?: string; uuid?: string };
@@ -342,10 +354,12 @@ export function SeekerDashboardScreen() {
           <ActionCard
             title="Find providers"
             subtitle="Search for services"
-            onPress={() => navigation.navigate('Discover', { screen: 'Providers' })}
+            onPress={openProvidersList}
           />
+          <ActionCard title="Saved" subtitle="Your shortlist" onPress={openSavedProviders} />
           <ActionCard title="Messages" subtitle={`${stats?.unreadMessages ?? 0} unread`} onPress={() => navigation.navigate('Messages')} />
           <ActionCard title="Library" subtitle="E-books & audiobooks" onPress={() => navigation.navigate('Discover', { screen: 'Library' })} />
+          <ActionCard title="Profile" subtitle="Update your info" onPress={() => navigation.navigate('Profile')} />
           <ActionCard title="Community" subtitle="Join discussions" onPress={() => navigation.navigate('Discover', { screen: 'Community' })} />
         </View>
 
@@ -358,6 +372,22 @@ export function SeekerDashboardScreen() {
               <StatPill label="Profile" value={`${stats.profileCompletion}%`} />
             </View>
           </>
+        )}
+
+        <SectionTitle title="Saved providers" />
+        {savedProviders.length === 0 ? (
+          <Text style={styles.empty}>Save providers from Discover to keep a shortlist here.</Text>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.sm }}>
+            {savedProviders.map((item) => (
+              <ProviderCard
+                key={item.slug}
+                title={item.business_name ?? 'Provider'}
+                subtitle={item.location_display ?? ''}
+                onPress={() => openProviderDetail(item.slug)}
+              />
+            ))}
+          </ScrollView>
         )}
 
         <SectionTitle title="Recommended for you" />

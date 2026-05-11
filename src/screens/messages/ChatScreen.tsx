@@ -1,13 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
+import { AppButton } from '../../components/AppButton';
+import { AppInput } from '../../components/AppInput';
+import type { SeekerBottomTabParamList } from '../../navigation/SeekerBottomTabs';
+import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import * as contractsApi from '../../api/contractsApi';
 import * as messagesApi from '../../api/messagesApi';
+import type { MessagesStackParamList } from './MessagesStack';
 import { formatConversationListTime, fullName, leadStatusLabel, leadStatusStyle } from '../../utils/providerUi';
-type ChatRoute = RouteProp<{ Chat: { uuid: string } }, 'Chat'>;
+type ChatRoute = RouteProp<MessagesStackParamList, 'Chat'>;
+type ChatNav = CompositeNavigationProp<
+  NativeStackNavigationProp<MessagesStackParamList, 'Chat'>,
+  BottomTabNavigationProp<SeekerBottomTabParamList>
+>;
 
 type Row = { type: 'date'; key: string; label: string } | { type: 'msg'; key: string; item: messagesApi.MessageItem };
 
@@ -25,6 +38,8 @@ function formatDateDivider(iso: string | null | undefined): string {
 
 export function ChatScreen() {
   const route = useRoute<ChatRoute>();
+  const navigation = useNavigation<ChatNav>();
+  const { role } = useAuth();
   const { uuid } = route.params;
 
   const [loading, setLoading] = useState(true);
@@ -34,27 +49,34 @@ export function ChatScreen() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [metaOpen, setMetaOpen] = useState(false);
+  const [offerRate, setOfferRate] = useState('');
+  const [contractBusy, setContractBusy] = useState(false);
 
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = null;
-    const fetchConversation = async (first = false) => {
+  const loadConversation = useCallback(
+    async (first = false) => {
       const res = await messagesApi.getConversation(uuid);
       if (first) setLoading(false);
       if (!res.success) {
         setError(res.message);
         return;
       }
+      setError(null);
       setConversation(res.data.conversation ?? null);
       setMessages(res.data.messages ?? []);
-    };
-    void fetchConversation(true);
+    },
+    [uuid]
+  );
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    void loadConversation(true);
     timer = setInterval(() => {
-      void fetchConversation(false);
+      void loadConversation(false);
     }, 5000);
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [uuid]);
+  }, [loadConversation]);
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
@@ -84,9 +106,68 @@ export function ChatScreen() {
     setMessages((prev) => [...prev, res.data.message]);
   }
 
+  async function onSendContractOffer() {
+    const leadUuid = conversation?.lead?.uuid;
+    if (role !== 'user' || !leadUuid) return;
+
+    const normalizedRate = offerRate.trim();
+    if (normalizedRate) {
+      const parsed = Number(normalizedRate);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        setError('Enter a valid offer rate or leave it blank.');
+        return;
+      }
+    }
+
+    setContractBusy(true);
+    setError(null);
+    const res = await contractsApi.sendContract(leadUuid, normalizedRate ? Number(normalizedRate) : undefined);
+    setContractBusy(false);
+    if (!res.success) {
+      setError(res.message);
+      return;
+    }
+
+    setOfferRate('');
+    const contractUuid = res.data.contract_uuid ?? conversation?.lead?.contract_uuid ?? null;
+    await loadConversation(false);
+
+    if (contractUuid) {
+      navigation.navigate('Discover', {
+        screen: 'Contracts',
+        params: {
+          screen: 'ContractDetail',
+          params: { uuid: contractUuid },
+        },
+      });
+    }
+  }
+
+  function openContract(contractUuid: string) {
+    navigation.navigate('Discover', {
+      screen: 'Contracts',
+      params: {
+        screen: 'ContractDetail',
+        params: { uuid: contractUuid },
+      },
+    });
+  }
+
   const leadStatus = conversation?.lead?.status;
   const leadPill = leadStatusStyle(leadStatus);
-  const participant = fullName(conversation?.user);
+  const participant = role === 'provider' ? fullName(conversation?.user) : fullName(conversation?.provider_user);
+  const leadContractUuid = conversation?.lead?.contract_uuid ?? null;
+  const canSendOffer =
+    role === 'user' &&
+    !!conversation?.lead?.uuid &&
+    !conversation?.lead?.contract_sent_at &&
+    !conversation?.lead?.contract_accepted_at &&
+    ['new', 'contacted'].includes((leadStatus ?? '').toLowerCase());
+  const contractStateText = conversation?.lead?.contract_accepted_at
+    ? 'Contract accepted'
+    : conversation?.lead?.contract_sent_at
+      ? 'Contract offer pending'
+      : '';
 
   return (
     <AppScreen style={{ flex: 1 }}>
@@ -94,7 +175,7 @@ export function ChatScreen() {
         <View style={{ flex: 1, justifyContent: 'center', padding: spacing.xl }}>
           <ActivityIndicator color={colors.primary[600]} />
         </View>
-      ) : error ? (
+      ) : error && !conversation ? (
         <View style={{ flex: 1, padding: spacing.xl, justifyContent: 'center' }}>
           <Text style={{ color: colors.danger }}>{error}</Text>
         </View>
@@ -143,11 +224,46 @@ export function ChatScreen() {
               </Pressable>
             </View>
             {metaOpen && (
-              <Text style={{ marginTop: spacing.xs, color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
-                One-on-one thread linked to a service inquiry. Only this client and provider can see this conversation.
-              </Text>
+              <View style={{ marginTop: spacing.xs }}>
+                <Text style={{ color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
+                  One-on-one thread linked to a service inquiry. Only this client and provider can see this conversation.
+                </Text>
+                {!!contractStateText && (
+                  <Text style={{ marginTop: spacing.xs, color: colors.primary[700], fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.medium }}>
+                    {contractStateText}
+                  </Text>
+                )}
+                {role === 'user' && (canSendOffer || !!leadContractUuid) ? (
+                  <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+                    {canSendOffer ? (
+                      <>
+                        <AppInput
+                          label="Offer rate (optional)"
+                          value={offerRate}
+                          onChangeText={setOfferRate}
+                          placeholder="e.g. 150"
+                          keyboardType="numeric"
+                        />
+                        <AppButton title="Send contract offer" onPress={() => void onSendContractOffer()} loading={contractBusy} variant="secondary" />
+                      </>
+                    ) : null}
+                    {!!leadContractUuid && (
+                      <AppButton
+                        title={conversation?.lead?.contract_accepted_at ? 'Open contract' : 'Open offer'}
+                        onPress={() => openContract(leadContractUuid)}
+                        variant="ghost"
+                      />
+                    )}
+                  </View>
+                ) : null}
+              </View>
             )}
           </View>
+          {!!error && (
+            <Text style={{ color: colors.danger, paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+              {error}
+            </Text>
+          )}
           <FlatList
             contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing['3xl'] }}
             data={rows}
