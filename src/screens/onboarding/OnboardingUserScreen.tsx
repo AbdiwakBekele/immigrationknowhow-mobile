@@ -19,7 +19,8 @@ import {
   USER_SELECT_SERVICES_LATER_VALUE,
   canonicalUserServiceTypeValue,
 } from './onboardingConstants';
-import { OnboardingDialPhoneFields, buildPhoneForApi, type DialOption } from './OnboardingDialPhoneFields';
+import { buildPhoneForApi, type DialOption } from './OnboardingDialPhoneFields';
+import { OnboardingPhoneVerificationBlock } from './components/OnboardingPhoneVerificationBlock';
 import { OnboardingFlowProgress } from './OnboardingFlowProgress';
 import { FilterableSingleSelect, UserServicesTagField, type LabeledOption } from './onboardingPickers';
 import {
@@ -454,31 +455,36 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
 
           {isPhoneStep ? (
             <View style={{ marginTop: spacing.xl }}>
-              {!otpSent ? (
-                <>
-                  <OnboardingDialPhoneFields
-                    dialOptions={dialOpts}
-                    countryIso={countryIsoPhone}
-                    phoneLocal={phoneLocalDigits}
-                    onCountryIsoChange={setCountryIsoPhone}
-                    onPhoneLocalChange={setPhoneLocalDigits}
-                    inlineError={phoneInlineError}
-                    onInlineErrorClear={() => setPhoneInlineError(null)}
-                  />
-                  <AppButton title="Send code" onPress={() => void onSendPhoneOtp()} loading={sendingPhone} />
-                </>
-              ) : (
-                <>
-                  <AppInput
-                    label="Verification code"
-                    value={otp}
-                    onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, OTP_LENGTH_WEB))}
-                    keyboardType="numeric"
-                    placeholder="6-digit code"
-                  />
-                  <AppButton title="Verify & Continue" onPress={() => void onVerifyOtp()} loading={verifying} />
-                </>
-              )}
+              <OnboardingPhoneVerificationBlock
+                phoneDialOptions={dialOpts}
+                countryIso={countryIsoPhone}
+                onCountryIsoChange={setCountryIsoPhone}
+                phoneLocalDigits={phoneLocalDigits}
+                onPhoneLocalChange={(digits) => {
+                  setPhoneLocalDigits(digits);
+                  if (phoneInlineError) setPhoneInlineError(null);
+                }}
+                otpSent={otpSent}
+                otpCode={otp}
+                onOtpCodeChange={setOtp}
+                onResendPress={() => {
+                  void onSendPhoneOtp();
+                }}
+                resendBusy={sendingPhone}
+                fieldError={phoneInlineError}
+              />
+              <AppButton
+                title={otpSent ? 'Verify & Continue' : 'Send code'}
+                onPress={() => {
+                  if (otpSent) {
+                    void onVerifyOtp();
+                    return;
+                  }
+                  void onSendPhoneOtp();
+                }}
+                loading={otpSent ? verifying : sendingPhone}
+                style={{ marginTop: spacing.md }}
+              />
             </View>
           ) : null}
 

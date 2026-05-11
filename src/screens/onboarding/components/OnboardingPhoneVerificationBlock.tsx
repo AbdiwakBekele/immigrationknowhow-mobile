@@ -92,6 +92,13 @@ export function OnboardingPhoneVerificationBlock({
     return clean;
   }, [phoneLocalDigits, isNanp, nationalMaxDigits]);
 
+  const phonePreview = useMemo(() => {
+    const dial = String(selectedDial || '').replace(/\D/g, '');
+    const local = String(phoneLocalDigits || '').replace(/\D/g, '').slice(0, nationalMaxDigits);
+    if (!dial && !local) return '';
+    return `+${dial}${local}`;
+  }, [selectedDial, phoneLocalDigits, nationalMaxDigits]);
+
   const filteredDialOptions = useMemo(() => {
     const q = dialQuery
       .trim()
@@ -176,6 +183,16 @@ export function OnboardingPhoneVerificationBlock({
   if (!otpSent) {
     return (
       <View style={styles.block}>
+        <View style={styles.infoCard}>
+          <View style={styles.infoIconWrap}>
+            <Ionicons name="call-outline" size={18} color={colors.primary[700]} />
+          </View>
+          <View style={styles.infoTextWrap}>
+            <Text style={styles.infoEyebrow}>Phone verification</Text>
+            <Text style={styles.infoTitle}>Add your mobile number</Text>
+            <Text style={styles.infoBody}>Choose your country code with the flag picker, then we’ll send a 6-digit code.</Text>
+          </View>
+        </View>
         <View
           style={[styles.phoneShell, !!fieldError && styles.phoneShellError]}
           accessibilityLabel="Phone number"
@@ -264,6 +281,18 @@ export function OnboardingPhoneVerificationBlock({
 
   return (
     <View style={styles.block}>
+      <View style={styles.infoCard}>
+        <View style={styles.infoIconWrap}>
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary[700]} />
+        </View>
+        <View style={styles.infoTextWrap}>
+          <Text style={styles.infoEyebrow}>Verification code</Text>
+          <Text style={styles.infoTitle}>Enter the 6-digit code</Text>
+          <Text style={styles.infoBody}>
+            {phonePreview ? `We sent a code to ${phonePreview}.` : 'We sent a code to your mobile number.'}
+          </Text>
+        </View>
+      </View>
       <View style={styles.otpRow} accessibilityLabel="6-digit verification code">
         {otpDigits.map((digit, index) => (
           <TextInput
@@ -286,6 +315,7 @@ export function OnboardingPhoneVerificationBlock({
       {!!fieldError && <Text style={styles.fieldError}>{fieldError}</Text>}
 
       <View style={styles.resendWrap}>
+        <Text style={styles.resendHint}>Didn&apos;t get the code?</Text>
         <Pressable onPress={onResendPress} disabled={resendBusy} accessibilityRole="button">
           <Text style={[styles.resendText, resendBusy && styles.resendDisabled]}>Resend code</Text>
         </Pressable>
@@ -298,15 +328,59 @@ const styles = StyleSheet.create({
   block: {
     gap: spacing.md,
   },
+  infoCard: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    backgroundColor: '#eff6ff',
+  },
+  infoIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dbeafe',
+  },
+  infoTextWrap: {
+    flex: 1,
+  },
+  infoEyebrow: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[700],
+    fontWeight: typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  infoTitle: {
+    marginTop: 2,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  infoBody: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.sm,
+    lineHeight: 20,
+    color: colors.text.secondary,
+  },
   phoneShell: {
     flexDirection: 'row',
     alignItems: 'stretch',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#dbe2ef',
     borderRadius: radii.lg,
     backgroundColor: colors.surfaceElevated,
     overflow: 'hidden',
     minHeight: 58,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 2,
   },
   phoneShellError: {
     borderColor: '#fca5a5',
@@ -336,15 +410,20 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
   },
   otpCell: {
-    width: 44,
-    height: 48,
-    borderRadius: radii.sm,
+    width: 46,
+    height: 54,
+    borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: '#d4d4d4',
+    borderColor: '#dbe2ef',
     backgroundColor: colors.surfaceElevated,
-    fontSize: typography.fontSize.md,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 1,
   },
   otpCellError: {
     borderColor: '#fca5a5',
@@ -356,6 +435,11 @@ const styles = StyleSheet.create({
   resendWrap: {
     alignItems: 'center',
     paddingTop: spacing.xs,
+    gap: 4,
+  },
+  resendHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.muted,
   },
   resendText: {
     fontSize: typography.fontSize.sm,

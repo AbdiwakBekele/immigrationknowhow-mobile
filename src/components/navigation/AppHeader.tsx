@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackHeaderProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DrawerMenuButton } from '../DrawerMenuButton';
@@ -51,7 +52,19 @@ export function AppHeader(props: AppHeaderProps) {
         />
       ) : null}
       <View style={styles.left}>
-        <DrawerMenuButton iconColor={iconColor} />
+        {props.back ? (
+          <Pressable
+            onPress={props.navigation.goBack}
+            hitSlop={12}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="chevron-back" size={26} color={iconColor} />
+          </Pressable>
+        ) : (
+          <DrawerMenuButton iconColor={iconColor} />
+        )}
         <Text style={titleStyle} numberOfLines={1}>
           {title}
         </Text>
@@ -95,6 +108,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingRight: spacing.sm,
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 8,
   },
   right: {
     flexDirection: 'row',

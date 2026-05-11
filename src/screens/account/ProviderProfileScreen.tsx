@@ -1,5 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,15 +17,18 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { backgroundCheckBody, backgroundCheckHeadline } from '../../utils/providerUi';
+import * as profileApi from '../../api/profileApi';
+import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 
 export function ProviderProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList, 'ProfileHome'>>();
   const tabNavigation = navigation.getParent<BottomTabNavigationProp<ProviderBottomTabParamList>>();
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshMe } = useAuth();
   const [dash, setDash] = useState<providerDashboardApi.ProviderDashboardData | null>(null);
   const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
   const formLoadedRef = useRef(false);
   const [saving, setSaving] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,7 +61,7 @@ export function ProviderProfileScreen() {
         formLoadedRef.current = true;
       }
     }
-  }, []);
+  }, [user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -66,6 +71,13 @@ export function ProviderProfileScreen() {
 
   const prov = dash?.provider;
   const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || 'Profile';
+  const initials = useMemo(() => {
+    const parts = [user?.first_name, user?.last_name]
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean);
+    if (!parts.length) return 'P';
+    return parts.slice(0, 2).map((value) => value[0]?.toUpperCase() ?? '').join('') || 'P';
+  }, [user?.first_name, user?.last_name]);
   const bg = prov?.background_check_status;
 
   const hasDirtyFields = useMemo(() => {
@@ -152,21 +164,136 @@ export function ProviderProfileScreen() {
     setSaveMessage('Saved');
   };
 
+  const onPickAvatar = async () => {
+    setAvatarBusy(true);
+    setSaveMessage(null);
+    setError(null);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.length) {
+        setAvatarBusy(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      const res = await profileApi.uploadAvatar({
+        uri: asset.uri,
+        name: asset.fileName?.trim() || `avatar-${Date.now()}.jpg`,
+        type: asset.mimeType?.trim() || 'image/jpeg',
+        file: (asset as { file?: Blob }).file,
+      });
+      setAvatarBusy(false);
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setSaveMessage('Profile photo updated');
+      await refreshMe();
+    } catch (err) {
+      setAvatarBusy(false);
+      const message = err instanceof Error ? err.message : 'Unable to pick a photo right now.';
+      setError(message);
+    }
+  };
+
+  const onRemoveAvatar = async () => {
+    setAvatarBusy(true);
+    setSaveMessage(null);
+    setError(null);
+    const res = await profileApi.deleteAvatar();
+    setAvatarBusy(false);
+    if (!res.success) {
+      setError(friendlyApiErrorMessage(res));
+      return;
+    }
+    setSaveMessage('Profile photo removed');
+    await refreshMe();
+  };
+
   return (
     <AppScreen variant="gradient" style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: 0 }}>
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}>
-        <Text style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, letterSpacing: 1.6, fontWeight: typography.fontWeight.semibold }}>
-          PROFILE
-        </Text>
-        <Text style={{ marginTop: spacing.xs, fontSize: typography.fontSize['2xl'], fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
-          Profile
-        </Text>
-        <Text style={{ marginTop: spacing.sm, fontSize: typography.fontSize.md, color: colors.text.primary, fontWeight: typography.fontWeight.medium }}>
-          {displayName}
-        </Text>
-        {!!user?.email && (
-          <Text style={{ marginTop: spacing.xs, fontSize: typography.fontSize.sm, color: colors.text.secondary }}>{user.email}</Text>
-        )}
+        <View
+          style={{
+            borderRadius: 22,
+            padding: spacing.lg,
+            backgroundColor: '#EEF4FF',
+            borderWidth: 1,
+            borderColor: '#D4E2FF',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+            {user?.avatar_url ? (
+              <Image source={{ uri: user.avatar_url }} style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: colors.surface }} contentFit="cover" />
+            ) : (
+              <View
+                style={{
+                  width: 76,
+                  height: 76,
+                  borderRadius: 38,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.primary[600],
+                }}
+              >
+                <Text style={{ color: colors.text.inverse, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold }}>{initials}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: typography.fontSize.xs, color: colors.primary[700], letterSpacing: 1.6, fontWeight: typography.fontWeight.semibold }}>
+                PROFILE
+              </Text>
+              <Text style={{ marginTop: spacing.xs, fontSize: typography.fontSize['2xl'], fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
+                Profile
+              </Text>
+              <Text style={{ marginTop: spacing.sm, fontSize: typography.fontSize.md, color: colors.text.primary, fontWeight: typography.fontWeight.medium }}>
+                {displayName}
+              </Text>
+              {!!user?.email && (
+                <Text style={{ marginTop: spacing.xs, fontSize: typography.fontSize.sm, color: colors.text.secondary }}>{user.email}</Text>
+              )}
+            </View>
+          </View>
+          <View style={{ marginTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            <Pressable
+              style={{
+                borderRadius: 999,
+                paddingHorizontal: spacing.lg,
+                paddingVertical: spacing.sm,
+                backgroundColor: colors.primary[600],
+                opacity: avatarBusy ? 0.6 : 1,
+              }}
+              onPress={() => void onPickAvatar()}
+              disabled={avatarBusy}
+            >
+              <Text style={{ color: colors.text.inverse, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>
+                {user?.avatar_url ? 'Change photo' : 'Upload photo'}
+              </Text>
+            </Pressable>
+            {user?.avatar_url ? (
+              <Pressable
+                style={{
+                  borderRadius: 999,
+                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.sm,
+                  backgroundColor: colors.surface,
+                  borderWidth: 1,
+                  borderColor: '#D4E2FF',
+                  opacity: avatarBusy ? 0.6 : 1,
+                }}
+                onPress={() => void onRemoveAvatar()}
+                disabled={avatarBusy}
+              >
+                <Text style={{ color: colors.primary[700], fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>Remove</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
 
         {error ? <Text style={{ marginTop: spacing.md, color: colors.danger }}>{error}</Text> : null}
         {saveMessage ? (

@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,6 +14,55 @@ import type { MessagesStackParamList } from './MessagesStack';
 function counterpartName(role: string | null | undefined, item: messagesApi.ConversationItem): string {
   if (role === 'provider') return fullName(item.user);
   return fullName(item.provider_user) || (item.subject ?? '').trim() || 'Conversation';
+}
+
+type ConversationGroup = {
+  key: string;
+  title: string;
+  latest: messagesApi.ConversationItem;
+  conversations: messagesApi.ConversationItem[];
+};
+
+function conversationTimestamp(item: messagesApi.ConversationItem): number {
+  const raw = item.last_message_at ?? item.latest_message?.created_at ?? null;
+  if (!raw) return 0;
+  const ts = new Date(raw).getTime();
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function counterpartKey(role: string | null | undefined, item: messagesApi.ConversationItem): string {
+  const participant = role === 'provider' ? item.user : item.provider_user;
+  const prefix = role === 'provider' ? 'user' : 'provider';
+  if (participant?.id != null) {
+    return `${prefix}:${participant.id}`;
+  }
+  return `${prefix}:name:${counterpartName(role, item).trim().toLowerCase()}`;
+}
+
+function groupConversations(role: string | null | undefined, items: messagesApi.ConversationItem[]): ConversationGroup[] {
+  const grouped = new Map<string, ConversationGroup>();
+
+  for (const item of items) {
+    const key = counterpartKey(role, item);
+    const current = grouped.get(key);
+    if (!current) {
+      grouped.set(key, {
+        key,
+        title: counterpartName(role, item),
+        latest: item,
+        conversations: [item],
+      });
+      continue;
+    }
+
+    current.conversations.push(item);
+    if (conversationTimestamp(item) > conversationTimestamp(current.latest)) {
+      current.latest = item;
+      current.title = counterpartName(role, item);
+    }
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => conversationTimestamp(b.latest) - conversationTimestamp(a.latest));
 }
 
 export function ArchivedMessagesScreen() {
@@ -45,27 +94,35 @@ export function ArchivedMessagesScreen() {
     }, [load])
   );
 
-  const onRecover = async (uuid: string) => {
-    setBusyUuid(uuid);
-    const res = await messagesApi.unarchiveConversation(uuid);
-    setBusyUuid(null);
-    if (!res.success) {
-      setError(res.message);
-      return;
+  const onRecover = async (group: ConversationGroup) => {
+    setBusyUuid(group.key);
+    for (const conversation of group.conversations) {
+      const res = await messagesApi.unarchiveConversation(conversation.uuid);
+      if (!res.success) {
+        setBusyUuid(null);
+        setError(res.message);
+        return;
+      }
     }
+    setBusyUuid(null);
     void load(false);
   };
 
-  const onDelete = async (uuid: string) => {
-    setBusyUuid(uuid);
-    const res = await messagesApi.deleteConversation(uuid);
-    setBusyUuid(null);
-    if (!res.success) {
-      setError(res.message);
-      return;
+  const onDelete = async (group: ConversationGroup) => {
+    setBusyUuid(group.key);
+    for (const conversation of group.conversations) {
+      const res = await messagesApi.deleteConversation(conversation.uuid);
+      if (!res.success) {
+        setBusyUuid(null);
+        setError(res.message);
+        return;
+      }
     }
+    setBusyUuid(null);
     void load(false);
   };
+
+  const groupedItems = useMemo(() => groupConversations(role, items), [items, role]);
 
   return (
     <AppScreen variant="gradient" style={{ padding: spacing.xl }}>
@@ -75,16 +132,17 @@ export function ArchivedMessagesScreen() {
         </View>
       ) : error ? (
         <Text style={{ marginTop: spacing.lg, color: colors.danger }}>{error}</Text>
-      ) : items.length === 0 ? (
+      ) : groupedItems.length === 0 ? (
         <Text style={{ marginTop: spacing.lg, color: colors.text.secondary }}>No archived threads.</Text>
       ) : (
         <FlatList
           style={{ marginTop: spacing.lg }}
-          data={items}
-          keyExtractor={(c) => c.uuid}
+          data={groupedItems}
+          keyExtractor={(group) => group.key}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
-          renderItem={({ item }) => {
-            const title = counterpartName(role, item);
+          renderItem={({ item: group }) => {
+            const item = group.latest;
+            const title = group.title;
             const st = leadStatusStyle(item.lead?.status);
             return (
               <Pressable
@@ -131,6 +189,11 @@ export function ArchivedMessagesScreen() {
                     )}
                   </View>
                 )}
+                {group.conversations.length > 1 && (
+                  <Text style={{ marginTop: spacing.xs, fontSize: typography.fontSize.xs, color: colors.text.muted }}>
+                    {group.conversations.length} archived inquiries with this {role === 'provider' ? 'client' : 'provider'}
+                  </Text>
+                )}
                 {!!item.latest_message?.body && (
                   <Text numberOfLines={2} style={{ marginTop: spacing.sm, color: colors.text.secondary }}>
                     {item.latest_message.body}
@@ -138,8 +201,8 @@ export function ArchivedMessagesScreen() {
                 )}
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
                   <Pressable
-                    disabled={busyUuid === item.uuid}
-                    onPress={() => void onRecover(item.uuid)}
+                    disabled={busyUuid === group.key}
+                    onPress={() => void onRecover(group)}
                     style={{
                       paddingHorizontal: spacing.sm,
                       paddingVertical: 5,
@@ -150,12 +213,12 @@ export function ArchivedMessagesScreen() {
                     }}
                   >
                     <Text style={{ fontSize: typography.fontSize.xs, color: colors.primary[700], fontWeight: typography.fontWeight.semibold }}>
-                      Recover
+                      {group.conversations.length > 1 ? 'Recover all' : 'Recover'}
                     </Text>
                   </Pressable>
                   <Pressable
-                    disabled={busyUuid === item.uuid}
-                    onPress={() => void onDelete(item.uuid)}
+                    disabled={busyUuid === group.key}
+                    onPress={() => void onDelete(group)}
                     style={{
                       paddingHorizontal: spacing.sm,
                       paddingVertical: 5,
@@ -166,7 +229,7 @@ export function ArchivedMessagesScreen() {
                     }}
                   >
                     <Text style={{ fontSize: typography.fontSize.xs, color: '#b91c1c', fontWeight: typography.fontWeight.medium }}>
-                      Delete
+                      {group.conversations.length > 1 ? 'Delete all' : 'Delete'}
                     </Text>
                   </Pressable>
                 </View>
