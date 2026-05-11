@@ -8,6 +8,7 @@ import { AppHeader } from '../../components/navigation/AppHeader';
 import { ProviderAnalyticsScreen } from './ProviderAnalyticsScreen';
 import { ProviderBackgroundCheckScreen } from './ProviderBackgroundCheckScreen';
 import { ProviderReviewsScreen } from './ProviderReviewsScreen';
+import { AiAssistantScreen } from '../discover/AiAssistantScreen';
 
 export type ProviderDashboardStackParamList = {
   ProviderDashboardHome: undefined;
@@ -17,6 +18,7 @@ export type ProviderDashboardStackParamList = {
   ProviderAnalytics: undefined;
   ProviderBackgroundCheck: undefined;
   ProviderReviews: undefined;
+  ProviderAiAssistant: undefined;
   Notifications: undefined;
 };
 
@@ -37,6 +39,7 @@ export function ProviderDashboardStack() {
         options={{ title: 'Notifications' }}
       />
       <Stack.Screen name="Notifications" component={ProviderNotificationsScreen} options={{ title: 'Notifications' }} />
+      <Stack.Screen name="ProviderAiAssistant" component={AiAssistantScreen} options={{ title: 'AI Assistant' }} />
     </Stack.Navigator>
   );
 }

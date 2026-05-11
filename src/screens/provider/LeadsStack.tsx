@@ -17,13 +17,11 @@ export type LeadsStackParamList = {
 const Stack = createNativeStackNavigator<LeadsStackParamList>();
 
 function leadsListHeader(p: NativeStackHeaderProps) {
-  const fb = !p.navigation.canGoBack() ? () => p.navigation.getParent()?.navigate('Dashboard') : undefined;
-  return <AppHeader {...p} fallbackBack={fb} />;
+  return <AppHeader {...p} />;
 }
 
 function leadDetailHeader(p: NativeStackHeaderProps) {
-  const fb = !p.navigation.canGoBack() ? () => p.navigation.navigate('LeadsList') : undefined;
-  return <AppHeader {...p} fallbackBack={fb} />;
+  return <AppHeader {...p} />;
 }
 
 export function LeadsStack() {

@@ -1,33 +1,47 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Keyboard,
   Linking,
+  Platform,
   Pressable,
-  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as aiApi from '../../api/aiAssistantApi';
+import type { ChatMessage } from '../../api/aiAssistantApi';
+
+type LocalMessage = ChatMessage & { pending?: boolean };
 
 export function AiAssistantScreen() {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<aiApi.AiAssistantState | null>(null);
-  const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const listRef = useRef<FlatList<LocalMessage>>(null);
 
   const load = async () => {
     setLoading(true);
     const res = await aiApi.getAiAssistant();
     setLoading(false);
-    if (res.success) setState(res.data.state);
+    if (res.success) {
+      setState(res.data.state);
+      setMessages(res.data.state.chat_messages ?? []);
+    }
   };
 
   useFocusEffect(
@@ -47,22 +61,50 @@ export function AiAssistantScreen() {
     if (url) await Linking.openURL(url);
   };
 
-  const ask = async () => {
-    setBusy(true);
+  const send = async () => {
+    const q = input.trim();
+    if (q.length < 2 || sending) return;
+
+    const userMsg: LocalMessage = {
+      id: `local-${Date.now()}`,
+      role: 'user',
+      text: q,
+      ts: new Date().toISOString(),
+    };
+    const thinkingMsg: LocalMessage = {
+      id: `thinking-${Date.now()}`,
+      role: 'assistant',
+      text: '',
+      ts: null,
+      pending: true,
+    };
+
+    setMessages((prev) => [...prev, userMsg, thinkingMsg]);
+    setInput('');
+    setSending(true);
     setErr(null);
-    setAnswer(null);
-    const res = await aiApi.askAiAssistant(question.trim());
-    setBusy(false);
+
+    const res = await aiApi.askAiAssistant(q);
+    setSending(false);
+
     if (!res.success) {
+      setMessages((prev) => prev.filter((m) => !m.pending));
       setErr(res.message);
       return;
     }
-    setAnswer(typeof res.data.answer === 'string' ? res.data.answer : '');
+
+    const assistantMsg: LocalMessage = {
+      id: `resp-${Date.now()}`,
+      role: 'assistant',
+      text: typeof res.data.answer === 'string' ? res.data.answer : '',
+      ts: new Date().toISOString(),
+    };
+    setMessages((prev) => prev.map((m) => (m.pending ? assistantMsg : m)));
   };
 
   if (loading) {
     return (
-      <AppScreen style={{ padding: spacing.xl, justifyContent: 'center' }}>
+      <AppScreen style={styles.center}>
         <ActivityIndicator color={colors.primary[600]} />
       </AppScreen>
     );
@@ -70,57 +112,291 @@ export function AiAssistantScreen() {
 
   const active = state?.is_addon_active;
 
-  return (
-    <AppScreen style={{ padding: spacing.xl }}>
-      <ScrollView keyboardShouldPersistTaps="handled">
-        <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
-          AI Assistant
-        </Text>
-        <Text style={{ marginTop: spacing.sm, color: colors.text.secondary }}>
-          {active ? 'Subscription active.' : `Add-on: ${state?.monthly_price ?? ''} ${state?.currency ?? ''}/month`}
-        </Text>
-        {!active && (
-          <Pressable onPress={() => void subscribe()} style={{ marginTop: spacing.lg }}>
-            <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>Subscribe via Stripe</Text>
+  if (!active) {
+    return (
+      <AppScreen style={styles.gateScreen}>
+        <View style={styles.gateCard}>
+          <Ionicons name="sparkles" size={40} color={colors.primary[600]} />
+          <Text style={styles.gateTitle}>AI Assistant</Text>
+          <Text style={styles.gateBody}>
+            Get instant answers about immigration programs, USCIS processes, and more with our AI-powered assistant.
+          </Text>
+          <Text style={styles.gatePrice}>
+            {state?.currency ?? 'USD'} {state?.monthly_price ?? '4.99'} / month
+          </Text>
+          <Pressable onPress={() => void subscribe()} style={styles.gateCta}>
+            <Text style={styles.gateCtaText}>Subscribe now</Text>
           </Pressable>
-        )}
-        {!!err && <Text style={{ marginTop: spacing.md, color: colors.danger }}>{err}</Text>}
-        <Text style={{ marginTop: spacing['2xl'], fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>Ask</Text>
+          {!!err && <Text style={styles.error}>{err}</Text>}
+        </View>
+      </AppScreen>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
+      <FlatList
+        ref={listRef}
+        data={messages}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.messageList}
+        showsVerticalScrollIndicator={false}
+        keyboardDismissMode="interactive"
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <Ionicons name="sparkles-outline" size={48} color={colors.text.tertiary} />
+            <Text style={styles.emptyTitle}>Ask me anything</Text>
+            <Text style={styles.emptyBody}>
+              Ask about immigration programs, USCIS processes, client education, library resources, or marketplace providers.
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const isUser = item.role === 'user';
+          return (
+            <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAi]}>
+              {!isUser && (
+                <View style={styles.aiAvatar}>
+                  <Ionicons name="sparkles" size={14} color={colors.primary[600]} />
+                </View>
+              )}
+              <View style={[styles.bubbleContent, isUser ? styles.bubbleContentUser : styles.bubbleContentAi]}>
+                {item.pending ? (
+                  <View style={styles.thinkingRow}>
+                    <ActivityIndicator size="small" color={colors.primary[600]} />
+                    <Text style={styles.thinkingText}>Thinking…</Text>
+                  </View>
+                ) : (
+                  <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.text}</Text>
+                )}
+              </View>
+            </View>
+          );
+        }}
+      />
+
+      {!!err && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{err}</Text>
+        </View>
+      )}
+
+      <View style={[styles.inputRow, { paddingBottom: spacing.sm + insets.bottom }]}>
         <TextInput
-          value={question}
-          onChangeText={setQuestion}
-          placeholder="Your question (min 6 characters)"
+          value={input}
+          onChangeText={setInput}
+          placeholder="Type your question…"
+          placeholderTextColor={colors.text.tertiary}
           multiline
-          style={{
-            marginTop: spacing.md,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: 12,
-            padding: spacing.md,
-            minHeight: 100,
-            color: colors.text.primary,
-            textAlignVertical: 'top',
-          }}
+          style={styles.textInput}
+          editable={!sending}
+          onFocus={() => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 300)}
         />
         <Pressable
-          onPress={() => void ask()}
-          disabled={busy || question.trim().length < 6}
-          style={{
-            marginTop: spacing.md,
-            backgroundColor: colors.primary[600],
-            paddingVertical: spacing.md,
-            borderRadius: 12,
-            opacity: busy || question.trim().length < 6 ? 0.5 : 1,
+          onPress={() => {
+            void send();
+            Keyboard.dismiss();
           }}
+          disabled={sending || input.trim().length < 2}
+          style={({ pressed }) => [
+            styles.sendBtn,
+            (sending || input.trim().length < 2) && styles.sendBtnDisabled,
+            pressed && styles.sendBtnPressed,
+          ]}
         >
-          <Text style={{ color: colors.text.inverse, textAlign: 'center', fontWeight: typography.fontWeight.semibold }}>
-            {busy ? 'Thinking…' : 'Send'}
-          </Text>
+          <Ionicons name="send" size={20} color="#fff" />
         </Pressable>
-        {!!answer && (
-          <Text style={{ marginTop: spacing.xl, color: colors.text.primary, lineHeight: 22 }}>{answer}</Text>
-        )}
-      </ScrollView>
-    </AppScreen>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageList: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    flexGrow: 1,
+  },
+  bubble: {
+    flexDirection: 'row',
+    marginBottom: spacing.md,
+    maxWidth: '85%',
+  },
+  bubbleUser: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row-reverse',
+  },
+  bubbleAi: {
+    alignSelf: 'flex-start',
+  },
+  aiAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ede9fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+    marginTop: 2,
+  },
+  bubbleContent: {
+    borderRadius: 18,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    maxWidth: '100%',
+  },
+  bubbleContentUser: {
+    backgroundColor: colors.primary[600],
+    borderBottomRightRadius: 4,
+  },
+  bubbleContentAi: {
+    backgroundColor: '#f1f5f9',
+    borderBottomLeftRadius: 4,
+  },
+  bubbleText: {
+    fontSize: typography.fontSize.md,
+    lineHeight: 22,
+    color: colors.text.primary,
+  },
+  bubbleTextUser: {
+    color: '#fff',
+  },
+  thinkingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  thinkingText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    fontStyle: 'italic',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+    gap: spacing.sm,
+  },
+  textInput: {
+    flex: 1,
+    minHeight: 42,
+    maxHeight: 120,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
+    backgroundColor: '#f8fafc',
+  },
+  sendBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.primary[600],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnDisabled: {
+    opacity: 0.4,
+  },
+  sendBtnPressed: {
+    opacity: 0.8,
+  },
+  emptyWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing['2xl'],
+    paddingTop: 80,
+  },
+  emptyTitle: {
+    marginTop: spacing.lg,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  emptyBody: {
+    marginTop: spacing.sm,
+    fontSize: typography.fontSize.md,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  gateScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  gateCard: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 24,
+    padding: spacing['2xl'],
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  gateTitle: {
+    marginTop: spacing.lg,
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  gateBody: {
+    marginTop: spacing.sm,
+    fontSize: typography.fontSize.md,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  gatePrice: {
+    marginTop: spacing.lg,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  gateCta: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing['2xl'],
+    borderRadius: 14,
+  },
+  gateCtaText: {
+    color: '#fff',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  error: {
+    marginTop: spacing.md,
+    color: colors.danger,
+    textAlign: 'center',
+  },
+  errorBanner: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: '#fef2f2',
+  },
+  errorBannerText: {
+    color: '#991b1b',
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+  },
+});

@@ -20,6 +20,8 @@ import { providerHeroGradient } from '../../theme/gradients';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as providerDashboardApi from '../../api/providerDashboardApi';
+import * as authApi from '../../api/authApi';
+import { useAuth } from '../../context/AuthContext';
 import type { ProviderTabParamList } from '../../navigation/ProviderTabs';
 import type { ProviderDashboardStackParamList } from './ProviderDashboardStack';
 import {
@@ -199,11 +201,15 @@ type Nav = CompositeNavigationProp<
 
 export function ProviderDashboardScreen() {
   const navigation = useNavigation<Nav>();
+  const { user: authUser, refreshMe } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dashboard, setDashboard] = useState<providerDashboardApi.ProviderDashboardData | null>(null);
   const unreadNotifications = dashboard?.unread_notifications_count ?? 0;
+  const [sendingVerification, setSendingVerification] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const emailNotVerified = !authUser?.email_verified_at;
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -224,6 +230,19 @@ export function ProviderDashboardScreen() {
       void load(false);
     }, [])
   );
+
+  const handleSendVerification = async () => {
+    setSendingVerification(true);
+    const res = await authApi.sendVerificationEmail();
+    setSendingVerification(false);
+    if (res.success) {
+      if (res.data.already_verified) {
+        await refreshMe();
+      } else {
+        setVerificationSent(true);
+      }
+    }
+  };
 
   useEffect(() => {
     // @ts-expect-error: route params shape is app-defined
@@ -254,7 +273,7 @@ export function ProviderDashboardScreen() {
   const recentLeads = dashboard?.recent_leads ?? [];
   const recentReviews = dashboard?.recent_reviews ?? [];
   const bgStatus = provider?.background_check_status ?? undefined;
-  const showBgBanner = bgStatus !== 'clear';
+  const showBgBanner = !!authUser?.requires_background_check && bgStatus !== 'clear';
 
   return (
     <AppScreen variant="gradient" style={styles.mainScreen}>
@@ -293,6 +312,44 @@ export function ProviderDashboardScreen() {
             </View>
           </View>
         </View>
+
+        {emailNotVerified && (
+          <View
+            style={{
+              marginTop: spacing.lg,
+              padding: spacing.lg,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#fde68a',
+              backgroundColor: '#fffbeb',
+            }}
+          >
+            <Text style={{ fontWeight: typography.fontWeight.semibold, color: '#92400e' }}>
+              Verify your email address
+            </Text>
+            <Text style={{ marginTop: spacing.sm, color: '#a16207', lineHeight: 20 }}>
+              Please verify {authUser?.email} to access all features.
+              {verificationSent ? ' Check your inbox for the verification link.' : ''}
+            </Text>
+            <Pressable
+              onPress={handleSendVerification}
+              disabled={sendingVerification || verificationSent}
+              style={{
+                marginTop: spacing.md,
+                alignSelf: 'flex-start',
+                backgroundColor: verificationSent ? '#86efac' : '#b45309',
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.lg,
+                borderRadius: 12,
+                opacity: sendingVerification ? 0.6 : 1,
+              }}
+            >
+              <Text style={{ color: verificationSent ? '#065f46' : colors.text.inverse, fontWeight: typography.fontWeight.semibold, fontSize: typography.fontSize.sm }}>
+                {sendingVerification ? 'Sending…' : verificationSent ? 'Email sent' : 'Send verification email'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         {showBgBanner && (
           <View
