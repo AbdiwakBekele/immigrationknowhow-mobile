@@ -28,6 +28,7 @@ type FilterableSingleSelectProps = {
   options: LabeledOption[];
   onChange: (value: string) => void;
   placeholder?: string;
+  required?: boolean;
 };
 
 export function FilterableSingleSelect({
@@ -36,6 +37,7 @@ export function FilterableSingleSelect({
   options,
   onChange,
   placeholder = 'Tap to choose',
+  required,
 }: FilterableSingleSelectProps) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -61,6 +63,7 @@ export function FilterableSingleSelect({
         }}
       >
         {label}
+        {required ? <Text style={{ color: colors.danger }}> *</Text> : null}
       </Text>
       <Pressable
         onPress={() => {

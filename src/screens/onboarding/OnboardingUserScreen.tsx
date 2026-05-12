@@ -239,12 +239,12 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
     if (!meta.requiresPhoneVerification) await refreshMe();
   };
 
-  const onSendPhoneOtp = async () => {
+  const onSendPhoneOtp = async (): Promise<boolean> => {
     const local = normalizeLocalDigits(phoneLocalDigits);
     setPhoneInlineError(null);
     if (local.length !== 10) {
       setPhoneInlineError(MSG_PHONE_10_DIGIT);
-      return;
+      return false;
     }
     setError(null);
     setSendingPhone(true);
@@ -254,9 +254,10 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
     setSendingPhone(false);
     if (!res.success) {
       setError(friendlyApiErrorMessage(res));
-      return;
+      return false;
     }
     setOtpSent(true);
+    return true;
   };
 
   const onVerifyOtp = async () => {
@@ -393,17 +394,17 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
               <View style={{ height: spacing.sm }} />
               <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
                 <View style={{ flex: 1, minWidth: 140 }}>
-                  <FilterableSingleSelect label="Country" value={country} options={countryOptions} onChange={setCountry} placeholder="Select country" />
+                  <FilterableSingleSelect label="Country" value={country} options={countryOptions} onChange={setCountry} placeholder="Select country" required />
                 </View>
                 <View style={{ flex: 1, minWidth: 140 }}>
                   {stateOptions.length > 0 ? (
-                    <FilterableSingleSelect label="State" value={stateVal} options={stateOptions} onChange={setStateVal} placeholder="Select state" />
+                    <FilterableSingleSelect label="State" value={stateVal} options={stateOptions} onChange={setStateVal} placeholder="Select state" required />
                   ) : (
-                    <AppInput label="State / region" value={stateVal} onChangeText={setStateVal} placeholder="Enter state or region" />
+                    <AppInput label="State / region" value={stateVal} onChangeText={setStateVal} placeholder="Enter state or region" required />
                   )}
                 </View>
               </View>
-              <AppInput label="City / location" value={city} onChangeText={setCity} placeholder="Enter city or location" />
+              <AppInput label="City / location" value={city} onChangeText={setCity} placeholder="Enter city or location" required />
               <AppInput
                 label="ZIP / postal code"
                 value={postalCode}
@@ -424,6 +425,7 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
                 options={languageOptions}
                 onChange={(v: string) => setPreferredLanguage(v.toLowerCase())}
                 placeholder="Select language"
+                required
               />
 
               <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
@@ -467,9 +469,7 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
                 otpSent={otpSent}
                 otpCode={otp}
                 onOtpCodeChange={setOtp}
-                onResendPress={() => {
-                  void onSendPhoneOtp();
-                }}
+                onResendPress={() => onSendPhoneOtp()}
                 resendBusy={sendingPhone}
                 fieldError={phoneInlineError}
               />

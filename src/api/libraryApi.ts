@@ -46,6 +46,15 @@ export async function libraryStripeCheckout(slug: string): Promise<ApiResponse<{
   }
 }
 
+export async function libraryConfirmCheckout(slug: string, sessionId: string): Promise<ApiResponse<any>> {
+  try {
+    const res = await apiClient.post(`/api/mobile/library/items/${encodeURIComponent(slug)}/confirm-checkout`, { session_id: sessionId });
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
 export async function libraryGrantFree(slug: string): Promise<ApiResponse<any>> {
   try {
     const res = await apiClient.post(`/api/mobile/library/items/${encodeURIComponent(slug)}/grant-free`);

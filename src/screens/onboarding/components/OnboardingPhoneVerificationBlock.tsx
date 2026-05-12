@@ -45,7 +45,8 @@ type Props = {
   otpSent: boolean;
   otpCode: string;
   onOtpCodeChange: (code: string) => void;
-  onResendPress: () => void;
+  /** Return `true` on success so the component can start the cooldown and show a banner. */
+  onResendPress: () => Promise<boolean>;
   resendBusy?: boolean;
   /** Shown under phone row (API / validation). */
   fieldError?: string | null;
@@ -71,6 +72,47 @@ export function OnboardingPhoneVerificationBlock({
   const otpInputsRef = useRef<Array<TextInput | null>>([]);
   const [dialOpen, setDialOpen] = useState(false);
   const [dialQuery, setDialQuery] = useState('');
+
+  const COOLDOWN_DURATION = 30;
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [showResendSuccess, setShowResendSuccess] = useState(false);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startCooldown = useCallback(() => {
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    setCooldownSeconds(COOLDOWN_DURATION);
+    cooldownRef.current = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          cooldownRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (otpSent) {
+      startCooldown();
+    }
+  }, [otpSent, startCooldown]);
+
+  const handleResendPress = useCallback(async () => {
+    const success = await onResendPress();
+    if (success) {
+      startCooldown();
+      setShowResendSuccess(true);
+      setTimeout(() => setShowResendSuccess(false), 3000);
+    }
+  }, [onResendPress, startCooldown]);
 
   const selectedDial = useMemo(() => {
     const o = phoneDialOptions.find((x) => x.value === countryIso);
@@ -314,10 +356,23 @@ export function OnboardingPhoneVerificationBlock({
       </View>
       {!!fieldError && <Text style={styles.fieldError}>{fieldError}</Text>}
 
+      {showResendSuccess ? (
+        <View style={styles.successBanner}>
+          <Ionicons name="checkmark-circle" size={16} color="#065F46" />
+          <Text style={styles.successBannerText}>Verification OTP is sent</Text>
+        </View>
+      ) : null}
+
       <View style={styles.resendWrap}>
         <Text style={styles.resendHint}>Didn&apos;t get the code?</Text>
-        <Pressable onPress={onResendPress} disabled={resendBusy} accessibilityRole="button">
-          <Text style={[styles.resendText, resendBusy && styles.resendDisabled]}>Resend code</Text>
+        <Pressable
+          onPress={() => void handleResendPress()}
+          disabled={resendBusy || cooldownSeconds > 0}
+          accessibilityRole="button"
+        >
+          <Text style={[styles.resendText, (resendBusy || cooldownSeconds > 0) && styles.resendDisabled]}>
+            {cooldownSeconds > 0 ? `Resend in ${cooldownSeconds}s` : 'Resend code'}
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -431,6 +486,21 @@ const styles = StyleSheet.create({
   fieldError: {
     fontSize: typography.fontSize.xs,
     color: colors.danger,
+  },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    backgroundColor: '#ECFDF5',
+  },
+  successBannerText: {
+    fontSize: typography.fontSize.sm,
+    color: '#065F46',
+    fontWeight: typography.fontWeight.medium,
   },
   resendWrap: {
     alignItems: 'center',

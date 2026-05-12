@@ -19,6 +19,7 @@ export function AppInput({
   autoCapitalize = 'none',
   error,
   leftIcon,
+  required,
 }: {
   label: string;
   value: string;
@@ -29,10 +30,14 @@ export function AppInput({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   error?: string | null;
   leftIcon?: IonName;
+  required?: boolean;
 }) {
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>
+        {label}
+        {required ? <Text style={styles.requiredStar}> *</Text> : null}
+      </Text>
       <View style={[styles.field, error ? styles.fieldError : null]}>
         {leftIcon ? (
           <View style={styles.iconSlot} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -104,6 +109,9 @@ const styles = StyleSheet.create({
   },
   inputWithIcon: {
     paddingLeft: 0,
+  },
+  requiredStar: {
+    color: colors.danger,
   },
   errorText: {
     marginTop: spacing.xs,
