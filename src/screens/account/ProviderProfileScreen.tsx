@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,7 +9,6 @@ import { AppScreen } from '../../components/AppScreen';
 import { AppButton } from '../../components/AppButton';
 import { useAuth } from '../../context/AuthContext';
 import * as providerDashboardApi from '../../api/providerDashboardApi';
-import * as onboardingApi from '../../api/onboardingApi';
 import type { ProviderBottomTabParamList } from '../../navigation/ProviderBottomTabs';
 import type { ProviderDashboardStackParamList } from '../provider/ProviderDashboardStack';
 import type { ProfileStackParamList } from './ProfileStack';
@@ -25,8 +24,8 @@ export function ProviderProfileScreen() {
   const tabNavigation = navigation.getParent<BottomTabNavigationProp<ProviderBottomTabParamList>>();
   const { user, signOut, refreshMe } = useAuth();
   const [dash, setDash] = useState<providerDashboardApi.ProviderDashboardData | null>(null);
-  const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
-  const formLoadedRef = useRef(false);
+  const [profileUser, setProfileUser] = useState<profileApi.MobileProfileData['user'] | null>(null);
+  const [providerProfile, setProviderProfile] = useState<profileApi.ProviderProfile | null>(null);
   const [saving, setSaving] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -42,26 +41,37 @@ export function ProviderProfileScreen() {
   const [specializations, setSpecializations] = useState('');
   const [serviceAreas, setServiceAreas] = useState('');
 
+  const hydrateForm = useCallback((provider: profileApi.ProviderProfile | null | undefined) => {
+    setBusinessName(String(provider?.business_name ?? '').trim());
+    setTagline(String(provider?.tagline ?? '').trim());
+    setBio(String(provider?.bio ?? '').trim());
+    setWebsite(String(provider?.website ?? '').trim());
+    setYearsExperience(String(provider?.years_experience ?? '').trim());
+    setHourlyRate(String(provider?.hourly_rate ?? '').trim());
+    setSpecializations(Array.isArray(provider?.specializations) ? provider.specializations.join(', ') : '');
+    setServiceAreas(Array.isArray(provider?.service_areas) ? provider.service_areas.join(', ') : '');
+  }, []);
+
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
-    const [dashRes, metaRes] = await Promise.all([providerDashboardApi.getProviderDashboard(), onboardingApi.meta()]);
+    const [dashRes, profileRes] = await Promise.all([providerDashboardApi.getProviderDashboard(), profileApi.getProfile()]);
     if (isRefresh) setRefreshing(false);
     else setLoading(false);
     if (!dashRes.success) {
-      setError(dashRes.message);
+      setError(friendlyApiErrorMessage(dashRes));
+      return;
+    }
+    if (!profileRes.success) {
+      setError(friendlyApiErrorMessage(profileRes));
       return;
     }
     setDash(dashRes.data.dashboard);
-    if (metaRes.success) {
-      setMeta(metaRes.data);
-      if (!formLoadedRef.current) {
-        hydrateForm(metaRes.data, dashRes.data.dashboard);
-        formLoadedRef.current = true;
-      }
-    }
-  }, [user]);
+    setProfileUser(profileRes.data.user);
+    setProviderProfile(profileRes.data.provider);
+    hydrateForm(profileRes.data.provider);
+  }, [hydrateForm]);
 
   useFocusEffect(
     useCallback(() => {
@@ -70,61 +80,37 @@ export function ProviderProfileScreen() {
   );
 
   const prov = dash?.provider;
-  const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || 'Profile';
+  const displayUser = profileUser ?? user;
+  const displayName = [displayUser?.first_name, displayUser?.last_name].filter(Boolean).join(' ').trim() || 'Profile';
   const initials = useMemo(() => {
-    const parts = [user?.first_name, user?.last_name]
+    const parts = [displayUser?.first_name, displayUser?.last_name]
       .map((value) => String(value ?? '').trim())
       .filter(Boolean);
     if (!parts.length) return 'P';
     return parts.slice(0, 2).map((value) => value[0]?.toUpperCase() ?? '').join('') || 'P';
-  }, [user?.first_name, user?.last_name]);
+  }, [displayUser?.first_name, displayUser?.last_name]);
   const bg = prov?.background_check_status;
 
   const hasDirtyFields = useMemo(() => {
-    if (!meta) return false;
-    const existing = meta.existingData ?? {};
-    const business = (existing.business ?? {}) as Record<string, unknown>;
-    const pricing = (existing.pricing ?? {}) as Record<string, unknown>;
-    const services = (existing.services ?? {}) as Record<string, unknown>;
-    const area = (existing['service-area'] ?? {}) as Record<string, unknown>;
-    const areas = Array.isArray(area.areas) ? area.areas : [];
-    const specs = Array.isArray(services.specializations) ? services.specializations : [];
+    const areas = Array.isArray(providerProfile?.service_areas) ? providerProfile.service_areas : [];
+    const specs = Array.isArray(providerProfile?.specializations) ? providerProfile.specializations : [];
     return (
-      businessName.trim() !== String(business.business_name ?? prov?.business_name ?? '').trim() ||
-      tagline.trim() !== String(business.tagline ?? '').trim() ||
-      bio.trim() !== String(business.bio ?? '').trim() ||
-      website.trim() !== String(business.website ?? '').trim() ||
-      yearsExperience.trim() !== String(business.years_experience ?? '').trim() ||
-      hourlyRate.trim() !== String(pricing.hourly_rate ?? '').trim() ||
+      businessName.trim() !== String(providerProfile?.business_name ?? '').trim() ||
+      tagline.trim() !== String(providerProfile?.tagline ?? '').trim() ||
+      bio.trim() !== String(providerProfile?.bio ?? '').trim() ||
+      website.trim() !== String(providerProfile?.website ?? '').trim() ||
+      yearsExperience.trim() !== String(providerProfile?.years_experience ?? '').trim() ||
+      hourlyRate.trim() !== String(providerProfile?.hourly_rate ?? '').trim() ||
       specializations.trim() !== specs.join(', ').trim() ||
       serviceAreas.trim() !== areas.join(', ').trim()
     );
-  }, [meta, prov?.business_name, businessName, tagline, bio, website, yearsExperience, hourlyRate, specializations, serviceAreas]);
+  }, [providerProfile, businessName, tagline, bio, website, yearsExperience, hourlyRate, specializations, serviceAreas]);
 
   const openDashboardScreen = (screen: keyof ProviderDashboardStackParamList) => {
     tabNavigation?.navigate('Dashboard', { screen });
   };
 
-  const hydrateForm = (m: onboardingApi.OnboardingMeta, d: providerDashboardApi.ProviderDashboardData) => {
-    const existing = m.existingData ?? {};
-    const business = (existing.business ?? {}) as Record<string, unknown>;
-    const pricing = (existing.pricing ?? {}) as Record<string, unknown>;
-    const services = (existing.services ?? {}) as Record<string, unknown>;
-    const area = (existing['service-area'] ?? {}) as Record<string, unknown>;
-    const specs = Array.isArray(services.specializations) ? services.specializations : [];
-    const areas = Array.isArray(area.areas) ? area.areas : [];
-    setBusinessName(String(business.business_name ?? d.provider.business_name ?? '').trim());
-    setTagline(String(business.tagline ?? '').trim());
-    setBio(String(business.bio ?? '').trim());
-    setWebsite(String(business.website ?? '').trim());
-    setYearsExperience(String(business.years_experience ?? '').trim());
-    setHourlyRate(String(pricing.hourly_rate ?? '').trim());
-    setSpecializations(specs.join(', '));
-    setServiceAreas(areas.join(', '));
-  };
-
   const onSave = async () => {
-    if (!meta) return;
     setSaving(true);
     setSaveMessage(null);
     setError(null);
@@ -136,31 +122,24 @@ export function ProviderProfileScreen() {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    const saveCalls = await Promise.all([
-      onboardingApi.saveProgress('business', {
-        business_name: businessName.trim() || null,
-        tagline: tagline.trim() || null,
-        bio: bio.trim() || null,
-        website: website.trim() || null,
-        years_experience: yearsExperience.trim() ? Number(yearsExperience.trim()) : null,
-      }),
-      onboardingApi.saveProgress('pricing', {
-        model: 'hourly',
-        hourly_rate: hourlyRate.trim() ? Number(hourlyRate.trim()) : null,
-      }),
-      onboardingApi.saveProgress('services', {
-        specializations: specs,
-      }),
-      onboardingApi.saveProgress('service-area', {
-        areas,
-      }),
-    ]);
+    const res = await profileApi.updateProviderProfile({
+      business_name: businessName.trim(),
+      tagline: tagline.trim() || null,
+      bio: bio.trim() || null,
+      website: website.trim() || null,
+      years_experience: yearsExperience.trim() ? Number(yearsExperience.trim()) : null,
+      hourly_rate: hourlyRate.trim() ? Number(hourlyRate.trim()) : null,
+      specializations: specs,
+      service_areas: areas,
+    });
     setSaving(false);
-    const failed = saveCalls.find((r) => !r.success);
-    if (failed && !failed.success) {
-      setError(failed.message);
+    if (!res.success) {
+      setError(friendlyApiErrorMessage(res));
       return;
     }
+    setProfileUser(res.data.user);
+    setProviderProfile(res.data.provider);
+    hydrateForm(res.data.provider);
     setSaveMessage('Saved');
   };
 
@@ -192,6 +171,7 @@ export function ProviderProfileScreen() {
         setError(friendlyApiErrorMessage(res));
         return;
       }
+      setProfileUser(res.data.user);
       setSaveMessage('Profile photo updated');
       await refreshMe();
     } catch (err) {
@@ -211,6 +191,7 @@ export function ProviderProfileScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
+    setProfileUser(res.data.user);
     setSaveMessage('Profile photo removed');
     await refreshMe();
   };
@@ -228,8 +209,8 @@ export function ProviderProfileScreen() {
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-            {user?.avatar_url ? (
-              <Image source={{ uri: user.avatar_url }} style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: colors.surface }} contentFit="cover" />
+            {displayUser?.avatar_url ? (
+              <Image source={{ uri: displayUser.avatar_url }} style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: colors.surface }} contentFit="cover" />
             ) : (
               <View
                 style={{
@@ -254,8 +235,8 @@ export function ProviderProfileScreen() {
               <Text style={{ marginTop: spacing.sm, fontSize: typography.fontSize.md, color: colors.text.primary, fontWeight: typography.fontWeight.medium }}>
                 {displayName}
               </Text>
-              {!!user?.email && (
-                <Text style={{ marginTop: spacing.xs, fontSize: typography.fontSize.sm, color: colors.text.secondary }}>{user.email}</Text>
+              {!!displayUser?.email && (
+                <Text style={{ marginTop: spacing.xs, fontSize: typography.fontSize.sm, color: colors.text.secondary }}>{displayUser.email}</Text>
               )}
             </View>
           </View>
@@ -272,10 +253,10 @@ export function ProviderProfileScreen() {
               disabled={avatarBusy}
             >
               <Text style={{ color: colors.text.inverse, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>
-                {user?.avatar_url ? 'Change photo' : 'Upload photo'}
+                {displayUser?.avatar_url ? 'Change photo' : 'Upload photo'}
               </Text>
             </Pressable>
-            {user?.avatar_url ? (
+            {displayUser?.avatar_url ? (
               <Pressable
                 style={{
                   borderRadius: 999,

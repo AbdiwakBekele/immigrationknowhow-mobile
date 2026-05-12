@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,15 +11,13 @@ import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { ProviderProfileScreen } from './ProviderProfileScreen';
 import { typography } from '../../theme/typography';
-import * as onboardingApi from '../../api/onboardingApi';
 import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import { shadows } from '../../theme/shadows';
 
 export function ProfileScreen() {
   const { user, role, signOut, refreshMe } = useAuth();
-  const formLoadedRef = useRef(false);
-  const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
+  const [profileUser, setProfileUser] = useState<profileApi.MobileProfileData['user'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,31 +38,32 @@ export function ProfileScreen() {
     return <ProviderProfileScreen />;
   }
 
+  const hydrateForm = useCallback((nextUser: profileApi.MobileProfileData['user'] | null | undefined) => {
+    setFirstName((nextUser?.first_name ?? '').trim());
+    setLastName((nextUser?.last_name ?? '').trim());
+    setEmail((nextUser?.email ?? '').trim());
+    setPhone((nextUser?.phone ?? '').trim());
+    setCity((nextUser?.city ?? '').trim());
+    setState((nextUser?.state ?? '').trim());
+    setCountry((nextUser?.country ?? '').trim());
+    setPostalCode((nextUser?.postal_code ?? '').trim());
+    setPreferredLanguage((String(nextUser?.preferred_language ?? '').trim() || 'en').toLowerCase());
+  }, []);
+
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
-    const res = await onboardingApi.meta();
+    const res = await profileApi.getProfile();
     if (isRefresh) setRefreshing(false);
     else setLoading(false);
     if (!res.success) {
-      setError(res.message);
+      setError(friendlyApiErrorMessage(res));
       return;
     }
-    setMeta(res.data);
-    if (!formLoadedRef.current) {
-      setFirstName((user?.first_name ?? '').trim());
-      setLastName((user?.last_name ?? '').trim());
-      setEmail((user?.email ?? '').trim());
-      setPhone((user?.phone ?? '').trim());
-      setCity((user?.city ?? '').trim());
-      setState((user?.state ?? '').trim());
-      setCountry((user?.country ?? '').trim());
-      setPostalCode(String(res.data.existingData?.location?.postal_code ?? '').trim());
-      setPreferredLanguage((String((user as { preferred_language?: string } | null)?.preferred_language ?? '').trim() || 'en').toLowerCase());
-      formLoadedRef.current = true;
-    }
-  }, [user]);
+    setProfileUser(res.data.user);
+    hydrateForm(res.data.user);
+  }, [hydrateForm]);
 
   useFocusEffect(
     useCallback(() => {
@@ -72,26 +71,27 @@ export function ProfileScreen() {
     }, [load])
   );
 
-  const name = [user?.first_name, user?.last_name].filter(Boolean).join(' ').trim() || 'Profile';
+  const displayUser = profileUser ?? user;
+  const name = [displayUser?.first_name, displayUser?.last_name].filter(Boolean).join(' ').trim() || 'Profile';
   const initials = useMemo(() => {
-    const parts = [user?.first_name, user?.last_name]
+    const parts = [displayUser?.first_name, displayUser?.last_name]
       .map((value) => String(value ?? '').trim())
       .filter(Boolean);
     if (!parts.length) return 'P';
     return parts.slice(0, 2).map((value) => value[0]?.toUpperCase() ?? '').join('') || 'P';
-  }, [user?.first_name, user?.last_name]);
+  }, [displayUser?.first_name, displayUser?.last_name]);
   const hasDirtyFields = useMemo(
     () =>
-      firstName.trim() !== (user?.first_name ?? '').trim() ||
-      lastName.trim() !== (user?.last_name ?? '').trim() ||
-      email.trim() !== (user?.email ?? '').trim() ||
-      phone.trim() !== (user?.phone ?? '').trim() ||
-      city.trim() !== (user?.city ?? '').trim() ||
-      state.trim() !== (user?.state ?? '').trim() ||
-      country.trim() !== (user?.country ?? '').trim() ||
-      preferredLanguage.trim() !== String((user as { preferred_language?: string } | null)?.preferred_language ?? '').trim().toLowerCase() ||
-      postalCode.trim() !== String(meta?.existingData?.location?.postal_code ?? '').trim(),
-    [user, meta, firstName, lastName, email, phone, city, state, country, preferredLanguage, postalCode]
+      firstName.trim() !== (profileUser?.first_name ?? '').trim() ||
+      lastName.trim() !== (profileUser?.last_name ?? '').trim() ||
+      email.trim() !== (profileUser?.email ?? '').trim() ||
+      phone.trim() !== (profileUser?.phone ?? '').trim() ||
+      city.trim() !== (profileUser?.city ?? '').trim() ||
+      state.trim() !== (profileUser?.state ?? '').trim() ||
+      country.trim() !== (profileUser?.country ?? '').trim() ||
+      preferredLanguage.trim() !== String(profileUser?.preferred_language ?? '').trim().toLowerCase() ||
+      postalCode.trim() !== String(profileUser?.postal_code ?? '').trim(),
+    [profileUser, firstName, lastName, email, phone, city, state, country, preferredLanguage, postalCode]
   );
 
   const onSave = async () => {
@@ -115,21 +115,8 @@ export function ProfileScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    setMeta((current) => {
-      if (!current) return current;
-      const existing = (current.existingData ?? {}) as Record<string, unknown>;
-      const location = ((existing.location ?? {}) as Record<string, unknown>);
-      return {
-        ...current,
-        existingData: {
-          ...existing,
-          location: {
-            ...location,
-            postal_code: payload.postal_code ?? '',
-          },
-        },
-      };
-    });
+    setProfileUser(res.data.user);
+    hydrateForm(res.data.user);
     setSaveMessage('Saved');
     await refreshMe();
   };
@@ -162,6 +149,7 @@ export function ProfileScreen() {
         setError(friendlyApiErrorMessage(res));
         return;
       }
+      setProfileUser(res.data.user);
       setSaveMessage('Profile photo updated');
       await refreshMe();
     } catch (err) {
@@ -181,6 +169,7 @@ export function ProfileScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
+    setProfileUser(res.data.user);
     setSaveMessage('Profile photo removed');
     await refreshMe();
   };
@@ -194,8 +183,8 @@ export function ProfileScreen() {
       >
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
-            {user?.avatar_url ? (
-              <Image source={{ uri: user.avatar_url }} style={styles.avatarImage} contentFit="cover" />
+            {displayUser?.avatar_url ? (
+              <Image source={{ uri: displayUser.avatar_url }} style={styles.avatarImage} contentFit="cover" />
             ) : (
               <View style={styles.avatarFallback}>
                 <Text style={styles.avatarInitials}>{initials}</Text>
@@ -205,14 +194,14 @@ export function ProfileScreen() {
               <Text style={styles.heroEyebrow}>PROFILE</Text>
               <Text style={styles.heroTitle}>Profile</Text>
               <Text style={styles.heroName}>{name}</Text>
-              {!!user?.email && <Text style={styles.heroEmail}>{user.email}</Text>}
+              {!!displayUser?.email && <Text style={styles.heroEmail}>{displayUser.email}</Text>}
             </View>
           </View>
           <View style={styles.heroActions}>
             <Pressable style={[styles.avatarAction, avatarBusy && styles.avatarActionDisabled]} onPress={() => void onPickAvatar()} disabled={avatarBusy}>
-              <Text style={styles.avatarActionText}>{user?.avatar_url ? 'Change photo' : 'Upload photo'}</Text>
+              <Text style={styles.avatarActionText}>{displayUser?.avatar_url ? 'Change photo' : 'Upload photo'}</Text>
             </Pressable>
-            {user?.avatar_url ? (
+            {displayUser?.avatar_url ? (
               <Pressable
                 style={[styles.avatarGhostAction, avatarBusy && styles.avatarActionDisabled]}
                 onPress={() => void onRemoveAvatar()}
