@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -155,10 +155,16 @@ export function OnboardingHomeScreen() {
     return m;
   }, []);
 
+  const usStatesCache = useRef<onboardingApi.OnboardingMeta['stateOptions']>([]);
+
   const refreshStateOptions = useCallback((countryCode: string) => {
     void onboardingApi.meta({ country: countryCode }).then((res) => {
       if (res.success) {
-        setMeta((prev) => (prev ? { ...prev, stateOptions: res.data.stateOptions } : prev));
+        const opts = res.data.stateOptions ?? [];
+        if (countryCode === 'US' && opts.length > 0) {
+          usStatesCache.current = opts;
+        }
+        setMeta((prev) => (prev ? { ...prev, stateOptions: opts } : prev));
       }
     });
   }, []);
@@ -238,14 +244,33 @@ export function OnboardingHomeScreen() {
     const pv = m.phoneVerification;
     if (pv?.phone) {
       const digits = String(pv.phone).replace(/\D/g, '');
-      setPhoneLocal(digits.length >= 10 && digits.startsWith('1') ? digits.slice(1, 11) : digits.slice(0, 10));
+      const dialOptions = pv.phoneDialOptions ?? [];
+      const sorted = [...dialOptions]
+        .filter((o) => o.dial)
+        .sort((a, b) => String(b.dial).length - String(a.dial).length);
+
+      let matchedIso = 'US';
+      let localDigits = digits.startsWith('1') ? digits.slice(1) : digits;
+
+      for (const opt of sorted) {
+        const dial = String(opt.dial).replace(/\D/g, '');
+        if (dial && digits.startsWith(dial)) {
+          matchedIso = opt.value;
+          localDigits = digits.slice(dial.length);
+          break;
+        }
+      }
+
+      setPhoneLocal(localDigits.slice(0, 15));
       setOtpSent(digits.length >= 10);
+      setDialCountry(matchedIso);
+    } else {
+      const defaultDial =
+        pv?.phoneDialOptions?.find((o) => o.value === 'US')?.value ??
+        pv?.phoneDialOptions?.[0]?.value ??
+        'US';
+      setDialCountry(defaultDial);
     }
-    const defaultDial =
-      pv?.phoneDialOptions?.find((o) => o.value === 'US')?.value ??
-      pv?.phoneDialOptions?.[0]?.value ??
-      'US';
-    setDialCountry(defaultDial);
   }, []);
 
   useEffect(() => {
@@ -256,9 +281,15 @@ export function OnboardingHomeScreen() {
       if (m) {
         hydrateForms(m);
         if (m.isProvider) {
+          if ((m.stateOptions ?? []).length > 0) {
+            usStatesCache.current = m.stateOptions;
+          }
           const cov = String(m.existingData?.coverage_area?.country ?? 'usa').toLowerCase();
-          const iso = cov === 'usa' ? 'US' : cov === 'canada' ? 'CA' : cov === 'uk' ? 'GB' : 'US';
-          refreshStateOptions(iso);
+          const isoMap: Record<string, string> = { usa: 'US', canada: 'CA', uk: 'GB' };
+          const iso = isoMap[cov];
+          if (iso) {
+            refreshStateOptions(iso);
+          }
         }
       }
     })();
@@ -286,10 +317,16 @@ export function OnboardingHomeScreen() {
     dialOpts.find((o) => o.value === 'US')?.dial ??
     '1';
 
+  const isNanp = useMemo(() => {
+    const u = dialCountry.toUpperCase();
+    return u === 'US' || u === 'CA';
+  }, [dialCountry]);
+
   const fullPhoneDigits = useMemo(() => {
-    const local = phoneLocal.replace(/\D/g, '').slice(0, 14);
+    const raw = phoneLocal.replace(/\D/g, '').slice(0, 14);
+    const local = isNanp ? raw : raw.replace(/^0+/, '');
     return `+${selectedDial}${local}`;
-  }, [phoneLocal, selectedDial]);
+  }, [phoneLocal, selectedDial, isNanp]);
 
   const phoneLocalSufficient = useMemo(() => {
     const local = phoneLocal.replace(/\D/g, '').slice(0, 14);
@@ -426,7 +463,7 @@ export function OnboardingHomeScreen() {
     setStep(3);
   }
 
-  async function handleSeekerSendPhoneOtp() {
+  async function handleSeekerSendPhoneOtp(): Promise<boolean> {
     setBusy(true);
     setError(null);
     const res = await onboardingApi.sendOtp({
@@ -440,21 +477,16 @@ export function OnboardingHomeScreen() {
     setBusy(false);
     if (!res.success) {
       setError(friendlyApiErrorMessage(res));
-      return;
+      return false;
     }
     setOtpSent(true);
+    return true;
   }
 
-  async function handlePhoneResend() {
-    if (isProviderFlow) {
-      await handleProviderSendPhoneOtp();
-      return;
-    }
-    if (isAdvertiserFlow) {
-      await handleAdvertiserSendOtp();
-      return;
-    }
-    await handleSeekerSendPhoneOtp();
+  async function handlePhoneResend(): Promise<boolean> {
+    if (isProviderFlow) return handleProviderSendPhoneOtp();
+    if (isAdvertiserFlow) return handleAdvertiserSendOtp();
+    return handleSeekerSendPhoneOtp();
   }
 
   async function handleVerifyOtp() {
@@ -522,7 +554,7 @@ export function OnboardingHomeScreen() {
     setStep(3);
   }
 
-  async function handleAdvertiserSendOtp() {
+  async function handleAdvertiserSendOtp(): Promise<boolean> {
     setBusy(true);
     setError(null);
     const res = await onboardingApi.sendOtp({
@@ -537,9 +569,10 @@ export function OnboardingHomeScreen() {
     setBusy(false);
     if (!res.success) {
       setError(friendlyApiErrorMessage(res));
-      return;
+      return false;
     }
     setOtpSent(true);
+    return true;
   }
 
   async function handleAdvertiserFinish() {
@@ -594,7 +627,7 @@ export function OnboardingHomeScreen() {
     setStep(next);
   }
 
-  async function handleProviderSendPhoneOtp() {
+  async function handleProviderSendPhoneOtp(): Promise<boolean> {
     setBusy(true);
     setError(null);
     const res = await onboardingApi.sendOtp({
@@ -603,9 +636,10 @@ export function OnboardingHomeScreen() {
     setBusy(false);
     if (!res.success) {
       setError(friendlyApiErrorMessage(res));
-      return;
+      return false;
     }
     setOtpSent(true);
+    return true;
   }
 
   async function saveProviderLocation() {
@@ -813,9 +847,7 @@ export function OnboardingHomeScreen() {
             setOtp(c);
             setError(null);
           }}
-          onResendPress={() => {
-            void handlePhoneResend();
-          }}
+          onResendPress={() => handlePhoneResend()}
           resendBusy={busy}
           fieldError={isPhoneVerificationStep ? error : null}
         />
@@ -895,9 +927,9 @@ export function OnboardingHomeScreen() {
           {stateUsePicklist ? (
             <PicklistField label="State" value={seekerState} options={meta.stateOptions} onChange={setSeekerState} required />
           ) : (
-            <AppInput label="State / region" value={seekerState} onChangeText={setSeekerState} placeholder="Required" />
+            <AppInput label="State / region" value={seekerState} onChangeText={setSeekerState} placeholder="Required" required />
           )}
-          <AppInput label="City" value={seekerCity} onChangeText={setSeekerCity} placeholder="City" />
+          <AppInput label="City" value={seekerCity} onChangeText={setSeekerCity} placeholder="City" required />
           <AppInput label="ZIP / postal code" value={seekerPostal} onChangeText={setSeekerPostal} />
           <AppInput label="County (optional)" value={seekerCounty} onChangeText={setSeekerCounty} />
           <PicklistField
@@ -945,24 +977,24 @@ export function OnboardingHomeScreen() {
     if (step === 2) {
       return (
         <>
-          <AppInput label="Street address" value={advStreet} onChangeText={setAdvStreet} placeholder="123 Main St" />
+          <AppInput label="Street address" value={advStreet} onChangeText={setAdvStreet} placeholder="123 Main St" required />
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <AppInput label="City" value={advCity} onChangeText={setAdvCity} />
+              <AppInput label="City" value={advCity} onChangeText={setAdvCity} required />
             </View>
             {stateUsePicklist ? (
               <View style={{ flex: 1 }}>
-                <PicklistField label="State" value={advState} options={meta.stateOptions} onChange={setAdvState} placeholder="Select" />
+                <PicklistField label="State" value={advState} options={meta.stateOptions} onChange={setAdvState} placeholder="Select" required />
               </View>
             ) : (
               <View style={{ flex: 1 }}>
-                <AppInput label="State / region" value={advState} onChangeText={setAdvState} />
+                <AppInput label="State / region" value={advState} onChangeText={setAdvState} required />
               </View>
             )}
           </View>
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <AppInput label="Postal / ZIP" value={advPostal} onChangeText={setAdvPostal} />
+              <AppInput label="Postal / ZIP" value={advPostal} onChangeText={setAdvPostal} required />
             </View>
             <View style={{ flex: 1 }}>
               <PicklistField
@@ -1024,8 +1056,15 @@ export function OnboardingHomeScreen() {
             options={[...PROVIDER_COVERAGE_COUNTRIES]}
             onChange={(v) => {
               setCovCountry(v);
-              const iso = v === 'usa' ? 'US' : v === 'canada' ? 'CA' : v === 'uk' ? 'GB' : 'US';
-              refreshStateOptions(iso);
+              setCovState('');
+              setCovPostal('');
+              const isoMap: Record<string, string> = { usa: 'US', canada: 'CA', uk: 'GB' };
+              const iso = isoMap[v];
+              const instant = iso === 'US' ? (usStatesCache.current ?? []) : [];
+              setMeta((prev) => (prev ? { ...prev, stateOptions: instant } : prev));
+              if (iso) {
+                refreshStateOptions(iso);
+              }
             }}
             required
           />
@@ -1034,14 +1073,15 @@ export function OnboardingHomeScreen() {
               {stateUsePicklist ? (
                 <PicklistField label="State" value={covState} options={stateOpts} onChange={setCovState} required />
               ) : (
-                <AppInput label="State / region" value={covState} onChangeText={setCovState} />
+                <AppInput label="State / region" value={covState} onChangeText={setCovState} required />
               )}
             </View>
             <View style={{ flex: 1 }}>
               <AppInput
-                label={covCountry === 'usa' ? 'City / ZIP code *' : 'City / ZIP code'}
+                label="City / ZIP code"
                 value={covPostal}
                 onChangeText={setCovPostal}
+                required={covCountry === 'usa'}
               />
             </View>
           </View>
@@ -1067,25 +1107,25 @@ export function OnboardingHomeScreen() {
         <>
           <SectionLabel flushTop>Business address</SectionLabel>
           <Text style={styles.mutedBlock}>Enter your business address for your profile and client matching.</Text>
-          <AppInput label="Address line 1" value={pStreet} onChangeText={setPStreet} />
+          <AppInput label="Address line 1" value={pStreet} onChangeText={setPStreet} required />
           <AppInput label="Address line 2 (optional)" value={pLine2} onChangeText={setPLine2} />
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <AppInput label="City" value={pCity} onChangeText={setPCity} />
+              <AppInput label="City" value={pCity} onChangeText={setPCity} required />
             </View>
             {pStatePicklist ? (
               <View style={{ flex: 1 }}>
-                <PicklistField label="State" value={pState} options={meta.stateOptions} onChange={setPState} />
+                <PicklistField label="State" value={pState} options={meta.stateOptions} onChange={setPState} required />
               </View>
             ) : (
               <View style={{ flex: 1 }}>
-                <AppInput label="State / region" value={pState} onChangeText={setPState} />
+                <AppInput label="State / region" value={pState} onChangeText={setPState} required />
               </View>
             )}
           </View>
           <View style={styles.row2}>
             <View style={{ flex: 1 }}>
-              <AppInput label="ZIP / postal" value={pPostal} onChangeText={setPPostal} />
+              <AppInput label="ZIP / postal" value={pPostal} onChangeText={setPPostal} required />
             </View>
             <View style={{ flex: 1 }}>
               <PicklistField
@@ -1096,6 +1136,7 @@ export function OnboardingHomeScreen() {
                   setPCountry(v);
                   refreshStateOptions(v);
                 }}
+                required
               />
             </View>
           </View>
@@ -1172,13 +1213,14 @@ export function OnboardingHomeScreen() {
             value={priceModel}
             options={[...PRICING_MODELS]}
             onChange={setPriceModel}
+            required
           />
           {priceModel === 'hourly' ? (
-            <AppInput label="Hourly rate (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" />
+            <AppInput label="Hourly rate (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" required />
           ) : priceModel === 'flat_rate' ? (
-            <AppInput label="Flat rate (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" />
+            <AppInput label="Flat rate (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" required />
           ) : priceModel === 'custom' ? (
-            <AppInput label="Custom price (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" />
+            <AppInput label="Custom price (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" required />
           ) : null}
           <AppInput label="Consultation fee (USD)" value={priceConsult} onChangeText={setPriceConsult} keyboardType="numeric" />
           <CheckboxRow

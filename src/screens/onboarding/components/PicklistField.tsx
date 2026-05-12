@@ -44,7 +44,7 @@ export function PicklistField({
       {label ? (
         <Text style={[styles.label, disabled && styles.labelDisabled]}>
           {label}
-          {required ? ' *' : ''}
+          {required ? <Text style={styles.requiredStar}> *</Text> : null}
         </Text>
       ) : null}
       <Pressable
@@ -115,6 +115,9 @@ const styles = StyleSheet.create({
   },
   labelDisabled: {
     color: colors.text.muted,
+  },
+  requiredStar: {
+    color: colors.danger,
   },
   field: {
     flexDirection: 'row',
