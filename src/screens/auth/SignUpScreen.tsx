@@ -127,13 +127,14 @@ export function SignUpScreen() {
     <AppScreen variant="muted">
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets
         >
           {navigation.canGoBack() ? (
             <View style={styles.backRow}>
