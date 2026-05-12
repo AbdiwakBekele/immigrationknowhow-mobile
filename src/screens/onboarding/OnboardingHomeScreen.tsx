@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +12,6 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import * as Linking from 'expo-linking';
 import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
 import { AppButton } from '../../components/AppButton';
@@ -287,7 +288,7 @@ export function OnboardingHomeScreen() {
 
   const fullPhoneDigits = useMemo(() => {
     const local = phoneLocal.replace(/\D/g, '').slice(0, 14);
-    return `${selectedDial}${local}`;
+    return `+${selectedDial}${local}`;
   }, [phoneLocal, selectedDial]);
 
   const phoneLocalSufficient = useMemo(() => {
@@ -674,8 +675,16 @@ export function OnboardingHomeScreen() {
   }
 
   async function saveProviderPricing() {
-    if (priceModel === 'hourly' && !priceHourly.trim()) {
-      setError('Please enter your hourly rate to continue.');
+    if (priceModel === 'consultation') {
+      if (!priceConsult.trim()) {
+        setError('Please enter your consultation fee to continue.');
+        return;
+      }
+    } else if (!priceHourly.trim()) {
+      const rateLabel =
+        priceModel === 'flat_rate' ? 'flat rate' :
+        priceModel === 'custom' ? 'custom price' : 'hourly rate';
+      setError(`Please enter your ${rateLabel} to continue.`);
       return;
     }
     setBusy(true);
@@ -736,7 +745,8 @@ export function OnboardingHomeScreen() {
     }
     const checkout = (res.data as { checkout_url?: string } | undefined)?.checkout_url;
     if (checkout && typeof checkout === 'string') {
-      await Linking.openURL(checkout);
+      navigation.navigate('StripeCheckout', { checkoutUrl: checkout });
+      return;
     }
     await refreshMe();
   }
@@ -1165,6 +1175,10 @@ export function OnboardingHomeScreen() {
           />
           {priceModel === 'hourly' ? (
             <AppInput label="Hourly rate (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" />
+          ) : priceModel === 'flat_rate' ? (
+            <AppInput label="Flat rate (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" />
+          ) : priceModel === 'custom' ? (
+            <AppInput label="Custom price (USD)" value={priceHourly} onChangeText={setPriceHourly} keyboardType="numeric" />
           ) : null}
           <AppInput label="Consultation fee (USD)" value={priceConsult} onChangeText={setPriceConsult} keyboardType="numeric" />
           <CheckboxRow
@@ -1256,43 +1270,51 @@ export function OnboardingHomeScreen() {
 
   return (
     <AppScreen variant="muted" style={{ flex: 1 }}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
-        <View style={styles.backRow}>
-          <Pressable
-            onPress={() => void goBackStep()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={12}
-            style={styles.backButton}
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.primary[700]} />
-          </Pressable>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets
+        >
+          <View style={styles.backRow}>
+            <Pressable
+              onPress={() => void goBackStep()}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={12}
+              style={styles.backButton}
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.primary[700]} />
+            </Pressable>
+          </View>
 
-        <AuthFlowProgressBar currentStep={step} totalSteps={progressTotal} />
+          <AuthFlowProgressBar currentStep={step} totalSteps={progressTotal} />
 
-        <Text style={[styles.title, !pageSubtitle ? styles.titleSolo : null]}>{pageTitle}</Text>
-        {pageSubtitle ? <Text style={styles.titleSubtitle}>{pageSubtitle}</Text> : null}
+          <Text style={[styles.title, !pageSubtitle ? styles.titleSolo : null]}>{pageTitle}</Text>
+          {pageSubtitle ? <Text style={styles.titleSubtitle}>{pageSubtitle}</Text> : null}
 
-        {!!error && !isPhoneVerificationStep ? <Text style={styles.error}>{error}</Text> : null}
+          {!!error && !isPhoneVerificationStep ? <Text style={styles.error}>{error}</Text> : null}
 
-        <View style={styles.card}>
-          {isProviderFlow ? renderProvider() : isAdvertiserFlow ? renderAdvertiser() : renderSeeker()}
-        </View>
+          <View style={styles.card}>
+            {isProviderFlow ? renderProvider() : isAdvertiserFlow ? renderAdvertiser() : renderSeeker()}
+          </View>
 
-        {action ? (
-          <AppButton title={action.title} onPress={action.onPress} loading={busy} disabled={primaryDisabled} />
-        ) : null}
-      </ScrollView>
+          {action ? (
+            <AppButton title={action.title} onPress={action.onPress} loading={busy} disabled={primaryDisabled} />
+          ) : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   scroll: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing['3xl'],
