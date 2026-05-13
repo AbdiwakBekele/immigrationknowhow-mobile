@@ -18,6 +18,7 @@ type AuthContextValue = AuthState & {
   signUp: (payload: authApi.RegisterPayload) => Promise<{ ok: true } | { ok: false; message: string }>;
   signOut: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  applyUser: (user: AuthUser) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -45,6 +46,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.success) {
       setUser(res.data.user);
     }
+  }, []);
+
+  const applyUser = useCallback((next: AuthUser) => {
+    setUser(next);
   }, []);
 
   useEffect(() => {
@@ -117,8 +122,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       signOut,
       refreshMe,
+      applyUser,
     }),
-    [isBootstrapping, isAuthenticated, token, user, role, signIn, signUp, signOut, refreshMe]
+    [isBootstrapping, isAuthenticated, token, user, role, signIn, signUp, signOut, refreshMe, applyUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
