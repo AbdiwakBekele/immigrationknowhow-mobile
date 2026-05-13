@@ -8,7 +8,7 @@ import { NotificationsScreen } from '../notifications/NotificationsScreen';
 
 export type CommunityStackParamList = {
   CommunityList: undefined;
-  CommunityPost: { id: number };
+  CommunityPost: { id: number; focusComments?: boolean };
   CommunityNews: undefined;
   Notifications: undefined;
 };

@@ -22,6 +22,7 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import { useAuth } from '../../context/AuthContext';
+import type { AuthUser } from '../../types/user';
 import * as onboardingApi from '../../api/onboardingApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
@@ -68,7 +69,19 @@ function CheckboxRow({
 
 export function OnboardingHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
-  const { refreshMe, signOut } = useAuth();
+  const { refreshMe, applyUser, signOut } = useAuth();
+
+  const completeOnboardingSession = useCallback(
+    async (completedUser?: AuthUser | null) => {
+      if (completedUser) {
+        applyUser(completedUser);
+        return;
+      }
+      await refreshMe();
+    },
+    [applyUser, refreshMe],
+  );
+
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
   const [step, setStep] = useState(2);
@@ -530,7 +543,7 @@ export function OnboardingHomeScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    await refreshMe();
+    await completeOnboardingSession(res.data?.user as AuthUser | undefined);
   }
 
   async function handleAdvertiserAddressContinue() {
@@ -599,7 +612,7 @@ export function OnboardingHomeScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    await refreshMe();
+    await completeOnboardingSession(res.data?.user as AuthUser | undefined);
   }
 
   async function handleProviderCoverageContinue() {
@@ -777,12 +790,12 @@ export function OnboardingHomeScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    const checkout = (res.data as { checkout_url?: string } | undefined)?.checkout_url;
+    const checkout = (res.data as { checkout_url?: string; user?: AuthUser } | undefined)?.checkout_url;
     if (checkout && typeof checkout === 'string') {
       navigation.navigate('StripeCheckout', { checkoutUrl: checkout });
       return;
     }
-    await refreshMe();
+    await completeOnboardingSession((res.data as { user?: AuthUser } | undefined)?.user);
   }
 
   const coverageUsesStateList = PROVIDER_COVERAGE_USES_STATE_LIST.includes(
