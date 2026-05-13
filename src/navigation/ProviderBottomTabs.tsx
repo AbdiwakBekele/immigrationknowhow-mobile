@@ -10,6 +10,7 @@ import { MessagesStack, type MessagesStackParamList } from '../screens/messages/
 import { LeadsStack, type LeadsStackParamList } from '../screens/provider/LeadsStack';
 import { ProviderDashboardStack, type ProviderDashboardStackParamList } from '../screens/provider/ProviderDashboardStack';
 import { tabBarIcon, useModernTabBarOptions } from './tabBar';
+import { getActiveRouteName, navigationStateHasReaderMode, routeHasReaderMode } from './readerMode';
 import { colors } from '../theme/colors';
 
 /** Primary provider destinations in the bottom bar; hub & billing live in the drawer. */
@@ -45,25 +46,20 @@ const fabStyles = StyleSheet.create({
   },
 });
 
-function getActiveRouteName(state: { index?: number; routes: Array<{ name: string; state?: unknown }> }): string {
-  const route = state.routes[state.index ?? 0];
-  if (route.state && typeof route.state === 'object' && 'routes' in route.state) {
-    return getActiveRouteName(route.state as { index?: number; routes: Array<{ name: string; state?: unknown }> });
-  }
-  return route.name;
-}
-
 function AiAssistantFab() {
   const drawer = useNavigation<DrawerNavigationProp<{ Main: undefined }>>();
-  const activeRoute = useNavigationState((state) => {
+  const { activeRoute, isReaderMode } = useNavigationState((state) => {
     try {
-      return getActiveRouteName(state);
+      return {
+        activeRoute: getActiveRouteName(state),
+        isReaderMode: navigationStateHasReaderMode(state),
+      };
     } catch {
-      return '';
+      return { activeRoute: '', isReaderMode: false };
     }
   });
 
-  if (activeRoute === 'ProviderAiAssistant') return null;
+  if (activeRoute === 'ProviderAiAssistant' || isReaderMode) return null;
 
   return (
     <Pressable
@@ -93,7 +89,12 @@ export function ProviderBottomTabs() {
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
-        screenOptions={modernTabBarOptions}
+        screenOptions={({ route }) => ({
+          ...modernTabBarOptions,
+          tabBarStyle: routeHasReaderMode(route)
+            ? [modernTabBarOptions.tabBarStyle, { display: 'none' }]
+            : modernTabBarOptions.tabBarStyle,
+        })}
         screenListeners={({ navigation, route }) => ({
           tabPress: (e) => {
             e.preventDefault();

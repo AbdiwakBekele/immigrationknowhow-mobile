@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,12 +12,14 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { WebView } from 'react-native-webview';
 import type { WebViewNavigation } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
 import { LibraryCover } from '../../components/library/LibraryCover';
+import { BASE_URL } from '../../config/api';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -59,8 +61,52 @@ function formatReadingTime(minutes: number | null | undefined): string | null {
   return `${Number.isInteger(h) ? h : h.toFixed(1)} hr read`;
 }
 
+function summarizeUrl(value: string | null | undefined): string {
+  if (!value) return '—';
+  const q = value.indexOf('?');
+  const safe = q >= 0 ? `${value.slice(0, q)}?…` : value;
+  return safe.length > 220 ? `${safe.slice(0, 220)}…` : safe;
+}
+
+function normalizeStreamUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  try {
+    const streamUrl = new URL(value);
+    const apiBaseUrl = new URL(BASE_URL);
+
+    if (
+      apiBaseUrl.protocol === 'https:' &&
+      streamUrl.protocol === 'http:' &&
+      streamUrl.host === apiBaseUrl.host
+    ) {
+      streamUrl.protocol = 'https:';
+    }
+
+    return streamUrl.toString();
+  } catch {
+    return value;
+  }
+}
+
+function logPdfReader(message: string, details?: Record<string, unknown>) {
+  if (details) {
+    console.log(`[LibraryReader] ${message}`, details);
+    return;
+  }
+  console.log(`[LibraryReader] ${message}`);
+}
+
+function logPdfReaderError(message: string, details?: Record<string, unknown>) {
+  if (details) {
+    console.error(`[LibraryReader] ${message}`, details);
+    return;
+  }
+  console.error(`[LibraryReader] ${message}`);
+}
+
 export function LibraryDetailScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList, 'LibraryDetail'>>();
   const route = useRoute<RouteProp<LibraryStackParamList, 'LibraryDetail'>>();
   const insets = useSafeAreaInsets();
   const { slug } = route.params;
@@ -92,6 +138,16 @@ export function LibraryDetailScreen() {
     navigation.setOptions({ title: t });
   }, [navigation, data, slug]);
 
+  const isReaderMode = !!pdfUrl && data?.item?.type === 'ebook';
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: !isReaderMode });
+  }, [navigation, isReaderMode]);
+
+  useEffect(() => {
+    navigation.setParams({ slug, readerMode: isReaderMode });
+  }, [navigation, slug, isReaderMode]);
+
   const pay = async () => {
     setCheckoutLoading(true);
     const res = await libraryApi.libraryStripeCheckout(slug);
@@ -116,12 +172,41 @@ export function LibraryDetailScreen() {
   };
 
   const openReader = async () => {
+    logPdfReader('Requesting stream URLs', { slug });
     const res = await libraryApi.getLibraryStreamUrls(slug);
-    if (!res.success || !res.data?.stream_urls?.pdf) {
+    const streamData = res.success ? res.data : null;
+    const rawPdfUrl = streamData?.stream_urls?.pdf ?? null;
+    const nextPdfUrl = normalizeStreamUrl(rawPdfUrl);
+
+    logPdfReader('Stream URL response received', {
+      slug,
+      success: res.success,
+      message: res.message,
+      hasPdfUrl: !!nextPdfUrl,
+      rawPdfUrl: summarizeUrl(rawPdfUrl),
+      pdfUrl: summarizeUrl(nextPdfUrl),
+      expiresInSeconds: streamData?.expires_in_seconds ?? null,
+    });
+
+    if (rawPdfUrl && nextPdfUrl && rawPdfUrl !== nextPdfUrl) {
+      logPdfReader('Normalized insecure stream URL to HTTPS', {
+        slug,
+        from: summarizeUrl(rawPdfUrl),
+        to: summarizeUrl(nextPdfUrl),
+      });
+    }
+
+    if (!res.success || !nextPdfUrl) {
+      logPdfReaderError('Cannot open reader: missing PDF URL', {
+        slug,
+        success: res.success,
+        message: res.message,
+        responseKeys: streamData ? Object.keys(streamData) : [],
+      });
       Alert.alert('Read', res.success ? 'No PDF URL available.' : res.message);
       return;
     }
-    setPdfUrl(res.data.stream_urls.pdf);
+    setPdfUrl(nextPdfUrl);
   };
 
   const onCheckoutSuccess = (successUrl: string) => {
@@ -198,7 +283,7 @@ export function LibraryDetailScreen() {
   }
 
   // --- PDF reader overlay (pdf.js in WebView) ---
-  if (pdfUrl && data?.item?.type === 'ebook') {
+  if (isReaderMode) {
     const pdfJsHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
@@ -215,7 +300,6 @@ canvas{display:block;margin:4px auto;box-shadow:0 1px 4px rgba(0,0,0,.12)}
   font-size:13px;font-family:system-ui;pointer-events:none;z-index:10;
   transition:opacity .3s}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
 </head><body>
 <div id="loading">Loading PDF…</div>
 <div id="error"></div>
@@ -230,15 +314,75 @@ const loadEl=document.getElementById('loading');
 const errEl=document.getElementById('error');
 const pageEl=document.getElementById('pageInfo');
 let hideTimer;
+const post=(type,payload={})=>{
+  try{
+    window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({
+      scope:'pdf-reader',
+      type,
+      ...payload,
+    }));
+  }catch(_){}
+};
+function stringifyError(error){
+  if(!error) return 'Unknown error';
+  if(typeof error==='string') return error;
+  if(error instanceof Error) return error.message||error.name||'Unknown error';
+  try{return JSON.stringify(error);}catch(_){return String(error);}
+}
+async function fetchPdfBytes(){
+  post('log',{
+    step:'fetch-start',
+    url,
+    origin:window.location.origin,
+    baseURI:document.baseURI,
+  });
+  const response=await fetch(url,{
+    method:'GET',
+    credentials:'omit',
+    headers:{Accept:'application/pdf,*/*'},
+  });
+  const contentType=response.headers.get('Content-Type')||'';
+  post('log',{
+    step:'fetch-response',
+    status:response.status,
+    ok:response.ok,
+    contentType,
+  });
+  if(!response.ok){
+    throw new Error('PDF request failed with status '+response.status);
+  }
+  if(contentType.toLowerCase().includes('text/html')){
+    throw new Error('PDF request returned HTML instead of a PDF.');
+  }
+  const bytes=await response.arrayBuffer();
+  post('log',{step:'fetch-bytes',byteLength:bytes.byteLength});
+  if(!bytes.byteLength){
+    throw new Error('PDF response was empty.');
+  }
+  return new Uint8Array(bytes);
+}
 async function render(){
   try{
-    const pdf=await pdfjsLib.getDocument({url,withCredentials:true}).promise;
+    post('log',{
+      step:'bootstrap',
+      userAgent:navigator.userAgent,
+      origin:window.location.origin,
+      baseURI:document.baseURI,
+      url,
+    });
+    const data=await fetchPdfBytes();
+    post('log',{step:'pdfjs-load-start',byteLength:data.byteLength});
+    const pdf=await pdfjsLib.getDocument({data}).promise;
     loadEl.style.display='none';
     const totalPages=pdf.numPages;
+    post('ready',{totalPages});
     pageEl.textContent='Page 1 of '+totalPages;
     const dpr=window.devicePixelRatio||1;
     const w=window.innerWidth;
     for(let i=1;i<=totalPages;i++){
+      if(i===1||i===totalPages||i%5===0){
+        post('log',{step:'render-progress',page:i,totalPages});
+      }
       const page=await pdf.getPage(i);
       const vp=page.getViewport({scale:1});
       const scale=(w/vp.width)*dpr;
@@ -259,11 +403,20 @@ async function render(){
       }});
     },{root:viewer,threshold:0.5});
     viewer.querySelectorAll('canvas').forEach(c=>obs.observe(c));
+    post('log',{step:'render-complete',totalPages});
   }catch(e){
+    const message=stringifyError(e);
     loadEl.style.display='none';
     errEl.style.display='block';
-    errEl.textContent='Could not load PDF.';
-    window.ReactNativeWebView&&window.ReactNativeWebView.postMessage('pdf-error');
+    errEl.textContent='Could not load PDF. '+message;
+    post('error',{
+      message,
+      name:e&&typeof e==='object'&&'name'in e?String(e.name):null,
+      stack:e&&typeof e==='object'&&'stack'in e?String(e.stack).slice(0,2000):null,
+      url,
+      origin:window.location.origin,
+      baseURI:document.baseURI,
+    });
   }
 }
 render();
@@ -281,18 +434,79 @@ render();
           <View style={{ width: 36 }} />
         </View>
         <WebView
-          source={{ html: pdfJsHtml }}
+          source={{ html: pdfJsHtml, baseUrl: BASE_URL }}
           style={{ flex: 1, backgroundColor: '#F1F5F9' }}
           javaScriptEnabled
           domStorageEnabled
           allowFileAccess
           mixedContentMode="compatibility"
           originWhitelist={['*']}
+          onLoadStart={() => {
+            logPdfReader('Reader WebView load started', {
+              slug,
+              pdfUrl: summarizeUrl(pdfUrl),
+              baseUrl: BASE_URL,
+            });
+          }}
+          onLoadEnd={() => {
+            logPdfReader('Reader WebView load ended', {
+              slug,
+              pdfUrl: summarizeUrl(pdfUrl),
+            });
+          }}
           onMessage={(event) => {
-            if (event.nativeEvent.data === 'pdf-error') {
-              Alert.alert('Reader', 'Could not load the PDF.');
-              setPdfUrl(null);
+            const raw = event.nativeEvent.data;
+            let payload: Record<string, unknown> | null = null;
+
+            try {
+              payload = JSON.parse(raw) as Record<string, unknown>;
+            } catch {
+              payload = null;
             }
+
+            if (!payload || payload.scope !== 'pdf-reader') {
+              if (raw === 'pdf-error') {
+                logPdfReaderError('Reader reported a legacy pdf-error event', {
+                  slug,
+                  pdfUrl: summarizeUrl(pdfUrl),
+                });
+                Alert.alert('Reader', 'Could not load the PDF.');
+                setPdfUrl(null);
+              }
+              return;
+            }
+
+            const type = typeof payload.type === 'string' ? payload.type : 'unknown';
+            if (type === 'error') {
+              logPdfReaderError('Reader render failed', payload);
+              const message =
+                typeof payload.message === 'string' && payload.message.trim() !== ''
+                  ? payload.message
+                  : 'Could not load the PDF.';
+              Alert.alert('Reader', message);
+              setPdfUrl(null);
+              return;
+            }
+
+            logPdfReader(`Reader event: ${type}`, payload);
+          }}
+          onError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            logPdfReaderError('Reader WebView onError', {
+              slug,
+              description: nativeEvent.description,
+              code: nativeEvent.code,
+              url: nativeEvent.url,
+            });
+          }}
+          onHttpError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            logPdfReaderError('Reader WebView onHttpError', {
+              slug,
+              statusCode: nativeEvent.statusCode,
+              description: nativeEvent.description,
+              url: nativeEvent.url,
+            });
           }}
           onShouldStartLoadWithRequest={() => true}
         />
@@ -599,7 +813,7 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
   priceValue: {
-    fontSize: typography.fontSize.xxl ?? 22,
+    fontSize: typography.fontSize['2xl'] ?? 22,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     marginTop: 2,

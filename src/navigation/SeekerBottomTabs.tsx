@@ -6,6 +6,7 @@ import { SeekerDashboardStack } from '../screens/seeker/SeekerDashboardStack';
 import { MessagesStack, type MessagesStackParamList } from '../screens/messages/MessagesStack';
 import { SeekerDiscoverStack, type SeekerDiscoverStackParamList } from '../screens/discover/SeekerDiscoverStack';
 import { tabBarIcon, useModernTabBarOptions } from './tabBar';
+import { routeHasReaderMode } from './readerMode';
 
 /** Primary destinations in the bottom bar; other flows live in the drawer. */
 export type SeekerBottomTabParamList = {
@@ -20,7 +21,14 @@ const Tab = createBottomTabNavigator<SeekerBottomTabParamList>();
 export function SeekerBottomTabs() {
   const modernTabBarOptions = useModernTabBarOptions();
   return (
-    <Tab.Navigator screenOptions={modernTabBarOptions}>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        ...modernTabBarOptions,
+        tabBarStyle: routeHasReaderMode(route)
+          ? [modernTabBarOptions.tabBarStyle, { display: 'none' }]
+          : modernTabBarOptions.tabBarStyle,
+      })}
+    >
       <Tab.Screen
         name="Dashboard"
         component={SeekerDashboardStack}

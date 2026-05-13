@@ -7,7 +7,7 @@ import { NotificationsScreen } from '../notifications/NotificationsScreen';
 
 export type LibraryStackParamList = {
   LibraryMy: undefined;
-  LibraryDetail: { slug: string };
+  LibraryDetail: { slug: string; readerMode?: boolean };
   Notifications: undefined;
 };
 
