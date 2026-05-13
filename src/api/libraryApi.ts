@@ -64,7 +64,9 @@ export async function libraryGrantFree(slug: string): Promise<ApiResponse<any>> 
   }
 }
 
-export async function getLibraryStreamUrls(slug: string): Promise<ApiResponse<{ stream_urls: Record<string, string> }>> {
+export async function getLibraryStreamUrls(
+  slug: string
+): Promise<ApiResponse<{ stream_urls: Record<string, string>; expires_in_seconds?: number }>> {
   try {
     const res = await apiClient.post(`/api/mobile/library/items/${encodeURIComponent(slug)}/stream-urls`);
     return res.data;

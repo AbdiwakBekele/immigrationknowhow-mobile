@@ -1,8 +1,9 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useNavigationState } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { navigationStateHasReaderMode } from '../navigation/readerMode';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 
@@ -10,6 +11,9 @@ export function AiAssistantFab() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const tabBarHeight = 64 + 10 + insets.bottom;
+  const isReaderMode = useNavigationState((state) => navigationStateHasReaderMode(state));
+
+  if (isReaderMode) return null;
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: tabBarHeight + spacing.md }]}>
