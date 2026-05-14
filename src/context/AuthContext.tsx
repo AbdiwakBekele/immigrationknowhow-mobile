@@ -79,6 +79,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [syncActiveRole]);
 
+  const applyUser = useCallback((next: AuthUser) => {
+    setUser(next);
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
