@@ -65,7 +65,7 @@ export function CommunityListScreen() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     const res = await communityApi.listCommunityPosts({
-      category,
+      ...(category !== 'feed' ? { category } : {}),
       search: search.trim(),
     });
     if (isRefresh) setRefreshing(false);
@@ -259,10 +259,10 @@ const styles = StyleSheet.create({
   },
   screenTitle: {
     marginTop: spacing.xs,
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
     color: '#111827',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   newsBtn: {
     flexDirection: 'row',

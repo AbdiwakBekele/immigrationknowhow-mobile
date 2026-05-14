@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { WebView } from 'react-native-webview';
 import type { CommunityPostPayload } from '../../api/communityApi';
 import { AppImage } from '../AppImage';
 import { CommunityEngagementBar } from './CommunityEngagementBar';
@@ -8,6 +9,7 @@ import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
+import { youtubeVideoIdFromUrl } from '../../utils/communityDisplay';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const FEED_IMAGE_HEIGHT = 160;
@@ -42,6 +44,8 @@ export function CommunityPostFeedCard({
   onBookmark,
   reacting = false,
 }: Props) {
+  const youtubeId = youtubeVideoIdFromUrl(post.video_url);
+
   return (
     <View style={styles.card}>
       <Pressable onPress={onOpen} style={({ pressed }) => [styles.contentPressable, pressed ? styles.contentPressed : null]}>
@@ -52,6 +56,23 @@ export function CommunityPostFeedCard({
             style={styles.heroImage}
             contentFit="cover"
           />
+        )}
+        {!!post.video_url && !youtubeId && (
+          <Pressable onPress={() => void Linking.openURL(post.video_url!)} style={styles.videoLink} accessibilityRole="link">
+            <Text style={styles.videoLinkText}>Open video</Text>
+          </Pressable>
+        )}
+        {!!youtubeId && (
+          <View style={styles.videoFrame}>
+            <WebView
+              source={{ uri: `https://www.youtube.com/embed/${youtubeId}` }}
+              style={styles.videoWebView}
+              allowsFullscreenVideo
+              javaScriptEnabled
+              domStorageEnabled
+              scrollEnabled={false}
+            />
+          </View>
         )}
         {!!post.tag && (
           <View style={styles.tagPill}>
@@ -104,6 +125,25 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: radii.lg,
     backgroundColor: '#E5E7EB',
+  },
+  videoLink: {
+    alignSelf: 'flex-start',
+  },
+  videoLinkText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  videoFrame: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  videoWebView: {
+    flex: 1,
+    backgroundColor: '#000',
   },
   tagPill: {
     alignSelf: 'flex-start',
