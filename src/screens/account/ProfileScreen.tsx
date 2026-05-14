@@ -14,6 +14,7 @@ import { typography } from '../../theme/typography';
 import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import { shadows } from '../../theme/shadows';
+import { RoleAccountSection } from '../../components/account/RoleAccountSection';
 
 export function ProfileScreen() {
   const { user, role, signOut, refreshMe } = useAuth();
@@ -219,6 +220,8 @@ export function ProfileScreen() {
             {saveMessage}
           </Text>
         ) : null}
+
+        <RoleAccountSection />
 
         {loading ? (
           <View style={styles.loadingWrap}>

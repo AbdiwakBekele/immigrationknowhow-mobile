@@ -18,6 +18,7 @@ import { typography } from '../../theme/typography';
 import { backgroundCheckBody, backgroundCheckHeadline } from '../../utils/providerUi';
 import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
+import { RoleAccountSection } from '../../components/account/RoleAccountSection';
 
 export function ProviderProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList, 'ProfileHome'>>();
@@ -282,6 +283,8 @@ export function ProviderProfileScreen() {
             {saveMessage}
           </Text>
         ) : null}
+
+        <RoleAccountSection />
 
         {loading && !dash && !error ? (
           <View style={{ marginTop: spacing['2xl'], alignItems: 'center' }}>

@@ -67,7 +67,15 @@ function CheckboxRow({
   );
 }
 
-export function OnboardingHomeScreen() {
+export function OnboardingHomeScreen({
+  flow = 'signup',
+  onFlowComplete,
+  onCheckoutRequired,
+}: {
+  flow?: 'signup' | 'addProvider';
+  onFlowComplete?: () => void;
+  onCheckoutRequired?: (checkoutUrl: string) => void;
+} = {}) {
   const navigation = useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
   const { refreshMe, applyUser, signOut } = useAuth();
 
@@ -155,7 +163,10 @@ export function OnboardingHomeScreen() {
   const [planUuid, setPlanUuid] = useState('');
 
   const loadMeta = useCallback(async (opts?: { country?: string; setStepFromServer?: boolean }) => {
-    const res = await onboardingApi.meta(opts?.country ? { country: opts.country } : undefined);
+    const res = await onboardingApi.meta({
+      ...(opts?.country ? { country: opts.country } : {}),
+      ...(flow === 'addProvider' ? { intent: 'provider' as const } : {}),
+    });
     if (!res.success) {
       setError(friendlyApiErrorMessage(res));
       return null;
@@ -166,12 +177,12 @@ export function OnboardingHomeScreen() {
       setStep(m.initialStep);
     }
     return m;
-  }, []);
+  }, [flow]);
 
   const usStatesCache = useRef<onboardingApi.OnboardingMeta['stateOptions']>([]);
 
   const refreshStateOptions = useCallback((countryCode: string) => {
-    void onboardingApi.meta({ country: countryCode }).then((res) => {
+    void onboardingApi.meta({ country: countryCode, ...(flow === 'addProvider' ? { intent: 'provider' as const } : {}) }).then((res) => {
       if (res.success) {
         const opts = res.data.stateOptions ?? [];
         if (countryCode === 'US' && opts.length > 0) {
@@ -180,7 +191,7 @@ export function OnboardingHomeScreen() {
         setMeta((prev) => (prev ? { ...prev, stateOptions: opts } : prev));
       }
     });
-  }, []);
+  }, [flow]);
 
   const hydrateForms = useCallback((m: onboardingApi.OnboardingMeta) => {
     const ex = m.existingData ?? {};
@@ -543,7 +554,8 @@ export function OnboardingHomeScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    await completeOnboardingSession(res.data?.user as AuthUser | undefined);
+    await refreshMe();
+    onFlowComplete?.();
   }
 
   async function handleAdvertiserAddressContinue() {
@@ -792,10 +804,15 @@ export function OnboardingHomeScreen() {
     }
     const checkout = (res.data as { checkout_url?: string; user?: AuthUser } | undefined)?.checkout_url;
     if (checkout && typeof checkout === 'string') {
+      if (onCheckoutRequired) {
+        onCheckoutRequired(checkout);
+        return;
+      }
       navigation.navigate('StripeCheckout', { checkoutUrl: checkout });
       return;
     }
-    await completeOnboardingSession((res.data as { user?: AuthUser } | undefined)?.user);
+    await refreshMe();
+    onFlowComplete?.();
   }
 
   const coverageUsesStateList = PROVIDER_COVERAGE_USES_STATE_LIST.includes(
