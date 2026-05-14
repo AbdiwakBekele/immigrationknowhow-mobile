@@ -130,6 +130,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceElevated,
     borderRadius: 16,
     padding: spacing.lg,
+    marginTop: spacing.lg,
     marginBottom: spacing.lg,
   },
   heading: {

@@ -221,6 +221,8 @@ export function ProfileScreen() {
           </Text>
         ) : null}
 
+        <RoleAccountSection />
+
         {loading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={colors.primary[600]} />
@@ -245,8 +247,6 @@ export function ProfileScreen() {
             </View>
           </View>
         )}
-
-        <RoleAccountSection />
 
         <View style={styles.actionsWrap}>
           <AppButton title="Save changes" onPress={() => void onSave()} loading={saving} disabled={!hasDirtyFields} />
