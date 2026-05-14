@@ -18,6 +18,7 @@ import { typography } from '../../theme/typography';
 import { backgroundCheckBody, backgroundCheckHeadline } from '../../utils/providerUi';
 import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
+import { RoleAccountSection } from '../../components/account/RoleAccountSection';
 
 export function ProviderProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList, 'ProfileHome'>>();
@@ -341,6 +342,8 @@ export function ProviderProfileScreen() {
           />
           <InputField label="Service areas" value={serviceAreas} onChangeText={setServiceAreas} placeholder="Dallas, Houston" />
         </View>
+
+        <RoleAccountSection />
 
         <View style={{ marginTop: spacing['3xl'], marginBottom: spacing['3xl'] }}>
           <AppButton title="Save changes" onPress={() => void onSave()} loading={saving} disabled={!hasDirtyFields} />

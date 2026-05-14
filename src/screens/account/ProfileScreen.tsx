@@ -14,6 +14,7 @@ import { typography } from '../../theme/typography';
 import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import { shadows } from '../../theme/shadows';
+import { RoleAccountSection } from '../../components/account/RoleAccountSection';
 
 export function ProfileScreen() {
   const { user, role, signOut, refreshMe } = useAuth();
@@ -244,6 +245,8 @@ export function ProfileScreen() {
             </View>
           </View>
         )}
+
+        <RoleAccountSection />
 
         <View style={styles.actionsWrap}>
           <AppButton title="Save changes" onPress={() => void onSave()} loading={saving} disabled={!hasDirtyFields} />
