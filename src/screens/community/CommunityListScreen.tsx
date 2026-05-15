@@ -23,6 +23,7 @@ import { shadows } from '../../theme/shadows';
 import * as communityApi from '../../api/communityApi';
 import type { CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
+import { communityDescriptionPlainText } from '../../utils/communityContent';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const SECTIONS: Array<{ key: string; label: string }> = [
@@ -165,7 +166,7 @@ export function CommunityListScreen() {
                 {!!item.tag && <Text style={styles.postTag}>{item.tag}</Text>}
                 {!!item.description && (
                   <Text style={styles.postDesc} numberOfLines={2}>
-                    {item.description}
+                    {communityDescriptionPlainText(item.description)}
                   </Text>
                 )}
                 <View style={styles.metrics}>

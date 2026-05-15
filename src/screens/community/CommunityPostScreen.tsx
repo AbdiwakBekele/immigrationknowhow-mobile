@@ -28,6 +28,8 @@ import * as communityApi from '../../api/communityApi';
 import type { CommunityCommentPayload, CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
+import { buildCommunityDescriptionDocument } from '../../utils/communityContent';
+import { WebView } from 'react-native-webview';
 
 function mergeReactions(prev: string[] | undefined, type: 'like' | 'share' | 'bookmark', active: boolean): string[] {
   const set = new Set(prev ?? []);
@@ -49,12 +51,16 @@ export function CommunityPostScreen() {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [reacting, setReacting] = useState<string | null>(null);
+  const [descriptionWebViewHeight, setDescriptionWebViewHeight] = useState(160);
 
   const load = async () => {
     setLoading(true);
     const [postRes, commentsRes] = await Promise.all([communityApi.getCommunityPost(id), communityApi.getCommunityComments(id)]);
     setLoading(false);
-    if (postRes.success && postRes.data.post) setPost(postRes.data.post);
+    if (postRes.success && postRes.data.post) {
+      setPost(postRes.data.post);
+      setDescriptionWebViewHeight(160);
+    }
     if (commentsRes.success) setComments(commentsRes.data.comments ?? []);
   };
 
@@ -167,7 +173,27 @@ export function CommunityPostScreen() {
             </Pressable>
           )}
 
-          {!!post?.description && <Text style={styles.body}>{post.description}</Text>}
+          {!!post?.description && (
+            <WebView
+              originWhitelist={['*']}
+              source={{ html: buildCommunityDescriptionDocument(post.description) }}
+              style={[styles.descriptionWebView, { height: descriptionWebViewHeight }]}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+              onMessage={(event) => {
+                const height = Number(event.nativeEvent.data);
+                if (Number.isFinite(height) && height > 0) {
+                  setDescriptionWebViewHeight(Math.min(Math.max(height, 80), 2400));
+                }
+              }}
+              injectedJavaScript={`
+                setTimeout(function () {
+                  window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));
+                }, 120);
+                true;
+              `}
+            />
+          )}
 
           <View style={styles.actionsRow}>
             <Pressable
@@ -297,11 +323,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     flex: 1,
   },
-  body: {
+  descriptionWebView: {
     marginTop: spacing.lg,
-    color: colors.text.primary,
-    lineHeight: 24,
-    fontSize: typography.fontSize.md,
+    width: '100%',
+    backgroundColor: 'transparent',
   },
   actionsRow: {
     flexDirection: 'row',
