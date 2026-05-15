@@ -40,10 +40,13 @@ export type OnboardingMeta = {
   stripeBillingReady: boolean;
 };
 
-export async function meta(params?: { country?: string; step?: number }): Promise<ApiResponse<OnboardingMeta>> {
+export async function meta(params?: { country?: string; step?: number; intent?: 'provider' }): Promise<ApiResponse<OnboardingMeta>> {
   try {
     const res = await apiClient.get('/api/mobile/onboarding/meta', {
-      params: params && (params.country !== undefined || params.step !== undefined) ? params : undefined,
+      params:
+        params && (params.country !== undefined || params.step !== undefined || params.intent !== undefined)
+          ? params
+          : undefined,
     });
     return res.data;
   } catch (e) {
@@ -80,7 +83,7 @@ export async function saveProgress(step: string, data: Record<string, any>): Pro
   }
 }
 
-export async function complete(payload: Record<string, any>): Promise<ApiResponse<{ user?: any; checkout_url?: string }>> {
+export async function complete(payload: Record<string, any>): Promise<ApiResponse<{ user?: import('../types/user').AuthUser; checkout_url?: string }>> {
   try {
     const res = await apiClient.post('/api/mobile/onboarding/complete', payload);
     return res.data;

@@ -1,6 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -14,7 +15,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
-import { AppImage } from '../../components/AppImage';
+import { CommunityPostFeedCard, type CommunityFeedEngagement } from '../../components/community/CommunityPostFeedCard';
+import { CommunityShareSheet } from '../../components/community/CommunityShareSheet';
 import { colors } from '../../theme/colors';
 import { radii, screenPaddingX } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
@@ -27,13 +29,25 @@ import { communityDescriptionPlainText } from '../../utils/communityContent';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const SECTIONS: Array<{ key: string; label: string }> = [
-  { key: 'feed', label: 'Feed' },
-  { key: 'immigration-legal', label: 'Immigration & legal' },
-  { key: 'career-finance', label: 'Career & finance' },
-  { key: 'health-wellness', label: 'Health & wellness' },
-  { key: 'daily-living', label: 'Daily living' },
-  { key: 'culture-community', label: 'Culture & community' },
+  { key: 'feed', label: COMMUNITY_SECTION_LABELS.feed },
+  { key: 'immigration-legal', label: COMMUNITY_SECTION_LABELS['immigration-legal'] },
+  { key: 'career-finance', label: COMMUNITY_SECTION_LABELS['career-finance'] },
+  { key: 'health-wellness', label: COMMUNITY_SECTION_LABELS['health-wellness'] },
+  { key: 'daily-living', label: COMMUNITY_SECTION_LABELS['daily-living'] },
+  { key: 'culture-community', label: COMMUNITY_SECTION_LABELS['culture-community'] },
 ];
+
+function buildEngagement(post: CommunityPostPayload): CommunityFeedEngagement {
+  const reactions = new Set(post.user_reactions ?? []);
+  return {
+    liked: reactions.has('like'),
+    bookmarked: reactions.has('bookmark'),
+    likes: post.likes_count ?? 0,
+    comments: post.comments_count ?? 0,
+    shares: post.shares_count ?? 0,
+    bookmarks: post.bookmarks_count ?? 0,
+  };
+}
 
 export function CommunityListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<CommunityStackParamList>>();
@@ -42,18 +56,30 @@ export function CommunityListScreen() {
   const [posts, setPosts] = useState<CommunityPostPayload[]>([]);
   const [category, setCategory] = useState('feed');
   const [search, setSearch] = useState('');
+  const [sharePost, setSharePost] = useState<CommunityPostPayload | null>(null);
+  const [engagement, setEngagement] = useState<Record<number, CommunityFeedEngagement>>({});
+  const [reactingPostId, setReactingPostId] = useState<number | null>(null);
+
+  const sectionTitle = useMemo(() => COMMUNITY_SECTION_LABELS[category] ?? 'Community', [category]);
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     const res = await communityApi.listCommunityPosts({
-      category,
+      ...(category !== 'feed' ? { category } : {}),
       search: search.trim(),
     });
     if (isRefresh) setRefreshing(false);
     else setLoading(false);
     if (!res.success) return;
-    setPosts(res.data?.posts?.data ?? []);
+    const nextPosts = res.data?.posts?.data ?? [];
+    setPosts(nextPosts);
+    setEngagement(
+      nextPosts.reduce<Record<number, CommunityFeedEngagement>>((acc, post) => {
+        acc[post.id] = buildEngagement(post);
+        return acc;
+      }, {})
+    );
   };
 
   useFocusEffect(
@@ -64,10 +90,52 @@ export function CommunityListScreen() {
 
   const onSearchSubmit = () => void load();
 
+  const updateEngagement = (postId: number, patch: Partial<CommunityFeedEngagement>) => {
+    setEngagement((current) => ({
+      ...current,
+      [postId]: {
+        ...(current[postId] ?? { liked: false, bookmarked: false, likes: 0, comments: 0, shares: 0, bookmarks: 0 }),
+        ...patch,
+      },
+    }));
+  };
+
+  const onToggleReaction = async (postId: number, type: 'like' | 'bookmark') => {
+    if (reactingPostId != null) return;
+    setReactingPostId(postId);
+    const res = await communityApi.reactToCommunityPost(postId, type);
+    setReactingPostId(null);
+    if (!res.success) {
+      Alert.alert('Could not update', res.message);
+      return;
+    }
+    const data = res.data;
+    if (!data) return;
+    updateEngagement(postId, {
+      likes: data.counts.likes_count,
+      comments: data.counts.comments_count,
+      shares: data.counts.shares_count,
+      bookmarks: data.counts.bookmarks_count,
+      ...(type === 'like' ? { liked: data.active } : {}),
+      ...(type === 'bookmark' ? { bookmarked: data.active } : {}),
+    });
+  };
+
+  const recordShare = async (postId: number) => {
+    const res = await communityApi.reactToCommunityPost(postId, 'share');
+    if (!res.success || !res.data?.counts) return;
+    updateEngagement(postId, {
+      shares: res.data.counts.shares_count,
+    });
+  };
+
   const listHeader = (
     <View style={styles.headerBlock}>
       <View style={styles.topRow}>
-        <Text style={styles.screenTitle}>Community</Text>
+        <View>
+          <Text style={styles.screenEyebrow}>Community feed</Text>
+          <Text style={styles.screenTitle}>{sectionTitle}</Text>
+        </View>
         <Pressable
           onPress={() => navigation.navigate('CommunityNews')}
           style={({ pressed }) => [styles.newsBtn, pressed && styles.newsBtnPressed]}
@@ -106,7 +174,7 @@ export function CommunityListScreen() {
         <View style={styles.searchRow}>
           <Ionicons name="search-outline" size={20} color={colors.text.muted} style={styles.searchIcon} />
           <TextInput
-            placeholder="Search posts…"
+            placeholder={`Search in ${sectionTitle}...`}
             placeholderTextColor={colors.text.muted}
             value={search}
             onChangeText={setSearch}
@@ -135,7 +203,7 @@ export function CommunityListScreen() {
           loading ? null : (
             <View style={styles.emptyWrap}>
               <Ionicons name="chatbubbles-outline" size={40} color={colors.text.muted} />
-              <Text style={styles.emptyText}>No posts in this section.</Text>
+              <Text style={styles.emptyText}>No posts found for this section. Try another category or search.</Text>
             </View>
           )
         }
@@ -188,16 +256,22 @@ export function CommunityListScreen() {
           </Pressable>
         )}
       />
+      <CommunityShareSheet
+        visible={!!sharePost}
+        postId={sharePost?.id ?? 0}
+        postTitle={sharePost?.title ?? ''}
+        onClose={() => setSharePost(null)}
+        onShared={sharePost ? () => recordShare(sharePost.id) : undefined}
+      />
     </AppScreen>
   );
 }
-
-const THUMB = 88;
 
 const styles = StyleSheet.create({
   screen: {
     paddingHorizontal: screenPaddingX,
     paddingTop: spacing.sm,
+    backgroundColor: '#F8FAFC',
   },
   listContent: {
     paddingBottom: spacing['3xl'],
@@ -208,13 +282,22 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  screenEyebrow: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: '#64748B',
   },
   screenTitle: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    letterSpacing: -0.3,
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: '#111827',
+    letterSpacing: -0.2,
   },
   newsBtn: {
     flexDirection: 'row',
@@ -263,8 +346,8 @@ const styles = StyleSheet.create({
     ...shadows.soft,
   },
   sectionChipActive: {
-    borderColor: '#A7C4FE',
-    backgroundColor: '#E9F1FF',
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[600],
   },
   sectionChipPressed: {
     opacity: 0.88,
@@ -278,7 +361,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
   },
   sectionChipTextActive: {
-    color: colors.primary[800],
+    color: colors.text.inverse,
   },
   searchActionsRow: {
     marginTop: spacing.md,
@@ -292,9 +375,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: radii.md,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    borderRadius: radii.xl,
     paddingHorizontal: spacing.md,
     minHeight: 48,
     ...shadows.soft,
@@ -304,7 +387,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: typography.fontSize.md,
+    fontSize: 15,
     color: colors.text.primary,
     paddingVertical: spacing.sm,
   },
@@ -333,76 +416,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing['2xl'],
     paddingVertical: spacing['2xl'],
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#C9D5E6',
+    backgroundColor: colors.surfaceElevated,
   },
   emptyText: {
     marginTop: spacing.md,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.md,
-  },
-  postCard: {
-    marginBottom: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
-    padding: spacing.md,
-    ...shadows.soft,
-  },
-  postRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  thumb: {
-    width: THUMB,
-    height: THUMB,
-    borderRadius: radii.md,
-    marginRight: spacing.md,
-  },
-  thumbPlaceholder: {
-    width: THUMB,
-    height: THUMB,
-    borderRadius: radii.md,
-    marginRight: spacing.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  postTitle: {
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    lineHeight: 22,
-  },
-  postTag: {
-    marginTop: spacing.xs,
-    fontSize: typography.fontSize.xs,
-    color: colors.text.muted,
-  },
-  postDesc: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
+    paddingHorizontal: spacing.lg,
+    textAlign: 'center',
+    color: '#64748B',
     fontSize: typography.fontSize.sm,
-    lineHeight: 18,
-  },
-  metrics: {
-    flexDirection: 'row',
-    marginTop: spacing.md,
-    gap: spacing.lg,
-  },
-  metric: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metricText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.muted,
-    fontWeight: typography.fontWeight.medium,
   },
 });

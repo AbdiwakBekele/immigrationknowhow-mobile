@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -15,10 +14,13 @@ import {
 } from 'react-native';
 import { useRoute, useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
+import { WebView } from 'react-native-webview';
 import { AppScreen } from '../../components/AppScreen';
 import { AppImage } from '../../components/AppImage';
+import { CommunityCommentRow } from '../../components/community/CommunityCommentRow';
+import { CommunityEngagementBar } from '../../components/community/CommunityEngagementBar';
+import { CommunityPostSharePanel } from '../../components/community/CommunityPostSharePanel';
+import { CommunityShareSheet } from '../../components/community/CommunityShareSheet';
 import { colors } from '../../theme/colors';
 import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
@@ -27,6 +29,7 @@ import { shadows } from '../../theme/shadows';
 import * as communityApi from '../../api/communityApi';
 import type { CommunityCommentPayload, CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
+import { communitySectionLabel, formatCommunityDate, youtubeVideoIdFromUrl } from '../../utils/communityDisplay';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { buildCommunityDescriptionDocument } from '../../utils/communityContent';
 import { WebView } from 'react-native-webview';
@@ -44,7 +47,9 @@ function mergeReactions(prev: string[] | undefined, type: 'like' | 'share' | 'bo
 
 export function CommunityPostScreen() {
   const route = useRoute<RouteProp<CommunityStackParamList, 'CommunityPost'>>();
-  const { id } = route.params;
+  const { id, focusComments } = route.params;
+  const scrollRef = useRef<ScrollView>(null);
+  const commentsOffsetRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [post, setPost] = useState<CommunityPostPayload | null>(null);
   const [comments, setComments] = useState<CommunityCommentPayload[]>([]);
@@ -68,6 +73,16 @@ export function CommunityPostScreen() {
     useCallback(() => {
       void load();
     }, [id])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusComments || loading) return;
+      const timer = setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: Math.max(commentsOffsetRef.current - spacing.lg, 0), animated: true });
+      }, 250);
+      return () => clearTimeout(timer);
+    }, [focusComments, loading])
   );
 
   const applyCounts = (counts: { likes_count: number; shares_count: number; bookmarks_count: number; comments_count: number }) => {
@@ -105,14 +120,21 @@ export function CommunityPostScreen() {
           : p
       );
     }
-    if (type === 'share' && data?.active) {
-      try {
-        const link = post.video_url?.trim() || '';
-        const message = link ? `${post.title}\n${link}` : post.title;
-        await Share.share({ title: post.title, message, ...(Platform.OS === 'ios' && link ? { url: link } : {}) });
-      } catch {
-        /* user dismissed */
-      }
+  };
+
+  const recordShare = async () => {
+    const res = await communityApi.reactToCommunityPost(id, 'share');
+    if (!res.success) return;
+    if (res.data?.counts) applyCounts(res.data.counts);
+    if (res.data && typeof res.data.active === 'boolean') {
+      setPost((p) =>
+        p
+          ? {
+              ...p,
+              user_reactions: mergeReactions(p.user_reactions, 'share', res.data.active),
+            }
+          : p
+      );
     }
   };
 
@@ -120,10 +142,11 @@ export function CommunityPostScreen() {
     const content = commentText.trim();
     if (!content || submitting) return;
     setSubmitting(true);
+    setCommentError(null);
     const res = await communityApi.addCommunityComment(id, content);
     setSubmitting(false);
     if (!res.success) {
-      Alert.alert('Comment failed', res.message);
+      setCommentError(res.message);
       return;
     }
     if (res.data.comment) setComments((c) => [res.data.comment, ...c]);
@@ -141,37 +164,51 @@ export function CommunityPostScreen() {
     );
   }
 
-  const reactions = post?.user_reactions ?? [];
+  if (!post) {
+    return (
+      <AppScreen style={styles.centered}>
+        <Text style={styles.errorText}>This post could not be found.</Text>
+      </AppScreen>
+    );
+  }
+
+  const reactions = post.user_reactions ?? [];
   const liked = reactions.includes('like');
   const bookmarked = reactions.includes('bookmark');
-  const shared = reactions.includes('share');
+  const youtubeId = youtubeVideoIdFromUrl(post.video_url);
+  const publishedAt = formatCommunityDate(post.created_at);
 
   return (
-    <AppScreen>
+    <AppScreen style={styles.screen}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView
+          ref={scrollRef}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>{post?.title ?? `Post ${id}`}</Text>
-          {!!post?.tag && <Text style={styles.tag}>{post.tag}</Text>}
+          <View style={styles.article}>
+            <View style={styles.headerBand}>
+              <View style={styles.categoryPill}>
+                <Text style={styles.categoryPillText}>
+                  {communitySectionLabel(post.category)}
+                  {post.tag ? ` · ${post.tag}` : ''}
+                </Text>
+              </View>
+              <Text style={styles.title}>{post.title}</Text>
+              {!!publishedAt && <Text style={styles.timestamp}>{publishedAt}</Text>}
+            </View>
 
-          {!!post?.image_url && (
-            <AppImage uri={resolveMediaUrl(post.image_url)} height={220} style={styles.heroImage} contentFit="cover" />
-          )}
+            <View style={styles.articleBody}>
+              {!!post.image_url && (
+                <AppImage uri={resolveMediaUrl(post.image_url)} height={240} style={styles.heroImage} contentFit="cover" />
+              )}
 
-          {!!post?.video_url && (
-            <Pressable
-              onPress={() => void Linking.openURL(post.video_url!)}
-              style={styles.videoLink}
-              accessibilityRole="link"
-            >
-              <Ionicons name="play-circle-outline" size={22} color={colors.primary[600]} />
-              <Text style={styles.videoLinkText}>Open video</Text>
-              <Ionicons name="open-outline" size={18} color={colors.primary[500]} style={{ marginLeft: spacing.sm }} />
-            </Pressable>
-          )}
+              {!!post.video_url && !youtubeId && (
+                <Pressable onPress={() => void Linking.openURL(post.video_url!)} style={styles.videoLink} accessibilityRole="link">
+                  <Text style={styles.videoLinkText}>Open video</Text>
+                </Pressable>
+              )}
 
           {!!post?.description && (
             <WebView
@@ -195,133 +232,155 @@ export function CommunityPostScreen() {
             />
           )}
 
-          <View style={styles.actionsRow}>
-            <Pressable
-              onPress={() => void onReact('like')}
-              disabled={!!reacting}
-              style={({ pressed }) => [styles.actionChip, liked && styles.actionChipActive, pressed && styles.actionPressed]}
-            >
-              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? colors.danger : colors.text.secondary} />
-              <Text style={[styles.actionLabel, liked && styles.actionLabelActive]}>{post?.likes_count ?? 0}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => void onReact('share')}
-              disabled={!!reacting || shared}
-              style={({ pressed }) => [styles.actionChip, shared && styles.actionChipMuted, pressed && styles.actionPressed]}
-            >
-              <Ionicons name="share-outline" size={20} color={colors.text.secondary} />
-              <Text style={styles.actionLabel}>{post?.shares_count ?? 0}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => void onReact('bookmark')}
-              disabled={!!reacting}
-              style={({ pressed }) => [styles.actionChip, bookmarked && styles.actionChipActive, pressed && styles.actionPressed]}
-            >
-              <Ionicons name={bookmarked ? 'bookmark' : 'bookmark-outline'} size={20} color={bookmarked ? colors.primary[600] : colors.text.secondary} />
-              <Text style={[styles.actionLabel, bookmarked && styles.actionLabelActive]}>{post?.bookmarks_count ?? 0}</Text>
-            </Pressable>
-          </View>
+              {!!post.description && <Text style={styles.body}>{post.description}</Text>}
 
-          <View style={styles.sectionHeader}>
-            <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.text.secondary} />
-            <Text style={styles.sectionTitle}>Comments ({post?.comments_count ?? comments.length})</Text>
-          </View>
+              <CommunityEngagementBar
+                liked={liked}
+                bookmarked={bookmarked}
+                likes={post.likes_count ?? 0}
+                comments={post.comments_count ?? comments.length}
+                shares={post.shares_count ?? 0}
+                bookmarks={post.bookmarks_count ?? 0}
+                onLike={() => void onReact('like')}
+                onComment={() => scrollRef.current?.scrollTo({ y: Math.max(commentsOffsetRef.current - spacing.lg, 0), animated: true })}
+                onShare={() => setShareOpen(true)}
+                onBookmark={() => void onReact('bookmark')}
+                disabled={!!reacting}
+              />
 
-          {comments.map((c) => (
-            <View key={c.id} style={styles.commentCard}>
-              <View style={styles.commentTop}>
-                {c.author_avatar_url ? (
-                  <Image
-                    source={{ uri: c.author_avatar_url }}
-                    style={styles.avatar}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    transition={150}
-                  />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Ionicons name="person" size={18} color={colors.text.muted} />
-                  </View>
-                )}
-                <Text style={styles.commentAuthor}>{c.author_name}</Text>
-              </View>
-              <Text style={styles.commentBody}>{c.content}</Text>
+              <CommunityPostSharePanel postId={id} postTitle={post.title} onShared={recordShare} />
             </View>
-          ))}
+          </View>
 
-          <Text style={styles.composeLabel}>Add a comment</Text>
-          <TextInput
-            placeholder="Write something respectful…"
-            placeholderTextColor={colors.text.muted}
-            value={commentText}
-            onChangeText={setCommentText}
-            multiline
-            maxLength={2000}
-            style={styles.composeInput}
-          />
-          <Pressable
-            onPress={() => void onSubmitComment()}
-            disabled={submitting || !commentText.trim()}
-            style={({ pressed }) => [
-              styles.submitBtn,
-              (submitting || !commentText.trim()) && styles.submitBtnDisabled,
-              pressed && !submitting && commentText.trim() && styles.submitBtnPressed,
-            ]}
+          <View
+            style={styles.commentsCard}
+            onLayout={(event) => {
+              commentsOffsetRef.current = event.nativeEvent.layout.y;
+            }}
           >
-            <Ionicons name="send" size={18} color={colors.text.inverse} style={{ marginRight: spacing.sm }} />
-            <Text style={styles.submitBtnText}>Post comment</Text>
-          </Pressable>
+            <Text style={styles.commentsTitle}>Comments</Text>
+            {comments.length === 0 ? <Text style={styles.commentsEmpty}>No comments yet.</Text> : null}
+            <View style={styles.commentsList}>
+              {comments.map((comment) => (
+                <CommunityCommentRow key={comment.id} comment={comment} />
+              ))}
+            </View>
+
+            <TextInput
+              placeholder="Write a comment..."
+              placeholderTextColor={colors.text.muted}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+              maxLength={2000}
+              style={styles.composeInput}
+            />
+            {!!commentError && <Text style={styles.errorText}>{commentError}</Text>}
+            <Pressable
+              onPress={() => void onSubmitComment()}
+              disabled={submitting || !commentText.trim()}
+              style={({ pressed }) => [
+                styles.submitBtn,
+                (submitting || !commentText.trim()) && styles.submitBtnDisabled,
+                pressed && !submitting && commentText.trim() ? styles.submitBtnPressed : null,
+              ]}
+            >
+              <Text style={styles.submitBtnText}>Add comment</Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <CommunityShareSheet
+        visible={shareOpen}
+        postId={id}
+        postTitle={post.title}
+        onClose={() => setShareOpen(false)}
+        onShared={recordShare}
+      />
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#F8FAFC',
+  },
   flex: { flex: 1 },
   centered: {
     padding: spacing.xl,
     justifyContent: 'center',
   },
   scroll: {
-    padding: spacing.xl,
+    padding: spacing.lg,
     paddingBottom: spacing['3xl'],
   },
-  title: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    letterSpacing: -0.3,
-    lineHeight: 28,
-  },
-  tag: {
-    marginTop: spacing.xs,
-    color: colors.text.muted,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
-  heroImage: {
-    marginTop: spacing.lg,
-    borderRadius: radii.lg,
+  article: {
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: colors.surfaceElevated,
+    overflow: 'hidden',
     ...shadows.soft,
   },
-  videoLink: {
-    marginTop: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
+  headerBand: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FBFF',
+    padding: spacing.lg,
+  },
+  categoryPill: {
     alignSelf: 'flex-start',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary[50],
+    borderRadius: radii.full,
     borderWidth: 1,
-    borderColor: colors.primary[200],
+    borderColor: '#BFDBFE',
+    backgroundColor: 'rgba(219, 234, 254, 0.7)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    marginBottom: spacing.sm,
+  },
+  categoryPillText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  title: {
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    color: '#0F172A',
+    lineHeight: 32,
+  },
+  timestamp: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.xs,
+    color: '#64748B',
+  },
+  articleBody: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  heroImage: {
+    width: '100%',
+    borderRadius: radii.xl,
+    backgroundColor: '#E5E7EB',
+  },
+  videoLink: {
+    alignSelf: 'flex-start',
   },
   videoLinkText: {
-    marginLeft: spacing.sm,
-    color: colors.primary[700],
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  videoFrame: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  videoWebView: {
     flex: 1,
+    backgroundColor: '#000',
   },
   descriptionWebView: {
     marginTop: spacing.lg,
@@ -334,126 +393,51 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.xl,
   },
-  actionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.full,
+  commentsCard: {
+    marginTop: spacing.lg,
+    borderRadius: radii.xl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
     backgroundColor: colors.surfaceElevated,
-    ...shadows.soft,
-  },
-  actionChipActive: {
-    borderColor: colors.primary[200],
-    backgroundColor: colors.primary[50],
-  },
-  actionChipMuted: {
-    opacity: 0.65,
-  },
-  actionPressed: {
-    opacity: 0.88,
-  },
-  actionLabel: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
-    minWidth: 18,
-  },
-  actionLabelActive: {
-    color: colors.primary[800],
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing['2xl'],
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-  },
-  commentCard: {
-    marginTop: spacing.md,
     padding: spacing.lg,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
     ...shadows.soft,
   },
-  commentTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
+  commentsTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: '#111827',
   },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: spacing.md,
-    backgroundColor: colors.surface,
+  commentsEmpty: {
+    marginTop: spacing.sm,
+    fontSize: typography.fontSize.sm,
+    color: '#64748B',
   },
-  avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: spacing.md,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  commentAuthor: {
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  commentBody: {
-    color: colors.text.primary,
-    lineHeight: 22,
-    fontSize: typography.fontSize.md,
-  },
-  composeLabel: {
-    marginTop: spacing.xl,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
+  commentsList: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
   composeInput: {
-    marginTop: spacing.sm,
-    minHeight: 100,
+    marginTop: spacing.md,
+    minHeight: 112,
     padding: spacing.md,
-    borderRadius: radii.md,
+    borderRadius: radii.xl,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceElevated,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
     color: colors.text.primary,
     textAlignVertical: 'top',
-    fontSize: typography.fontSize.md,
-    ...shadows.soft,
+    fontSize: typography.fontSize.sm,
   },
   submitBtn: {
-    marginTop: spacing.md,
-    marginBottom: spacing['2xl'],
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radii.md,
+    marginTop: spacing.sm,
+    alignSelf: 'flex-end',
+    borderRadius: radii.full,
     backgroundColor: colors.primary[600],
-    ...shadows.soft,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
   },
   submitBtnDisabled: {
     backgroundColor: colors.primary[300],
-    opacity: 0.9,
   },
   submitBtnPressed: {
     opacity: 0.92,
@@ -461,6 +445,11 @@ const styles = StyleSheet.create({
   submitBtnText: {
     color: colors.text.inverse,
     fontWeight: typography.fontWeight.semibold,
-    fontSize: typography.fontSize.md,
+    fontSize: typography.fontSize.sm,
+  },
+  errorText: {
+    marginTop: spacing.sm,
+    color: '#B91C1C',
+    fontSize: typography.fontSize.sm,
   },
 });

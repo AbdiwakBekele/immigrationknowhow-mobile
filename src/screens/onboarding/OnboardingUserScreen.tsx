@@ -18,6 +18,8 @@ import {
   USER_SELECT_SERVICES_LATER_LABEL,
   USER_SELECT_SERVICES_LATER_VALUE,
   canonicalUserServiceTypeValue,
+  userSelectedBabysitterService,
+  userSelectedPetSitterService,
 } from './onboardingConstants';
 import { buildPhoneForApi, type DialOption } from './OnboardingDialPhoneFields';
 import { OnboardingPhoneVerificationBlock } from './components/OnboardingPhoneVerificationBlock';
@@ -153,6 +155,9 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
     return [{ value: USER_SELECT_SERVICES_LATER_VALUE, label: USER_SELECT_SERVICES_LATER_LABEL }, ...base];
   }, [meta.serviceTypes, selectLaterInOptions]);
 
+  const showChildrenFields = useMemo(() => userSelectedBabysitterService(servicesNeeded), [servicesNeeded]);
+  const showPetCountField = useMemo(() => userSelectedPetSitterService(servicesNeeded), [servicesNeeded]);
+
   const pageTitle = useMemo(() => {
     if (currentStep === 3 && meta.requiresPhoneVerification) return 'Phone verification';
     if (currentStep === 4) return 'Congratulations';
@@ -199,19 +204,30 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
       setError('Please select a language preference.');
       return;
     }
-    const nc = numChildren.trim() ? Number(numChildren.trim()) : null;
-    if (nc != null && (Number.isNaN(nc) || nc < 0 || nc > MAX_CHILDREN_INPUT)) {
-      setError(`Number of children must be between 0 and ${MAX_CHILDREN_INPUT}.`);
-      return;
-    }
-    const dc = dogsCount.trim() ? Number(dogsCount.trim()) : null;
-    if (dc != null && (Number.isNaN(dc) || dc < 0 || dc > MAX_DOGS_INPUT)) {
-      setError(`Dogs (pets) must be between 0 and ${MAX_DOGS_INPUT}.`);
-      return;
-    }
 
     const servicesPayload =
       servicesNeeded.length === 1 && servicesNeeded[0] === USER_SELECT_SERVICES_LATER_VALUE ? [] : servicesNeeded;
+
+    const needBabysitter = userSelectedBabysitterService(servicesNeeded);
+    const needPetSitter = userSelectedPetSitterService(servicesNeeded);
+
+    let nc: number | null = null;
+    if (needBabysitter && numChildren.trim()) {
+      nc = Number(numChildren.trim());
+      if (Number.isNaN(nc) || nc < 0 || nc > MAX_CHILDREN_INPUT) {
+        setError(`Number of children must be between 0 and ${MAX_CHILDREN_INPUT}.`);
+        return;
+      }
+    }
+
+    let dc: number | null = null;
+    if (needPetSitter && dogsCount.trim()) {
+      dc = Number(dogsCount.trim());
+      if (Number.isNaN(dc) || dc < 0 || dc > MAX_DOGS_INPUT) {
+        setError(`Number of pets must be between 0 and ${MAX_DOGS_INPUT}.`);
+        return;
+      }
+    }
 
     setSubmittingAddr(true);
     /** Payload keys align with `router.post(route('address-detail.send'), …)` in `User.vue`. */
@@ -225,9 +241,9 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
       location_label: locationLabel.trim() || undefined,
       preferred_language: lang || 'en',
       services_needed: servicesPayload,
-      number_of_children: nc != null ? nc : undefined,
-      children_ages_text: childrenAges.trim() || undefined,
-      dogs_count: dc != null ? dc : undefined,
+      number_of_children: needBabysitter ? nc : null,
+      children_ages_text: needBabysitter ? childrenAges.trim() || null : null,
+      dogs_count: needPetSitter ? dc : null,
     });
     setSubmittingAddr(false);
     if (!res.success) {
@@ -280,6 +296,9 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
     const servicesPayload =
       servicesNeeded.length === 1 && servicesNeeded[0] === USER_SELECT_SERVICES_LATER_VALUE ? [] : servicesNeeded;
 
+    const needBabysitter = userSelectedBabysitterService(servicesNeeded);
+    const needPetSitter = userSelectedPetSitterService(servicesNeeded);
+
     const payload = {
       services_needed: servicesPayload,
       city: city.trim(),
@@ -291,9 +310,9 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
       preferred_language: preferredLanguage.trim().toLowerCase() || 'en',
       languages: [preferredLanguage.trim().toLowerCase() || 'en'],
       profile: {
-        number_of_children: numChildren.trim() ? Number(numChildren.trim()) : null,
-        children_ages_text: childrenAges.trim() || null,
-        dogs_count: dogsCount.trim() ? Number(dogsCount.trim()) : null,
+        number_of_children: needBabysitter && numChildren.trim() ? Number(numChildren.trim()) : null,
+        children_ages_text: needBabysitter ? childrenAges.trim() || null : null,
+        dogs_count: needPetSitter && dogsCount.trim() ? Number(dogsCount.trim()) : null,
       },
     };
 
@@ -428,27 +447,31 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
                 required
               />
 
-              <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
-                <View style={{ flex: 1, minWidth: 140 }}>
-                  <AppInput
-                    label="Number of children"
-                    value={numChildren}
-                    onChangeText={setNumChildren}
-                    keyboardType="numeric"
-                    placeholder="e.g. 2"
-                  />
+              {showChildrenFields ? (
+                <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
+                  <View style={{ flex: 1, minWidth: 140 }}>
+                    <AppInput
+                      label="Number of children"
+                      value={numChildren}
+                      onChangeText={setNumChildren}
+                      keyboardType="numeric"
+                      placeholder="e.g. 2"
+                    />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 140 }}>
+                    <AppInput label="Children's ages" value={childrenAges} onChangeText={setChildrenAges} placeholder="e.g. 4, 7 or newborn" />
+                  </View>
                 </View>
-                <View style={{ flex: 1, minWidth: 140 }}>
-                  <AppInput label="Children's ages" value={childrenAges} onChangeText={setChildrenAges} placeholder="e.g. 4, 7 or newborn" />
-                </View>
-              </View>
-              <AppInput
-                label="Dogs (pets)"
-                value={dogsCount}
-                onChangeText={setDogsCount}
-                keyboardType="numeric"
-                placeholder="How many dogs in the household?"
-              />
+              ) : null}
+              {showPetCountField ? (
+                <AppInput
+                  label="Number of pets"
+                  value={dogsCount}
+                  onChangeText={setDogsCount}
+                  keyboardType="numeric"
+                  placeholder="How many pets in the household?"
+                />
+              ) : null}
 
               <View style={{ height: spacing.lg }} />
               <AppButton title="Continue" onPress={() => void onSubmitAddress()} loading={submittingAddr} />

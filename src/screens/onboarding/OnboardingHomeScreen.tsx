@@ -22,6 +22,7 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import { useAuth } from '../../context/AuthContext';
+import type { AuthUser } from '../../types/user';
 import * as onboardingApi from '../../api/onboardingApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
@@ -37,6 +38,7 @@ import {
   TUTOR_DELIVERY_METHOD_OPTIONS,
   TUTOR_SERVICE_VALUES,
 } from './constants';
+import { userSelectedBabysitterService, userSelectedPetSitterService } from './onboardingConstants';
 
 const MAX_USER_SERVICES = 8;
 
@@ -66,9 +68,29 @@ function CheckboxRow({
   );
 }
 
-export function OnboardingHomeScreen() {
+export function OnboardingHomeScreen({
+  flow = 'signup',
+  onFlowComplete,
+  onCheckoutRequired,
+}: {
+  flow?: 'signup' | 'addProvider';
+  onFlowComplete?: () => void;
+  onCheckoutRequired?: (checkoutUrl: string) => void;
+} = {}) {
   const navigation = useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
-  const { refreshMe, signOut } = useAuth();
+  const { refreshMe, applyUser, signOut } = useAuth();
+
+  const completeOnboardingSession = useCallback(
+    async (completedUser?: AuthUser | null) => {
+      if (completedUser) {
+        applyUser(completedUser);
+        return;
+      }
+      await refreshMe();
+    },
+    [applyUser, refreshMe],
+  );
+
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
   const [step, setStep] = useState(2);
@@ -142,7 +164,10 @@ export function OnboardingHomeScreen() {
   const [planUuid, setPlanUuid] = useState('');
 
   const loadMeta = useCallback(async (opts?: { country?: string; setStepFromServer?: boolean }) => {
-    const res = await onboardingApi.meta(opts?.country ? { country: opts.country } : undefined);
+    const res = await onboardingApi.meta({
+      ...(opts?.country ? { country: opts.country } : {}),
+      ...(flow === 'addProvider' ? { intent: 'provider' as const } : {}),
+    });
     if (!res.success) {
       setError(friendlyApiErrorMessage(res));
       return null;
@@ -153,12 +178,12 @@ export function OnboardingHomeScreen() {
       setStep(m.initialStep);
     }
     return m;
-  }, []);
+  }, [flow]);
 
   const usStatesCache = useRef<onboardingApi.OnboardingMeta['stateOptions']>([]);
 
   const refreshStateOptions = useCallback((countryCode: string) => {
-    void onboardingApi.meta({ country: countryCode }).then((res) => {
+    void onboardingApi.meta({ country: countryCode, ...(flow === 'addProvider' ? { intent: 'provider' as const } : {}) }).then((res) => {
       if (res.success) {
         const opts = res.data.stateOptions ?? [];
         if (countryCode === 'US' && opts.length > 0) {
@@ -167,7 +192,7 @@ export function OnboardingHomeScreen() {
         setMeta((prev) => (prev ? { ...prev, stateOptions: opts } : prev));
       }
     });
-  }, []);
+  }, [flow]);
 
   const hydrateForms = useCallback((m: onboardingApi.OnboardingMeta) => {
     const ex = m.existingData ?? {};
@@ -304,6 +329,9 @@ export function OnboardingHomeScreen() {
     const v = String(providerPrimaryService || '').toLowerCase();
     return TUTOR_SERVICE_VALUES.some((t) => t === v);
   }, [providerPrimaryService]);
+
+  const showSeekerChildrenFields = useMemo(() => userSelectedBabysitterService(seekerServices), [seekerServices]);
+  const showSeekerPetCountField = useMemo(() => userSelectedPetSitterService(seekerServices), [seekerServices]);
 
   useEffect(() => {
     if (!isTutorProvider) {
@@ -442,6 +470,8 @@ export function OnboardingHomeScreen() {
     if (!meta) return;
     setBusy(true);
     setError(null);
+    const needBabysitter = userSelectedBabysitterService(seekerServices);
+    const needPetSitter = userSelectedPetSitterService(seekerServices);
     const res = await onboardingApi.sendOtp({
       city: seekerCity.trim(),
       state: seekerState.trim(),
@@ -450,9 +480,13 @@ export function OnboardingHomeScreen() {
       county: seekerCounty.trim() || undefined,
       location_label: seekerLocationLabel.trim() || undefined,
       preferred_language: seekerLanguage,
-      number_of_children: seekerChildrenCount.trim() === '' ? undefined : parseInt(seekerChildrenCount, 10),
-      children_ages_text: seekerChildrenAges.trim() || undefined,
-      dogs_count: seekerDogs.trim() === '' ? undefined : parseInt(seekerDogs, 10),
+      number_of_children: needBabysitter
+        ? seekerChildrenCount.trim() !== ''
+          ? parseInt(seekerChildrenCount, 10)
+          : null
+        : null,
+      children_ages_text: needBabysitter ? seekerChildrenAges.trim() || null : null,
+      dogs_count: needPetSitter ? (seekerDogs.trim() !== '' ? parseInt(seekerDogs, 10) : null) : null,
       services_needed: seekerServices.length ? seekerServices : undefined,
     });
     setBusy(false);
@@ -509,6 +543,8 @@ export function OnboardingHomeScreen() {
   async function handleSeekerFinish() {
     setBusy(true);
     setError(null);
+    const needBabysitter = userSelectedBabysitterService(seekerServices);
+    const needPetSitter = userSelectedPetSitterService(seekerServices);
     const res = await onboardingApi.complete({
       services_needed: seekerServices,
       city: seekerCity.trim(),
@@ -520,9 +556,10 @@ export function OnboardingHomeScreen() {
       preferred_language: seekerLanguage,
       languages: [seekerLanguage],
       profile: {
-        number_of_children: seekerChildrenCount.trim() === '' ? null : parseInt(seekerChildrenCount, 10),
-        children_ages_text: seekerChildrenAges.trim() || undefined,
-        dogs_count: seekerDogs.trim() === '' ? null : parseInt(seekerDogs, 10),
+        number_of_children:
+          needBabysitter && seekerChildrenCount.trim() !== '' ? parseInt(seekerChildrenCount, 10) : null,
+        children_ages_text: needBabysitter ? seekerChildrenAges.trim() || null : null,
+        dogs_count: needPetSitter ? (seekerDogs.trim() !== '' ? parseInt(seekerDogs, 10) : null) : null,
       },
     });
     setBusy(false);
@@ -531,6 +568,7 @@ export function OnboardingHomeScreen() {
       return;
     }
     await refreshMe();
+    onFlowComplete?.();
   }
 
   async function handleAdvertiserAddressContinue() {
@@ -599,7 +637,7 @@ export function OnboardingHomeScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    await refreshMe();
+    await completeOnboardingSession(res.data?.user as AuthUser | undefined);
   }
 
   async function handleProviderCoverageContinue() {
@@ -777,12 +815,17 @@ export function OnboardingHomeScreen() {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    const checkout = (res.data as { checkout_url?: string } | undefined)?.checkout_url;
+    const checkout = (res.data as { checkout_url?: string; user?: AuthUser } | undefined)?.checkout_url;
     if (checkout && typeof checkout === 'string') {
+      if (onCheckoutRequired) {
+        onCheckoutRequired(checkout);
+        return;
+      }
       navigation.navigate('StripeCheckout', { checkoutUrl: checkout });
       return;
     }
     await refreshMe();
+    onFlowComplete?.();
   }
 
   const coverageUsesStateList = PROVIDER_COVERAGE_USES_STATE_LIST.includes(
@@ -939,15 +982,31 @@ export function OnboardingHomeScreen() {
             onChange={setSeekerLanguage}
             required
           />
-          <View style={styles.row2}>
-            <View style={{ flex: 1 }}>
-              <AppInput label="Children" value={seekerChildrenCount} onChangeText={setSeekerChildrenCount} keyboardType="numeric" placeholder="Number" />
+          {showSeekerChildrenFields ? (
+            <View style={styles.row2}>
+              <View style={{ flex: 1 }}>
+                <AppInput
+                  label="Number of children"
+                  value={seekerChildrenCount}
+                  onChangeText={setSeekerChildrenCount}
+                  keyboardType="numeric"
+                  placeholder="e.g. 2"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppInput label="Children's ages" value={seekerChildrenAges} onChangeText={setSeekerChildrenAges} placeholder="e.g. 4, 7" />
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <AppInput label="Ages" value={seekerChildrenAges} onChangeText={setSeekerChildrenAges} placeholder="e.g. 4, 7" />
-            </View>
-          </View>
-          <AppInput label="Dogs (pets)" value={seekerDogs} onChangeText={setSeekerDogs} keyboardType="numeric" />
+          ) : null}
+          {showSeekerPetCountField ? (
+            <AppInput
+              label="Number of pets"
+              value={seekerDogs}
+              onChangeText={setSeekerDogs}
+              keyboardType="numeric"
+              placeholder="How many pets in the household?"
+            />
+          ) : null}
         </>
       );
     }
