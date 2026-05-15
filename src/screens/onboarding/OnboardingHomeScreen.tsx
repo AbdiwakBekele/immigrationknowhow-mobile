@@ -38,6 +38,7 @@ import {
   TUTOR_DELIVERY_METHOD_OPTIONS,
   TUTOR_SERVICE_VALUES,
 } from './constants';
+import { userSelectedBabysitterService, userSelectedPetSitterService } from './onboardingConstants';
 
 const MAX_USER_SERVICES = 8;
 
@@ -329,6 +330,9 @@ export function OnboardingHomeScreen({
     return TUTOR_SERVICE_VALUES.some((t) => t === v);
   }, [providerPrimaryService]);
 
+  const showSeekerChildrenFields = useMemo(() => userSelectedBabysitterService(seekerServices), [seekerServices]);
+  const showSeekerPetCountField = useMemo(() => userSelectedPetSitterService(seekerServices), [seekerServices]);
+
   useEffect(() => {
     if (!isTutorProvider) {
       setTutorDeliveryMethods([]);
@@ -466,6 +470,8 @@ export function OnboardingHomeScreen({
     if (!meta) return;
     setBusy(true);
     setError(null);
+    const needBabysitter = userSelectedBabysitterService(seekerServices);
+    const needPetSitter = userSelectedPetSitterService(seekerServices);
     const res = await onboardingApi.sendOtp({
       city: seekerCity.trim(),
       state: seekerState.trim(),
@@ -474,9 +480,13 @@ export function OnboardingHomeScreen({
       county: seekerCounty.trim() || undefined,
       location_label: seekerLocationLabel.trim() || undefined,
       preferred_language: seekerLanguage,
-      number_of_children: seekerChildrenCount.trim() === '' ? undefined : parseInt(seekerChildrenCount, 10),
-      children_ages_text: seekerChildrenAges.trim() || undefined,
-      dogs_count: seekerDogs.trim() === '' ? undefined : parseInt(seekerDogs, 10),
+      number_of_children: needBabysitter
+        ? seekerChildrenCount.trim() !== ''
+          ? parseInt(seekerChildrenCount, 10)
+          : null
+        : null,
+      children_ages_text: needBabysitter ? seekerChildrenAges.trim() || null : null,
+      dogs_count: needPetSitter ? (seekerDogs.trim() !== '' ? parseInt(seekerDogs, 10) : null) : null,
       services_needed: seekerServices.length ? seekerServices : undefined,
     });
     setBusy(false);
@@ -533,6 +543,8 @@ export function OnboardingHomeScreen({
   async function handleSeekerFinish() {
     setBusy(true);
     setError(null);
+    const needBabysitter = userSelectedBabysitterService(seekerServices);
+    const needPetSitter = userSelectedPetSitterService(seekerServices);
     const res = await onboardingApi.complete({
       services_needed: seekerServices,
       city: seekerCity.trim(),
@@ -544,9 +556,10 @@ export function OnboardingHomeScreen({
       preferred_language: seekerLanguage,
       languages: [seekerLanguage],
       profile: {
-        number_of_children: seekerChildrenCount.trim() === '' ? null : parseInt(seekerChildrenCount, 10),
-        children_ages_text: seekerChildrenAges.trim() || undefined,
-        dogs_count: seekerDogs.trim() === '' ? null : parseInt(seekerDogs, 10),
+        number_of_children:
+          needBabysitter && seekerChildrenCount.trim() !== '' ? parseInt(seekerChildrenCount, 10) : null,
+        children_ages_text: needBabysitter ? seekerChildrenAges.trim() || null : null,
+        dogs_count: needPetSitter ? (seekerDogs.trim() !== '' ? parseInt(seekerDogs, 10) : null) : null,
       },
     });
     setBusy(false);
@@ -969,15 +982,31 @@ export function OnboardingHomeScreen({
             onChange={setSeekerLanguage}
             required
           />
-          <View style={styles.row2}>
-            <View style={{ flex: 1 }}>
-              <AppInput label="Children" value={seekerChildrenCount} onChangeText={setSeekerChildrenCount} keyboardType="numeric" placeholder="Number" />
+          {showSeekerChildrenFields ? (
+            <View style={styles.row2}>
+              <View style={{ flex: 1 }}>
+                <AppInput
+                  label="Number of children"
+                  value={seekerChildrenCount}
+                  onChangeText={setSeekerChildrenCount}
+                  keyboardType="numeric"
+                  placeholder="e.g. 2"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppInput label="Children's ages" value={seekerChildrenAges} onChangeText={setSeekerChildrenAges} placeholder="e.g. 4, 7" />
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <AppInput label="Ages" value={seekerChildrenAges} onChangeText={setSeekerChildrenAges} placeholder="e.g. 4, 7" />
-            </View>
-          </View>
-          <AppInput label="Dogs (pets)" value={seekerDogs} onChangeText={setSeekerDogs} keyboardType="numeric" />
+          ) : null}
+          {showSeekerPetCountField ? (
+            <AppInput
+              label="Number of pets"
+              value={seekerDogs}
+              onChangeText={setSeekerDogs}
+              keyboardType="numeric"
+              placeholder="How many pets in the household?"
+            />
+          ) : null}
         </>
       );
     }

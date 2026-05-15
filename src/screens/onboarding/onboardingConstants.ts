@@ -19,6 +19,26 @@ export function canonicalUserServiceTypeValue(value: string, label?: string): st
   return v;
 }
 
+/** True when seeker chose babysitter / child care — show children household fields (web parity). */
+export function userSelectedBabysitterService(servicesNeeded: readonly string[]): boolean {
+  const arr = servicesNeeded ?? [];
+  return arr.some((v) => {
+    if (!v || v === USER_SELECT_SERVICES_LATER_VALUE) return false;
+    const s = String(v).trim().toLowerCase();
+    return s === 'babysitter' || s === 'baby_sitter';
+  });
+}
+
+/** True when seeker chose pet sitter — show pet count field (web parity). */
+export function userSelectedPetSitterService(servicesNeeded: readonly string[]): boolean {
+  const arr = servicesNeeded ?? [];
+  return arr.some((v) => {
+    if (!v || v === USER_SELECT_SERVICES_LATER_VALUE) return false;
+    const s = String(v).trim().toLowerCase();
+    return s === 'pet_sitter' || s === 'petsitter';
+  });
+}
+
 export const PROVIDER_COVERAGE_LOCATIONS = [
   { value: 'usa', label: 'USA' },
   { value: 'uk', label: 'UK' },
