@@ -38,7 +38,13 @@ import {
   TUTOR_DELIVERY_METHOD_OPTIONS,
   TUTOR_SERVICE_VALUES,
 } from './constants';
-import { userSelectedBabysitterService, userSelectedPetSitterService } from './onboardingConstants';
+import {
+  USER_SELECT_SERVICES_LATER_VALUE,
+  canonicalUserServiceTypeValue,
+  userSelectedBabysitterService,
+  userSelectedPetSitterService,
+} from './onboardingConstants';
+import { SeekerOnboardingContent } from './SeekerOnboardingContent';
 
 const MAX_USER_SERVICES = 8;
 
@@ -78,17 +84,22 @@ export function OnboardingHomeScreen({
   onCheckoutRequired?: (checkoutUrl: string) => void;
 } = {}) {
   const navigation = useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
-  const { refreshMe, applyUser, signOut } = useAuth();
+  const { refreshMe, applyUser, setActiveRole, signOut } = useAuth();
 
   const completeOnboardingSession = useCallback(
     async (completedUser?: AuthUser | null) => {
       if (completedUser) {
-        applyUser(completedUser);
-        return;
+        applyUser({
+          ...completedUser,
+          onboarding_completed: completedUser.onboarding_completed ?? true,
+        });
+        if (completedUser.roles?.includes('provider')) {
+          await setActiveRole('provider');
+        }
       }
       await refreshMe();
     },
-    [applyUser, refreshMe],
+    [applyUser, refreshMe, setActiveRole],
   );
 
   const [loading, setLoading] = useState(true);
@@ -325,6 +336,17 @@ export function OnboardingHomeScreen({
   const isAdvertiserFlow = !!(meta?.isAdvertiser ?? false);
   const needsPhone = !!meta?.requiresPhoneVerification;
 
+  const advanceAfterAddressSave = useCallback(
+    (apiNextStep?: number) => {
+      if (!needsPhone) {
+        setStep(4);
+        return;
+      }
+      setStep(typeof apiNextStep === 'number' ? apiNextStep : 3);
+    },
+    [needsPhone],
+  );
+
   const isTutorProvider = useMemo(() => {
     const v = String(providerPrimaryService || '').toLowerCase();
     return TUTOR_SERVICE_VALUES.some((t) => t === v);
@@ -379,7 +401,8 @@ export function OnboardingHomeScreen({
     if (isAdvertiserFlow) {
       if (step === 2) return 'Address details';
       if (needsPhone && step === 3) return 'Phone verification';
-      return 'Congratulations';
+      if (step === 4) return 'Congratulations';
+      return 'Onboarding';
     }
     // seeker
     if (needsPhone && step === 3) return 'Phone verification';
@@ -387,8 +410,13 @@ export function OnboardingHomeScreen({
     return 'Onboarding';
   }, [meta, isProviderFlow, isAdvertiserFlow, needsPhone, step]);
 
+  const isSeekerFlow = !!meta && !isProviderFlow && !isAdvertiserFlow;
+
   const pageSubtitle = useMemo((): string | null => {
     if (!meta) return null;
+    if (isSeekerFlow && step === 2) {
+      return 'Match with immigration and local service providers near you.';
+    }
     if (isProviderFlow && step === 2) {
       return 'Where you meet clients. Your full business address is collected in the next step.';
     }
@@ -399,7 +427,30 @@ export function OnboardingHomeScreen({
       return 'Help clients understand what you offer.';
     }
     return null;
-  }, [meta, isProviderFlow, step]);
+  }, [meta, isProviderFlow, isSeekerFlow, step]);
+
+  const toggleSeekerService = useCallback((value: string, label: string) => {
+    const canonical = canonicalUserServiceTypeValue(value, label);
+    if (canonical === USER_SELECT_SERVICES_LATER_VALUE) {
+      setSeekerServices([USER_SELECT_SERVICES_LATER_VALUE]);
+      setError(null);
+      return;
+    }
+    setSeekerServices((prev) => {
+      let next = prev.filter((v) => v !== USER_SELECT_SERVICES_LATER_VALUE);
+      if (next.includes(canonical)) {
+        next = next.filter((v) => v !== canonical);
+      } else {
+        next = [...next, canonical];
+      }
+      const real = next.filter((v) => v && v !== USER_SELECT_SERVICES_LATER_VALUE);
+      if (real.length === 0) {
+        return [USER_SELECT_SERVICES_LATER_VALUE];
+      }
+      return real.length > MAX_USER_SERVICES ? real.slice(0, MAX_USER_SERVICES) : real;
+    });
+    setError(null);
+  }, []);
 
   async function onBackPress() {
     if (navigation.canGoBack()) {
@@ -468,10 +519,22 @@ export function OnboardingHomeScreen({
 
   async function handleSeekerAddressContinue() {
     if (!meta) return;
+    if (!seekerCity.trim() || !seekerState.trim() || !seekerCountry) {
+      setError('Please complete city, state, and country to continue.');
+      return;
+    }
+    if (seekerCountry.toUpperCase() === 'US' && !seekerPostal.trim()) {
+      setError('Please add a ZIP or postal code to continue.');
+      return;
+    }
     setBusy(true);
     setError(null);
     const needBabysitter = userSelectedBabysitterService(seekerServices);
     const needPetSitter = userSelectedPetSitterService(seekerServices);
+    const servicesPayload =
+      seekerServices.length > 0
+        ? seekerServices
+        : [USER_SELECT_SERVICES_LATER_VALUE];
     const res = await onboardingApi.sendOtp({
       city: seekerCity.trim(),
       state: seekerState.trim(),
@@ -487,14 +550,14 @@ export function OnboardingHomeScreen({
         : null,
       children_ages_text: needBabysitter ? seekerChildrenAges.trim() || null : null,
       dogs_count: needPetSitter ? (seekerDogs.trim() !== '' ? parseInt(seekerDogs, 10) : null) : null,
-      services_needed: seekerServices.length ? seekerServices : undefined,
+      services_needed: servicesPayload,
     });
     setBusy(false);
     if (!res.success) {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    setStep(3);
+    advanceAfterAddressSave(res.data?.nextStep);
   }
 
   async function handleSeekerSendPhoneOtp(): Promise<boolean> {
@@ -534,8 +597,15 @@ export function OnboardingHomeScreen({
     }
     await refreshMe();
     const m = await loadMeta();
-    if (m) hydrateForms(m);
-    setStep(4);
+    if (m) {
+      hydrateForms(m);
+      setMeta(m);
+    }
+    const next =
+      typeof res.data?.nextStep === 'number'
+        ? res.data.nextStep
+        : m?.initialStep ?? 4;
+    setStep(next);
     setOtpSent(false);
     setOtp('');
   }
@@ -545,8 +615,12 @@ export function OnboardingHomeScreen({
     setError(null);
     const needBabysitter = userSelectedBabysitterService(seekerServices);
     const needPetSitter = userSelectedPetSitterService(seekerServices);
+    const servicesForComplete =
+      seekerServices.length > 0
+        ? seekerServices
+        : [USER_SELECT_SERVICES_LATER_VALUE];
     const res = await onboardingApi.complete({
-      services_needed: seekerServices,
+      services_needed: servicesForComplete,
       city: seekerCity.trim(),
       state: seekerState.trim(),
       country: seekerCountry,
@@ -567,11 +641,24 @@ export function OnboardingHomeScreen({
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    await refreshMe();
+    const completedUser = res.data?.user;
+    await completeOnboardingSession(completedUser ?? null);
     onFlowComplete?.();
   }
 
   async function handleAdvertiserAddressContinue() {
+    if (!advStreet.trim()) {
+      setError('Please enter your street address to continue.');
+      return;
+    }
+    if (!advCity.trim() || !advState.trim() || !advCountry) {
+      setError('Please complete city, state, and country to continue.');
+      return;
+    }
+    if (advCountry.toUpperCase() === 'US' && !advPostal.trim()) {
+      setError('Please add a ZIP code to continue.');
+      return;
+    }
     setBusy(true);
     setError(null);
     const res = await onboardingApi.sendOtp({
@@ -589,7 +676,7 @@ export function OnboardingHomeScreen({
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    setStep(3);
+    advanceAfterAddressSave(res.data?.nextStep);
   }
 
   async function handleAdvertiserSendOtp(): Promise<boolean> {
@@ -776,7 +863,7 @@ export function OnboardingHomeScreen({
   }
 
   async function finishProvider() {
-    if (!planUuid) {
+    if (selectablePlans.length > 0 && !planUuid) {
       setError('Please choose a subscription plan to continue.');
       return;
     }
@@ -808,15 +895,22 @@ export function OnboardingHomeScreen({
         consultation_fee: priceConsult.trim() === '' ? null : parseFloat(priceConsult),
         free_consultation: priceFreeConsult,
       },
-      subscription: { plan_uuid: planUuid },
+      ...(selectablePlans.length > 0 ? { subscription: { plan_uuid: planUuid } } : {}),
     });
     setBusy(false);
     if (!res.success) {
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    const checkout = (res.data as { checkout_url?: string; user?: AuthUser } | undefined)?.checkout_url;
+    const payload = res.data as { checkout_url?: string; user?: AuthUser } | undefined;
+    const checkout = payload?.checkout_url;
     if (checkout && typeof checkout === 'string') {
+      if (payload?.user) {
+        applyUser({
+          ...payload.user,
+          onboarding_completed: payload.user.onboarding_completed ?? true,
+        });
+      }
       if (onCheckoutRequired) {
         onCheckoutRequired(checkout);
         return;
@@ -824,7 +918,7 @@ export function OnboardingHomeScreen({
       navigation.navigate('StripeCheckout', { checkoutUrl: checkout });
       return;
     }
-    await refreshMe();
+    await completeOnboardingSession(payload?.user ?? null);
     onFlowComplete?.();
   }
 
@@ -858,6 +952,13 @@ export function OnboardingHomeScreen({
       return String(optVal) === selectedType;
     });
   }, [meta, providerPrimaryService]);
+
+  useEffect(() => {
+    if (step !== 7 || selectablePlans.length !== 1 || planUuid) {
+      return;
+    }
+    setPlanUuid(selectablePlans[0].uuid);
+  }, [step, selectablePlans, planUuid]);
 
   const isPhoneVerificationStep = step === 3 && needsPhone;
 
@@ -899,134 +1000,59 @@ export function OnboardingHomeScreen({
 
   const renderSeeker = () => {
     if (!meta) return null;
-    const stateUsePicklist = (meta.stateOptions?.length ?? 0) > 0;
-
-    if (step === 2) {
-      const seekerServicePickOptions = meta.serviceTypes.filter((o) => !seekerServices.includes(o.value));
-      const seekerPicklistFull = seekerServices.length >= MAX_USER_SERVICES;
-      const seekerPicklistPlaceholder = seekerPicklistFull
-        ? `Maximum ${MAX_USER_SERVICES} services`
-        : seekerServicePickOptions.length === 0
-          ? seekerServices.length > 0
-            ? 'All listed services added'
-            : 'No services available'
-          : 'Choose a service to add';
-
-      return (
-        <>
-          <Text style={styles.help}>
-            Add the services you need from the list (up to {MAX_USER_SERVICES}). The first one you add is treated as your primary need.
-          </Text>
-          <PicklistField
-            label="Service type"
-            value=""
-            options={seekerServicePickOptions}
-            onChange={(v) => {
-              if (seekerServices.length >= MAX_USER_SERVICES || seekerServices.includes(v)) return;
-              setSeekerServices((prev) => [...prev, v]);
-              setError(null);
-            }}
-            placeholder={seekerPicklistPlaceholder}
-            disabled={seekerPicklistFull || seekerServicePickOptions.length === 0}
-          />
-          {seekerServices.length > 0 ? (
-            <View style={styles.seekerSelectedBlock}>
-              <Text style={styles.seekerSelectedHeading}>Selected ({seekerServices.length})</Text>
-              {seekerServices.map((val, idx) => {
-                const svcLabel = meta.serviceTypes.find((o) => o.value === val)?.label ?? val;
-                const isLast = idx === seekerServices.length - 1;
-                return (
-                  <View
-                    key={val}
-                    style={[styles.seekerSelectedRow, isLast ? styles.seekerSelectedRowLast : null]}
-                  >
-                    <Text style={styles.seekerSelectedText}>{svcLabel}</Text>
-                    <Pressable
-                      onPress={() => {
-                        setSeekerServices((prev) => prev.filter((x) => x !== val));
-                        setError(null);
-                      }}
-                      hitSlop={10}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${svcLabel}`}
-                    >
-                      <Ionicons name="close-circle" size={22} color={colors.text.muted} />
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-          ) : null}
-          <PicklistField
-            label="Country"
-            value={seekerCountry}
-            options={meta.countryOptions}
-            onChange={(v) => {
-              setSeekerCountry(v);
-              refreshStateOptions(v);
-            }}
-            required
-          />
-          {stateUsePicklist ? (
-            <PicklistField label="State" value={seekerState} options={meta.stateOptions} onChange={setSeekerState} required />
-          ) : (
-            <AppInput label="State / region" value={seekerState} onChangeText={setSeekerState} placeholder="Required" required />
-          )}
-          <AppInput label="City" value={seekerCity} onChangeText={setSeekerCity} placeholder="City" required />
-          <AppInput label="ZIP / postal code" value={seekerPostal} onChangeText={setSeekerPostal} />
-          <AppInput label="County (optional)" value={seekerCounty} onChangeText={setSeekerCounty} />
-          <PicklistField
-            label="Language preference"
-            value={seekerLanguage}
-            options={meta.languageOptions}
-            onChange={setSeekerLanguage}
-            required
-          />
-          {showSeekerChildrenFields ? (
-            <View style={styles.row2}>
-              <View style={{ flex: 1 }}>
-                <AppInput
-                  label="Number of children"
-                  value={seekerChildrenCount}
-                  onChangeText={setSeekerChildrenCount}
-                  keyboardType="numeric"
-                  placeholder="e.g. 2"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <AppInput label="Children's ages" value={seekerChildrenAges} onChangeText={setSeekerChildrenAges} placeholder="e.g. 4, 7" />
-              </View>
-            </View>
-          ) : null}
-          {showSeekerPetCountField ? (
-            <AppInput
-              label="Number of pets"
-              value={seekerDogs}
-              onChangeText={setSeekerDogs}
-              keyboardType="numeric"
-              placeholder="How many pets in the household?"
-            />
-          ) : null}
-        </>
-      );
-    }
-
-    if (step === 3 && needsPhone) {
-      return renderPhoneFields();
-    }
-
-    if (step === 4) {
-      return (
-        <View style={styles.congrats}>
-          <Text style={styles.congratsTitle}>Congratulations!</Text>
-          <Text style={styles.congratsBody}>
-            You&apos;re all set to finish onboarding. Tap below when you&apos;re ready.
-          </Text>
-        </View>
-      );
-    }
-
-    return null;
+    const dialFallback = [{ value: 'US', label: 'United States', dial: '1' }];
+    return (
+      <SeekerOnboardingContent
+        step={step}
+        meta={meta}
+        needsPhone={needsPhone}
+        seekerServices={seekerServices}
+        onToggleService={toggleSeekerService}
+        seekerCountry={seekerCountry}
+        onSeekerCountryChange={(v) => {
+          setSeekerCountry(v);
+          refreshStateOptions(v);
+        }}
+        seekerState={seekerState}
+        onSeekerStateChange={setSeekerState}
+        seekerCity={seekerCity}
+        onSeekerCityChange={setSeekerCity}
+        seekerPostal={seekerPostal}
+        onSeekerPostalChange={setSeekerPostal}
+        seekerCounty={seekerCounty}
+        onSeekerCountyChange={setSeekerCounty}
+        seekerLocationLabel={seekerLocationLabel}
+        onSeekerLocationLabelChange={setSeekerLocationLabel}
+        seekerLanguage={seekerLanguage}
+        onSeekerLanguageChange={setSeekerLanguage}
+        seekerChildrenCount={seekerChildrenCount}
+        onSeekerChildrenCountChange={setSeekerChildrenCount}
+        seekerChildrenAges={seekerChildrenAges}
+        onSeekerChildrenAgesChange={setSeekerChildrenAges}
+        seekerDogs={seekerDogs}
+        onSeekerDogsChange={setSeekerDogs}
+        dialCountry={dialCountry}
+        onDialCountryChange={(iso) => {
+          setDialCountry(iso);
+          setError(null);
+        }}
+        phoneLocal={phoneLocal}
+        onPhoneLocalChange={(d) => {
+          setPhoneLocal(d);
+          setError(null);
+        }}
+        otp={otp}
+        onOtpChange={(c) => {
+          setOtp(c);
+          setError(null);
+        }}
+        otpSent={otpSent}
+        onResendPhone={() => handlePhoneResend()}
+        resendBusy={busy}
+        phoneFieldError={isPhoneVerificationStep ? error : null}
+        phoneDialOptions={dialOpts.length > 0 ? dialOpts : dialFallback}
+      />
+    );
   };
 
   const renderAdvertiser = () => {
@@ -1345,11 +1371,27 @@ export function OnboardingHomeScreen({
     }
     if (isAdvertiserFlow) {
       if (step === 2) return { title: 'Continue', onPress: () => void handleAdvertiserAddressContinue() };
-      if (step === 3 && needsPhone) return { title: otpSent ? 'Verify & continue' : 'Send code', onPress: () => (otpSent ? void handleVerifyOtp() : void handleAdvertiserSendOtp()) };
+      if (step === 3 && needsPhone) {
+        return {
+          title: otpSent ? 'Verify & continue' : 'Send code',
+          onPress: () => (otpSent ? void handleVerifyOtp() : void handleAdvertiserSendOtp()),
+        };
+      }
+      if (step === 3 && !needsPhone) {
+        return { title: 'Finish setup', onPress: () => void handleAdvertiserFinish() };
+      }
       if (step === 4) return { title: 'Finish setup', onPress: () => void handleAdvertiserFinish() };
     }
     if (step === 2) return { title: 'Continue', onPress: () => void handleSeekerAddressContinue() };
-    if (step === 3 && needsPhone) return { title: otpSent ? 'Verify & continue' : 'Send code', onPress: () => (otpSent ? void handleVerifyOtp() : void handleSeekerSendPhoneOtp()) };
+    if (step === 3 && needsPhone) {
+      return {
+        title: otpSent ? 'Verify & continue' : 'Send code',
+        onPress: () => (otpSent ? void handleVerifyOtp() : void handleSeekerSendPhoneOtp()),
+      };
+    }
+    if (step === 3 && !needsPhone) {
+      return { title: 'Finish setup', onPress: () => void handleSeekerFinish() };
+    }
     if (step === 4) return { title: 'Finish setup', onPress: () => void handleSeekerFinish() };
     return null;
   };
@@ -1394,14 +1436,18 @@ export function OnboardingHomeScreen({
             </Pressable>
           </View>
 
-          <AuthFlowProgressBar currentStep={step} totalSteps={progressTotal} />
+          <AuthFlowProgressBar
+            currentStep={step}
+            totalSteps={progressTotal}
+            variant={isSeekerFlow ? 'numbered' : 'bar'}
+          />
 
           <Text style={[styles.title, !pageSubtitle ? styles.titleSolo : null]}>{pageTitle}</Text>
           {pageSubtitle ? <Text style={styles.titleSubtitle}>{pageSubtitle}</Text> : null}
 
           {!!error && !isPhoneVerificationStep ? <Text style={styles.error}>{error}</Text> : null}
 
-          <View style={styles.card}>
+          <View style={isSeekerFlow ? styles.seekerContent : styles.card}>
             {isProviderFlow ? renderProvider() : isAdvertiserFlow ? renderAdvertiser() : renderSeeker()}
           </View>
 
@@ -1462,6 +1508,9 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     marginBottom: spacing.lg,
     ...shadows.soft,
+  },
+  seekerContent: {
+    marginBottom: spacing.lg,
   },
   sectionLabelWrap: {
     flexDirection: 'row',

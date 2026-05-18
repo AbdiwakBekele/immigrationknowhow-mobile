@@ -415,10 +415,41 @@ export function SeekerDashboardScreen() {
           />
           <ActionCard title="Saved" subtitle="Your shortlist" onPress={openSavedProviders} />
           <ActionCard title="Messages" subtitle={`${stats?.unreadMessages ?? 0} unread`} onPress={() => navigation.navigate('Messages')} />
+          <ActionCard
+            title="Contracts"
+            subtitle="Offers & agreements"
+            onPress={() => navigation.navigate('Discover', { screen: 'Contracts' })}
+          />
           <ActionCard title="Library" subtitle="E-books & audiobooks" onPress={() => navigation.navigate('Discover', { screen: 'Library' })} />
           <ActionCard title="Profile" subtitle="Update your info" onPress={() => navigation.navigate('Profile')} />
           <ActionCard title="Community" subtitle="Join discussions" onPress={() => navigation.navigate('Discover', { screen: 'Community' })} />
+          <ActionCard
+            title="Contracts"
+            subtitle="Offers & agreements"
+            onPress={() => navigation.navigate('Discover', { screen: 'Contracts' })}
+          />
         </View>
+
+        {profileCompletion < 100 && (
+          <Pressable
+            onPress={() => navigation.navigate('Profile')}
+            style={{
+              marginTop: spacing.lg,
+              padding: spacing.lg,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#BFDBFE',
+              backgroundColor: '#EFF6FF',
+            }}
+          >
+            <Text style={{ fontWeight: typography.fontWeight.semibold, color: '#1E40AF' }}>
+              Complete your profile ({profileCompletion}%)
+            </Text>
+            <Text style={{ marginTop: spacing.xs, color: '#3B82F6', fontSize: typography.fontSize.sm, lineHeight: 20 }}>
+              Add details so providers can match you faster — same as the web profile page.
+            </Text>
+          </Pressable>
+        )}
 
         {stats && (
           <>

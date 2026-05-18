@@ -20,6 +20,7 @@ type AuthContextValue = AuthState & {
   signUp: (payload: authApi.RegisterPayload) => Promise<{ ok: true } | { ok: false; message: string }>;
   signOut: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  applyUser: (user: AuthUser) => void;
   setActiveRole: (role: UserRole) => Promise<void>;
   hasRole: (role: UserRole) => boolean;
 };
@@ -167,10 +168,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       signOut,
       refreshMe,
+      applyUser,
       setActiveRole,
       hasRole,
     }),
-    [isBootstrapping, isAuthenticated, token, user, role, activeRole, signIn, signUp, signOut, refreshMe, setActiveRole, hasRole]
+    [isBootstrapping, isAuthenticated, token, user, role, activeRole, signIn, signUp, signOut, refreshMe, applyUser, setActiveRole, hasRole]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

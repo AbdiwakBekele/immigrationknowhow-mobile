@@ -172,9 +172,16 @@ export function normalizeApiError(error: unknown): ApiError {
           ? data.error
           : undefined;
 
+    const isTimeout =
+      axiosError.code === 'ECONNABORTED' ||
+      /timeout/i.test(axiosError.message ?? '');
+    const networkMessage = isTimeout
+      ? 'Could not reach the server. Check that Laravel Herd is running and that the API URL in src/config/api.ts is reachable from this device.'
+      : undefined;
+
     return {
       success: false,
-      message: serverMessage ?? axiosError.message ?? 'Network request failed',
+      message: serverMessage ?? networkMessage ?? axiosError.message ?? 'Network request failed',
     };
   }
 
