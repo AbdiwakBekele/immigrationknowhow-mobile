@@ -26,6 +26,7 @@ import * as communityApi from '../../api/communityApi';
 import type { CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
 import { communityDescriptionPlainText } from '../../utils/communityContent';
+import { COMMUNITY_SECTION_LABELS } from '../../utils/communityDisplay';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const SECTIONS: Array<{ key: string; label: string }> = [

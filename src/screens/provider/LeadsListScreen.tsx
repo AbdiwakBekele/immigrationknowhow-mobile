@@ -5,6 +5,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -12,6 +13,7 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
+import { PicklistField } from '../onboarding/components/PicklistField';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -95,69 +97,68 @@ export function LeadsListScreen() {
   );
 
   return (
-    <AppScreen variant="gradient" style={{ padding: spacing.xl, paddingBottom: 0 }}>
+    <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
       {loading && !refreshing && items.length === 0 ? (
-        <View style={{ marginTop: spacing['3xl'] }}>
+        <View style={styles.centered}>
           <ActivityIndicator color={colors.primary[600]} />
         </View>
       ) : error && items.length === 0 ? (
-        <Text style={{ marginTop: spacing.lg, color: colors.danger }}>{error}</Text>
+        <Text style={styles.errorText}>{error}</Text>
       ) : (
         <FlatList
-          style={{ marginTop: spacing.sm }}
+          style={styles.list}
           data={items}
           keyExtractor={(l) => l.uuid}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void fetchLeads(true)} />}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
-            <View style={{ marginBottom: spacing.lg }}>
-              <Text style={{ fontSize: typography.fontSize.xs, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Lead management
-              </Text>
-              <Text
-                style={{
-                  marginTop: spacing.xs,
-                  fontSize: typography.fontSize['2xl'],
-                  fontWeight: typography.fontWeight.bold,
-                  color: colors.text.primary,
-                }}
-              >
-                Leads
-              </Text>
-              <Text style={{ marginTop: spacing.xs, color: colors.text.secondary, marginBottom: spacing.lg }}>
-                Manage inquiries and update status to match the web portal.
-              </Text>
+            <View style={styles.header}>
+              <Text style={styles.subtitle}>Manage inquiries and update status to match the web portal.</Text>
 
-              {stats && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.md }}>
+              {stats ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.statsRow}
+                >
                   <MiniStat label="Total" value={String(stats.total ?? 0)} />
                   <MiniStat label="New" value={String(stats.new ?? 0)} accent="#ca8a04" />
                   <MiniStat label="In progress" value={String(stats.in_progress ?? 0)} accent="#7c3aed" />
                   <MiniStat label="Converted" value={String(stats.converted ?? 0)} accent="#047857" />
                   <MiniStat label="Conv. rate" value={String(stats.conversion_rate ?? '0%')} accent={colors.primary[600]} />
                 </ScrollView>
-              )}
+              ) : null}
 
               <TextInput
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Search name, email, or message…"
                 placeholderTextColor={colors.text.muted}
-                style={{
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 12,
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.md,
-                  color: colors.text.primary,
-                  backgroundColor: colors.surface,
-                }}
+                style={styles.searchInput}
               />
 
-              <Text style={{ marginTop: spacing.md, marginBottom: spacing.xs, fontSize: typography.fontSize.sm, color: colors.text.muted }}>Status</Text>
-              <FilterRow options={STATUS_FILTERS} value={status} onChange={setStatus} />
-
-              <Text style={{ marginTop: spacing.md, marginBottom: spacing.xs, fontSize: typography.fontSize.sm, color: colors.text.muted }}>Urgency</Text>
-              <FilterRow options={URGENCY_FILTERS} value={urgency} onChange={setUrgency} />
+              <View style={styles.filterRow}>
+                <View style={styles.filterCell}>
+                  <PicklistField
+                    label="Status"
+                    value={status}
+                    options={STATUS_FILTERS}
+                    onChange={setStatus}
+                    placeholder="All statuses"
+                    noMargin
+                  />
+                </View>
+                <View style={styles.filterCell}>
+                  <PicklistField
+                    label="Urgency"
+                    value={urgency}
+                    options={URGENCY_FILTERS}
+                    onChange={setUrgency}
+                    placeholder="All urgency"
+                    noMargin
+                  />
+                </View>
+              </View>
             </View>
           }
           ListEmptyComponent={
@@ -232,44 +233,54 @@ function MiniStat({ label, value, accent }: { label: string; value: string; acce
   );
 }
 
-function FilterRow({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
-      {options.map((opt) => {
-        const selected = value === opt.value;
-        return (
-          <Pressable
-            key={opt.value || 'all'}
-            onPress={() => onChange(opt.value)}
-            style={{
-              paddingVertical: spacing.sm,
-              paddingHorizontal: spacing.md,
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: selected ? colors.primary[500] : colors.border,
-              backgroundColor: selected ? colors.primary[50] : colors.surface,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: typography.fontSize.sm,
-                color: selected ? colors.primary[700] : colors.text.secondary,
-                fontWeight: selected ? typography.fontWeight.semibold : typography.fontWeight.regular,
-              }}
-            >
-              {opt.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
-}
+const styles = StyleSheet.create({
+  screen: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: 0,
+  },
+  list: {
+    flex: 1,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: spacing['2xl'],
+  },
+  errorText: {
+    marginTop: spacing.lg,
+    color: colors.danger,
+  },
+  header: {
+    marginBottom: spacing.lg,
+  },
+  subtitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.md,
+  },
+  statsRow: {
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    color: colors.text.primary,
+    backgroundColor: colors.surface,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  filterCell: {
+    flex: 1,
+    minWidth: 0,
+  },
+});

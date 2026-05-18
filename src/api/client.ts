@@ -1,5 +1,6 @@
 import axios, { AxiosError, isAxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { API_DETAILED_LOGS, BASE_URL } from '../config/api';
+import { logTerminalError } from '../utils/terminalErrorLog';
 import type { ApiError } from './types';
 import { getToken } from '../services/tokenStorage';
 
@@ -77,12 +78,18 @@ function logResponseError(err: AxiosError) {
   } else {
     preview = '(no response body)';
   }
-  console.error(
+  const summary =
     `[API] └── ERROR ${status ?? '??'} ${url}${ms != null ? ` | ${ms}ms` : ''}\n` +
-      `│ code:    ${code ?? '—'}\n` +
-      `│ message: ${msg}\n` +
-      `│ body:    ${preview}`
-  );
+    `│ code:    ${code ?? '—'}\n` +
+    `│ message: ${msg}\n` +
+    `│ body:    ${preview}`;
+  console.error(summary);
+  logTerminalError('API REQUEST FAILED', new Error(msg), {
+    status: status ?? 'unknown',
+    url,
+    code: code ?? '—',
+    ms: ms ?? '—',
+  });
 }
 
 export function setUnauthorizedHandler(handler: (() => void) | null) {
@@ -139,7 +146,14 @@ apiClient.interceptors.response.use(
         const u = cfg ? requestUrl(cfg as ConfigWithTimer) : '';
         const status = error.response?.status;
         const data = error.response?.data;
+        const message = typeof data === 'object' && data && 'message' in data
+          ? String((data as { message?: unknown }).message)
+          : error.message;
         console.error(`[API] ✗ ${status ?? '??'} ${u}`, data ?? error.message);
+        logTerminalError('API REQUEST FAILED', new Error(message), {
+          status: status ?? 'unknown',
+          url: u,
+        });
       }
     }
     const status = error?.response?.status;

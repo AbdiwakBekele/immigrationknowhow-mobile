@@ -32,7 +32,6 @@ import type { CommunityStackParamList } from './CommunityStack';
 import { communitySectionLabel, formatCommunityDate, youtubeVideoIdFromUrl } from '../../utils/communityDisplay';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { buildCommunityDescriptionDocument } from '../../utils/communityContent';
-import { WebView } from 'react-native-webview';
 
 function mergeReactions(prev: string[] | undefined, type: 'like' | 'share' | 'bookmark', active: boolean): string[] {
   const set = new Set(prev ?? []);

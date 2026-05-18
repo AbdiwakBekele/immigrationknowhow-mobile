@@ -24,6 +24,7 @@ export function PicklistField({
   required,
   variant = 'default',
   disabled = false,
+  noMargin = false,
 }: {
   label?: string;
   value: string;
@@ -34,13 +35,15 @@ export function PicklistField({
   /** `embedded` = no outer margin, borderless trigger (e.g. inside phone row). */
   variant?: 'default' | 'embedded';
   disabled?: boolean;
+  /** Removes bottom margin (e.g. side-by-side filter row). */
+  noMargin?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
   const sheetHeading = label?.trim() ? label : 'Select';
 
   return (
-    <View style={[styles.wrap, variant === 'embedded' && styles.wrapEmbedded]}>
+    <View style={[styles.wrap, variant === 'embedded' && styles.wrapEmbedded, noMargin && styles.wrapNoMargin]}>
       {label ? (
         <Text style={[styles.label, disabled && styles.labelDisabled]}>
           {label}
@@ -107,6 +110,7 @@ export function PicklistField({
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.lg },
   wrapEmbedded: { marginBottom: 0 },
+  wrapNoMargin: { marginBottom: 0 },
   label: {
     color: colors.text.secondary,
     marginBottom: spacing.sm,

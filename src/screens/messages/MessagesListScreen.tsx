@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -12,6 +12,7 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as messagesApi from '../../api/messagesApi';
 import type { MessagesStackParamList } from './MessagesStack';
+import { MessagesHeaderActions } from './MessagesHeaderActions';
 import { formatConversationListTime, fullName, leadStatusLabel, leadStatusStyle } from '../../utils/providerUi';
 
 function counterpartName(role: string | null | undefined, item: messagesApi.ConversationItem): string {
@@ -145,67 +146,61 @@ export function MessagesListScreen() {
     return groupedItems.filter((group) => group.title.toLowerCase().includes(q));
   }, [groupedItems, search]);
 
-  const headerSubtitle =
-    role === 'provider'
-      ? unreadTotal > 0
-        ? `${unreadTotal} unread chats grouped by client.`
-        : 'All caught up. Chats are grouped by client.'
-      : unreadTotal > 0
-        ? `${unreadTotal} unread messages grouped by provider.`
-        : 'All caught up. Chats are grouped by provider.';
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerActions: (
+        <MessagesHeaderActions
+          unreadCount={unreadTotal}
+          onArchive={() => navigation.navigate('ArchivedMessages')}
+        />
+      ),
+    });
+    return () => {
+      navigation.setOptions({ headerActions: undefined });
+    };
+  }, [navigation, unreadTotal]);
+
+  const searchField = (
+    <View style={styles.searchShell}>
+      <Ionicons name="search-outline" size={18} color={colors.text.muted} />
+      <TextInput
+        value={search}
+        onChangeText={setSearch}
+        placeholder={role === 'provider' ? 'Search by client name…' : 'Search by provider name…'}
+        placeholderTextColor={colors.text.muted}
+        style={styles.searchInput}
+      />
+    </View>
+  );
 
   if (loading && !refreshing && items.length === 0) {
     return (
-      <AppScreen variant="gradient" style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary[600]} />
-        <Text style={styles.loadingText}>Loading conversations…</Text>
+      <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
+        {searchField}
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primary[600]} />
+          <Text style={styles.loadingText}>Loading conversations…</Text>
+        </View>
       </AppScreen>
     );
   }
 
   return (
-    <AppScreen variant="gradient" style={styles.screen}>
+    <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
       {!!error && (
         <View style={styles.errorBanner}>
           <Ionicons name="alert-circle-outline" size={20} color={colors.danger} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
+      {searchField}
       <FlatList
+        style={styles.list}
         data={filtered}
         keyExtractor={(group) => group.key}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={
-          <View style={styles.headerWrap}>
-            <View style={styles.heroCard}>
-              <Text style={styles.heroEyebrow}>Messaging</Text>
-              <Text style={styles.heroTitle}>{role === 'provider' ? 'Client messages' : 'Messages'}</Text>
-              <Text style={styles.heroSubtitle}>{headerSubtitle}</Text>
-              <View style={styles.heroActions}>
-                <View style={styles.statChip}>
-                  <Ionicons name="mail-unread-outline" size={16} color={colors.primary[700]} />
-                  <Text style={styles.statText}>{unreadTotal} unread</Text>
-                </View>
-                <Pressable style={styles.archivedButton} onPress={() => navigation.navigate('ArchivedMessages')}>
-                  <Ionicons name="archive-outline" size={16} color={colors.text.primary} />
-                  <Text style={styles.archivedButtonText}>Archived</Text>
-                </Pressable>
-              </View>
-            </View>
-            <View style={styles.searchShell}>
-              <Ionicons name="search-outline" size={18} color={colors.text.muted} />
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder={role === 'provider' ? 'Search by client name…' : 'Search by provider name…'}
-                placeholderTextColor={colors.text.muted}
-                style={styles.searchInput}
-              />
-            </View>
-          </View>
-        }
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             <Ionicons name="chatbubbles-outline" size={52} color={colors.text.muted} />
@@ -298,11 +293,14 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: 0,
   },
+  list: {
+    flex: 1,
+    marginTop: spacing.md,
+  },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
     gap: spacing.md,
   },
   loadingText: {
@@ -318,7 +316,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FECACA',
     backgroundColor: '#FEF2F2',
-    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   errorText: {
     flex: 1,
@@ -328,78 +326,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: spacing['3xl'],
   },
-  headerWrap: {
-    marginBottom: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  heroCard: {
-    borderRadius: radii.xl,
-    padding: spacing.xl,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    ...shadows.softLg,
-  },
-  heroEyebrow: {
-    fontSize: typography.fontSize.xs,
-    color: colors.primary[700],
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  heroTitle: {
-    marginTop: spacing.xs,
-    fontSize: typography.fontSize['2xl'],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  heroSubtitle: {
-    marginTop: spacing.sm,
-    color: colors.text.secondary,
-    lineHeight: 21,
-  },
-  heroActions: {
-    marginTop: spacing.lg,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  statChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radii.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  statText: {
-    color: colors.primary[700],
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  archivedButton: {
-    marginLeft: 'auto',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderRadius: radii.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  archivedButtonText: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-  },
   searchShell: {
-    marginTop: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,

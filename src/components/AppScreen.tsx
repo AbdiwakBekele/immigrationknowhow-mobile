@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../theme/colors';
 import { drawerGradient, screenGradient } from '../theme/gradients';
@@ -9,11 +9,14 @@ export function AppScreen({
   children,
   style,
   variant = 'default',
+  safeAreaEdges = ['top', 'left', 'right'],
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   /** `muted` = soft slate canvas (auth). `gradient` = light brand gradient. `drawer` = same deep blue canvas as the side drawer. */
   variant?: 'default' | 'muted' | 'gradient' | 'drawer';
+  /** Use `['left', 'right']` when a native stack header already applies the top inset. */
+  safeAreaEdges?: Edge[];
 }) {
   const bg =
     variant === 'muted'
@@ -23,7 +26,7 @@ export function AppScreen({
         : colors.background;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={safeAreaEdges}>
       {variant === 'gradient' ? (
         <LinearGradient colors={[...screenGradient]} locations={[0, 0.42, 1]} style={StyleSheet.absoluteFillObject} />
       ) : null}
