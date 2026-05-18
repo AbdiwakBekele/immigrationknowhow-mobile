@@ -1,16 +1,32 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as adsApi from '../../api/adsApi';
 
+const HEADER_BAR_HEIGHT = 56;
+
 export function AdsCreateScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const keyboardVerticalOffset = insets.top + HEADER_BAR_HEIGHT;
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -60,15 +76,21 @@ export function AdsCreateScreen() {
   };
 
   return (
-    <AppScreen style={{ padding: spacing.xl }}>
-      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text style={{ fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>
-          Create Ad
-        </Text>
-
-        <Text style={{ marginTop: spacing.sm, color: colors.text.secondary }}>
-          Your ad will be reviewed (and may require payment) before publishing.
-        </Text>
+    <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
+      >
+        <ScrollView
+          style={styles.flex}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          automaticallyAdjustKeyboardInsets
+        >
+          <Text style={styles.subtitle}>Your ad will be reviewed (and may require payment) before publishing.</Text>
 
         <Text style={label()}>Title</Text>
         <TextInput placeholder="Ad title" value={title} onChangeText={setTitle} style={inp()} />
@@ -126,14 +148,15 @@ export function AdsCreateScreen() {
           )}
         </Pressable>
 
-        <View style={{ height: spacing['3xl'] }} />
-      </ScrollView>
+          <View style={{ height: spacing['3xl'] }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </AppScreen>
   );
 }
 
 function label() {
-  return { marginTop: spacing.lg, fontWeight: typography.fontWeight.semibold, color: colors.text.primary } as const;
+  return { marginTop: spacing.md, fontWeight: typography.fontWeight.semibold, color: colors.text.primary } as const;
 }
 
 function inp() {
@@ -147,4 +170,25 @@ function inp() {
     backgroundColor: colors.surface,
   } as const;
 }
+
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
+  screen: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: 0,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: spacing['3xl'] * 2,
+  },
+  subtitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    lineHeight: 20,
+  },
+});
 
