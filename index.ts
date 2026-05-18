@@ -1,7 +1,10 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import { installTerminalErrorLogging } from './src/utils/terminalErrorLog';
 import { LogBox } from 'react-native';
 import { registerRootComponent } from 'expo';
+
+installTerminalErrorLogging();
 
 LogBox.ignoreLogs([
   // Emitted by some dependencies still importing SafeAreaView from react-native.

@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
 import { AppButton } from '../../components/AppButton';
+import { ProfileAvatarPicker } from '../../components/account/ProfileAvatarPicker';
 import { useAuth } from '../../context/AuthContext';
 import * as providerDashboardApi from '../../api/providerDashboardApi';
 import type { ProviderBottomTabParamList } from '../../navigation/ProviderBottomTabs';
@@ -209,23 +209,14 @@ export function ProviderProfileScreen() {
             borderColor: '#D4E2FF',
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-            {displayUser?.avatar_url ? (
-              <Image source={{ uri: displayUser.avatar_url }} style={{ width: 76, height: 76, borderRadius: 38, backgroundColor: colors.surface }} contentFit="cover" />
-            ) : (
-              <View
-                style={{
-                  width: 76,
-                  height: 76,
-                  borderRadius: 38,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.primary[600],
-                }}
-              >
-                <Text style={{ color: colors.text.inverse, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold }}>{initials}</Text>
-              </View>
-            )}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+            <ProfileAvatarPicker
+              avatarUrl={displayUser?.avatar_url}
+              initials={initials}
+              busy={avatarBusy}
+              onPick={() => void onPickAvatar()}
+              onRemove={displayUser?.avatar_url ? () => void onRemoveAvatar() : undefined}
+            />
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: typography.fontSize.xs, color: colors.primary[700], letterSpacing: 1.6, fontWeight: typography.fontWeight.semibold }}>
                 PROFILE
@@ -240,40 +231,6 @@ export function ProviderProfileScreen() {
                 <Text style={{ marginTop: spacing.xs, fontSize: typography.fontSize.sm, color: colors.text.secondary }}>{displayUser.email}</Text>
               )}
             </View>
-          </View>
-          <View style={{ marginTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            <Pressable
-              style={{
-                borderRadius: 999,
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.sm,
-                backgroundColor: colors.primary[600],
-                opacity: avatarBusy ? 0.6 : 1,
-              }}
-              onPress={() => void onPickAvatar()}
-              disabled={avatarBusy}
-            >
-              <Text style={{ color: colors.text.inverse, fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>
-                {displayUser?.avatar_url ? 'Change photo' : 'Upload photo'}
-              </Text>
-            </Pressable>
-            {displayUser?.avatar_url ? (
-              <Pressable
-                style={{
-                  borderRadius: 999,
-                  paddingHorizontal: spacing.lg,
-                  paddingVertical: spacing.sm,
-                  backgroundColor: colors.surface,
-                  borderWidth: 1,
-                  borderColor: '#D4E2FF',
-                  opacity: avatarBusy ? 0.6 : 1,
-                }}
-                onPress={() => void onRemoveAvatar()}
-                disabled={avatarBusy}
-              >
-                <Text style={{ color: colors.primary[700], fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold }}>Remove</Text>
-              </Pressable>
-            ) : null}
           </View>
         </View>
 

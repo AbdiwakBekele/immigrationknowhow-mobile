@@ -15,9 +15,19 @@ const HEADER_BAR_HEIGHT = 56;
 
 export type AppHeaderProps = NativeStackHeaderProps;
 
+type AppHeaderScreenOptions = {
+  appHeaderVariant?: 'default' | 'drawer';
+  /** Extra controls shown before the notification bell (e.g. Messages list unread + archive). */
+  headerActions?: React.ReactNode;
+};
+
 function headerCanvasVariant(options: NativeStackHeaderProps['options']): 'default' | 'drawer' {
-  const v = (options as { appHeaderVariant?: 'default' | 'drawer' }).appHeaderVariant;
+  const v = (options as AppHeaderScreenOptions).appHeaderVariant;
   return v === 'drawer' ? 'drawer' : 'default';
+}
+
+function headerActionsSlot(options: NativeStackHeaderProps['options']): React.ReactNode {
+  return (options as AppHeaderScreenOptions).headerActions ?? null;
 }
 
 export function AppHeader(props: AppHeaderProps) {
@@ -71,6 +81,7 @@ export function AppHeader(props: AppHeaderProps) {
       </View>
 
       <View style={styles.right}>
+        {headerActionsSlot(props.options)}
         <NotificationHeaderButton
           unreadCount={unreadCount}
           iconColor={iconColor}

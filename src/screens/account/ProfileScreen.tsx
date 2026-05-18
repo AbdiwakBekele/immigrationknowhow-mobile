@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppScreen } from '../../components/AppScreen';
@@ -14,6 +13,7 @@ import { typography } from '../../theme/typography';
 import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import { shadows } from '../../theme/shadows';
+import { ProfileAvatarPicker } from '../../components/account/ProfileAvatarPicker';
 import { RoleAccountSection } from '../../components/account/RoleAccountSection';
 
 export function ProfileScreen() {
@@ -184,33 +184,19 @@ export function ProfileScreen() {
       >
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
-            {displayUser?.avatar_url ? (
-              <Image source={{ uri: displayUser.avatar_url }} style={styles.avatarImage} contentFit="cover" />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarInitials}>{initials}</Text>
-              </View>
-            )}
+            <ProfileAvatarPicker
+              avatarUrl={displayUser?.avatar_url}
+              initials={initials}
+              busy={avatarBusy}
+              onPick={() => void onPickAvatar()}
+              onRemove={displayUser?.avatar_url ? () => void onRemoveAvatar() : undefined}
+            />
             <View style={styles.heroTextWrap}>
               <Text style={styles.heroEyebrow}>PROFILE</Text>
               <Text style={styles.heroTitle}>Profile</Text>
               <Text style={styles.heroName}>{name}</Text>
               {!!displayUser?.email && <Text style={styles.heroEmail}>{displayUser.email}</Text>}
             </View>
-          </View>
-          <View style={styles.heroActions}>
-            <Pressable style={[styles.avatarAction, avatarBusy && styles.avatarActionDisabled]} onPress={() => void onPickAvatar()} disabled={avatarBusy}>
-              <Text style={styles.avatarActionText}>{displayUser?.avatar_url ? 'Change photo' : 'Upload photo'}</Text>
-            </Pressable>
-            {displayUser?.avatar_url ? (
-              <Pressable
-                style={[styles.avatarGhostAction, avatarBusy && styles.avatarActionDisabled]}
-                onPress={() => void onRemoveAvatar()}
-                disabled={avatarBusy}
-              >
-                <Text style={styles.avatarGhostActionText}>Remove</Text>
-              </Pressable>
-            ) : null}
           </View>
         </View>
 
@@ -312,7 +298,7 @@ const styles = StyleSheet.create({
   },
   heroTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
   },
   heroTextWrap: {
@@ -340,58 +326,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-  },
-  avatarImage: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: colors.surface,
-  },
-  avatarFallback: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary[600],
-  },
-  avatarInitials: {
-    color: colors.text.inverse,
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-  },
-  heroActions: {
-    marginTop: spacing.md,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  avatarAction: {
-    borderRadius: 999,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.primary[600],
-  },
-  avatarGhostAction: {
-    borderRadius: 999,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: '#D4E2FF',
-  },
-  avatarActionDisabled: {
-    opacity: 0.6,
-  },
-  avatarActionText: {
-    color: colors.text.inverse,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  avatarGhostActionText: {
-    color: colors.primary[700],
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
   },
   errorText: {
     marginTop: spacing.md,
