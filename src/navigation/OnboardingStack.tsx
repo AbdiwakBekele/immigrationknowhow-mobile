@@ -5,7 +5,7 @@ import { StripeCheckoutScreen } from '../screens/onboarding/StripeCheckoutScreen
 
 export type OnboardingStackParamList = {
   OnboardingHome: undefined;
-  StripeCheckout: { checkoutUrl: string };
+  StripeCheckout: { checkoutUrl: string; variant?: 'onboarding' | 'default'; adUuid?: string };
 };
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -15,14 +16,52 @@ import type { WebViewNavigation } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
+import * as adsApi from '../../api/adsApi';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
-import type { OnboardingStackParamList } from '../../navigation/OnboardingStack';
 
-type ScreenRoute = RouteProp<OnboardingStackParamList, 'StripeCheckout'>;
-type ScreenNav = NativeStackNavigationProp<OnboardingStackParamList, 'StripeCheckout'>;
+export type StripeCheckoutParams = {
+  checkoutUrl: string;
+  /** Runs provider onboarding auth refresh after success. */
+  variant?: 'onboarding' | 'default';
+  /** Required for ad checkout — confirms payment via API when WebView intercepts the return URL. */
+  adUuid?: string;
+};
+
+type StripeCheckoutParamList = {
+  StripeCheckout: StripeCheckoutParams;
+};
+
+type ScreenRoute = RouteProp<StripeCheckoutParamList, 'StripeCheckout'>;
+type ScreenNav = NativeStackNavigationProp<StripeCheckoutParamList, 'StripeCheckout'>;
+
+function extractSessionId(url: string): string | null {
+  const match = url.match(/[?&]session_id=([^&]+)/);
+  if (!match?.[1]) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+function isCheckoutSuccess(url: string): boolean {
+  if (url.includes('checkout=success')) {
+    return true;
+  }
+  return url.includes('purchase/return') && url.includes('session_id=');
+}
+
+function isCheckoutCancelled(url: string): boolean {
+  if (url.includes('checkout=cancelled')) {
+    return true;
+  }
+  return url.includes('purchase/cancel');
+}
 
 export function StripeCheckoutScreen() {
   const { refreshMe, setActiveRole } = useAuth();
@@ -30,31 +69,68 @@ export function StripeCheckoutScreen() {
   const navigation = useNavigation<ScreenNav>();
   const insets = useSafeAreaInsets();
   const webViewRef = useRef<WebView>(null);
+  const handledRef = useRef(false);
   const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
   const [title, setTitle] = useState('Checkout');
+  const variant = route.params.variant ?? 'onboarding';
+  const adUuid = route.params.adUuid;
+
+  async function completeCheckoutSuccess(url: string) {
+    if (handledRef.current) {
+      return;
+    }
+    handledRef.current = true;
+    setConfirming(true);
+
+    try {
+      if (adUuid) {
+        const sessionId = extractSessionId(url);
+        if (!sessionId) {
+          Alert.alert('Payment', 'Missing payment session. Please contact support if you were charged.');
+          handledRef.current = false;
+          return;
+        }
+        const res = await adsApi.confirmAdCheckout(adUuid, sessionId);
+        if (!res.success) {
+          Alert.alert('Payment', res.message);
+          handledRef.current = false;
+          return;
+        }
+        if (res.message) {
+          Alert.alert('Payment', res.message);
+        }
+      } else if (variant === 'onboarding') {
+        await refreshMe();
+        await setActiveRole('provider');
+      }
+
+      navigation.goBack();
+    } finally {
+      setConfirming(false);
+    }
+  }
 
   function handleNavigationChange(event: WebViewNavigation) {
     const { url } = event;
 
-    if (url.includes('checkout=success')) {
-      void (async () => {
-        await refreshMe();
-        await setActiveRole('provider');
-        navigation.goBack();
-      })();
-      return false;
+    if (isCheckoutSuccess(url)) {
+      void completeCheckoutSuccess(url);
+      return;
     }
 
-    if (url.includes('checkout=cancelled')) {
-      navigation.goBack();
-      return false;
+    if (isCheckoutCancelled(url)) {
+      if (!handledRef.current) {
+        handledRef.current = true;
+        navigation.goBack();
+      }
     }
   }
 
   function handleShouldStartLoad(event: WebViewNavigation): boolean {
     const { url } = event;
 
-    if (url.includes('checkout=success') || url.includes('checkout=cancelled')) {
+    if (isCheckoutSuccess(url) || isCheckoutCancelled(url)) {
       handleNavigationChange(event);
       return false;
     }
@@ -67,6 +143,7 @@ export function StripeCheckoutScreen() {
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
+          disabled={confirming}
           style={styles.backButton}
           hitSlop={12}
           accessibilityRole="button"
@@ -80,10 +157,10 @@ export function StripeCheckoutScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      {loading && (
+      {(loading || confirming) && (
         <View style={styles.loaderOverlay}>
           <ActivityIndicator size="large" color={colors.primary[600]} />
-          <Text style={styles.loaderText}>Loading checkout…</Text>
+          <Text style={styles.loaderText}>{confirming ? 'Confirming payment…' : 'Loading checkout…'}</Text>
         </View>
       )}
 
