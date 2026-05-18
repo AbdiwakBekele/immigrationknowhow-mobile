@@ -31,6 +31,8 @@ import type { CommunityCommentPayload, CommunityPostPayload } from '../../api/co
 import type { CommunityStackParamList } from './CommunityStack';
 import { communitySectionLabel, formatCommunityDate, youtubeVideoIdFromUrl } from '../../utils/communityDisplay';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
+import { buildCommunityDescriptionDocument } from '../../utils/communityContent';
+import { WebView } from 'react-native-webview';
 
 function mergeReactions(prev: string[] | undefined, type: 'like' | 'share' | 'bookmark', active: boolean): string[] {
   const set = new Set(prev ?? []);
@@ -54,14 +56,16 @@ export function CommunityPostScreen() {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [reacting, setReacting] = useState<string | null>(null);
-  const [commentError, setCommentError] = useState<string | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [descriptionWebViewHeight, setDescriptionWebViewHeight] = useState(160);
 
   const load = async () => {
     setLoading(true);
     const [postRes, commentsRes] = await Promise.all([communityApi.getCommunityPost(id), communityApi.getCommunityComments(id)]);
     setLoading(false);
-    if (postRes.success && postRes.data.post) setPost(postRes.data.post);
+    if (postRes.success && postRes.data.post) {
+      setPost(postRes.data.post);
+      setDescriptionWebViewHeight(160);
+    }
     if (commentsRes.success) setComments(commentsRes.data.comments ?? []);
   };
 
@@ -206,17 +210,27 @@ export function CommunityPostScreen() {
                 </Pressable>
               )}
 
-              {!!youtubeId && (
-                <View style={styles.videoFrame}>
-                  <WebView
-                    source={{ uri: `https://www.youtube.com/embed/${youtubeId}` }}
-                    style={styles.videoWebView}
-                    allowsFullscreenVideo
-                    javaScriptEnabled
-                    domStorageEnabled
-                  />
-                </View>
-              )}
+          {!!post?.description && (
+            <WebView
+              originWhitelist={['*']}
+              source={{ html: buildCommunityDescriptionDocument(post.description) }}
+              style={[styles.descriptionWebView, { height: descriptionWebViewHeight }]}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+              onMessage={(event) => {
+                const height = Number(event.nativeEvent.data);
+                if (Number.isFinite(height) && height > 0) {
+                  setDescriptionWebViewHeight(Math.min(Math.max(height, 80), 2400));
+                }
+              }}
+              injectedJavaScript={`
+                setTimeout(function () {
+                  window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));
+                }, 120);
+                true;
+              `}
+            />
+          )}
 
               {!!post.description && <Text style={styles.body}>{post.description}</Text>}
 
@@ -368,10 +382,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  body: {
-    fontSize: 15,
-    lineHeight: 24,
-    color: '#334155',
+  descriptionWebView: {
+    marginTop: spacing.lg,
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginTop: spacing.xl,
   },
   commentsCard: {
     marginTop: spacing.lg,

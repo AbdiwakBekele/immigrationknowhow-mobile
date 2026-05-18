@@ -25,7 +25,8 @@ import { shadows } from '../../theme/shadows';
 import * as communityApi from '../../api/communityApi';
 import type { CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
-import { COMMUNITY_SECTION_LABELS } from '../../utils/communityDisplay';
+import { communityDescriptionPlainText } from '../../utils/communityContent';
+import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const SECTIONS: Array<{ key: string; label: string }> = [
   { key: 'feed', label: COMMUNITY_SECTION_LABELS.feed },
@@ -209,16 +210,50 @@ export function CommunityListScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
-          <CommunityPostFeedCard
-            post={item}
-            engagement={engagement[item.id] ?? buildEngagement(item)}
-            reacting={reactingPostId === item.id}
-            onOpen={() => navigation.navigate('CommunityPost', { id: item.id })}
-            onLike={() => void onToggleReaction(item.id, 'like')}
-            onComment={() => navigation.navigate('CommunityPost', { id: item.id, focusComments: true })}
-            onShare={() => setSharePost(item)}
-            onBookmark={() => void onToggleReaction(item.id, 'bookmark')}
-          />
+          <Pressable
+            onPress={() => navigation.navigate('CommunityPost', { id: item.id })}
+            style={styles.postCard}
+          >
+            <View style={styles.postRow}>
+              {item.image_url ? (
+                <AppImage
+                  uri={resolveMediaUrl(item.image_url)}
+                  style={styles.thumb}
+                  contentFit="cover"
+                  height={THUMB}
+                />
+              ) : (
+                <View style={styles.thumbPlaceholder}>
+                  <Ionicons name="document-text-outline" size={28} color={colors.text.muted} />
+                </View>
+              )}
+              <View style={styles.postTextCol}>
+                <Text style={styles.postTitle} numberOfLines={2}>
+                  {item.title ?? `Post #${item.id}`}
+                </Text>
+                {!!item.tag && <Text style={styles.postTag}>{item.tag}</Text>}
+                {!!item.description && (
+                  <Text style={styles.postDesc} numberOfLines={2}>
+                    {communityDescriptionPlainText(item.description)}
+                  </Text>
+                )}
+                <View style={styles.metrics}>
+                  <View style={styles.metric}>
+                    <Ionicons name="heart-outline" size={15} color={colors.text.muted} />
+                    <Text style={styles.metricText}>{item.likes_count ?? 0}</Text>
+                  </View>
+                  <View style={styles.metric}>
+                    <Ionicons name="chatbubble-outline" size={15} color={colors.text.muted} />
+                    <Text style={styles.metricText}>{item.comments_count ?? 0}</Text>
+                  </View>
+                  <View style={styles.metric}>
+                    <Ionicons name="share-outline" size={15} color={colors.text.muted} />
+                    <Text style={styles.metricText}>{item.shares_count ?? 0}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Pressable>
         )}
       />
       <CommunityShareSheet
