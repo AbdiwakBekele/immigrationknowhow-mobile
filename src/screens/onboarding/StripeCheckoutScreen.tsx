@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import * as adsApi from '../../api/adsApi';
+import * as aiApi from '../../api/aiAssistantApi';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -25,9 +26,11 @@ import { shadows } from '../../theme/shadows';
 export type StripeCheckoutParams = {
   checkoutUrl: string;
   /** Runs provider onboarding auth refresh after success. */
-  variant?: 'onboarding' | 'default';
+  variant?: 'onboarding' | 'default' | 'aiAssistant';
   /** Required for ad checkout — confirms payment via API when WebView intercepts the return URL. */
   adUuid?: string;
+  /** Fallback Stripe session id when the return URL does not include session_id (AI Assistant). */
+  checkoutSessionId?: string;
 };
 
 type StripeCheckoutParamList = {
@@ -53,6 +56,9 @@ function isCheckoutSuccess(url: string): boolean {
   if (url.includes('checkout=success')) {
     return true;
   }
+  if (url.includes('/mobile/ai-assistant/checkout-return') && url.includes('session_id=')) {
+    return true;
+  }
   return url.includes('purchase/return') && url.includes('session_id=');
 }
 
@@ -60,7 +66,41 @@ function isCheckoutCancelled(url: string): boolean {
   if (url.includes('checkout=cancelled')) {
     return true;
   }
+  if (url.includes('/mobile/ai-assistant/checkout-return') && url.includes('checkout=cancelled')) {
+    return true;
+  }
   return url.includes('purchase/cancel');
+}
+
+async function confirmAiAssistantWithRetry(
+  sessionId: string,
+  fallbackSessionId?: string,
+): Promise<{ ok: true; state: aiApi.AiAssistantState } | { ok: false; message: string }> {
+  const ids = [sessionId, fallbackSessionId].filter((id): id is string => Boolean(id && id.trim()));
+  const uniqueIds = [...new Set(ids)];
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    for (const id of uniqueIds) {
+      const res = await aiApi.confirmAiAssistantCheckout(id);
+      if (res.success && res.data.state.is_addon_active) {
+        return { ok: true, state: res.data.state };
+      }
+      if (res.success && !res.data.state.is_addon_active) {
+        continue;
+      }
+      if (!res.success && attempt === 4) {
+        return { ok: false, message: res.message };
+      }
+    }
+    if (attempt < 4) {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+  }
+
+  return {
+    ok: false,
+    message: 'Payment was received but your subscription is not active yet. Please try again in a moment.',
+  };
 }
 
 export function StripeCheckoutScreen() {
@@ -75,6 +115,7 @@ export function StripeCheckoutScreen() {
   const [title, setTitle] = useState('Checkout');
   const variant = route.params.variant ?? 'onboarding';
   const adUuid = route.params.adUuid;
+  const checkoutSessionId = route.params.checkoutSessionId;
 
   async function completeCheckoutSuccess(url: string) {
     if (handledRef.current) {
@@ -103,6 +144,19 @@ export function StripeCheckoutScreen() {
       } else if (variant === 'onboarding') {
         await refreshMe();
         await setActiveRole('provider');
+      } else if (variant === 'aiAssistant') {
+        const sessionId = extractSessionId(url) ?? checkoutSessionId ?? null;
+        if (!sessionId) {
+          Alert.alert('Subscription', 'Missing payment session. Please contact support if you were charged.');
+          handledRef.current = false;
+          return;
+        }
+        const confirmed = await confirmAiAssistantWithRetry(sessionId, checkoutSessionId);
+        if (!confirmed.ok) {
+          Alert.alert('Subscription', confirmed.message);
+          handledRef.current = false;
+          return;
+        }
       }
 
       navigation.goBack();

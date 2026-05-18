@@ -12,6 +12,7 @@ import { ProvidersStack, type ProvidersStackParamList } from '../seeker/Provider
 import { ContractsStack, type ContractsStackParamList } from '../contracts/ContractsStack';
 import { AppHeader } from '../../components/navigation/AppHeader';
 import { NotificationsScreen } from '../notifications/NotificationsScreen';
+import { StripeCheckoutScreen, type StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
 export type SeekerDiscoverStackParamList = {
@@ -26,6 +27,7 @@ export type SeekerDiscoverStackParamList = {
   Providers: NavigatorScreenParams<ProvidersStackParamList> | undefined;
   Contracts: NavigatorScreenParams<ContractsStackParamList> | undefined;
   Notifications: undefined;
+  StripeCheckout: StripeCheckoutParams;
 };
 
 const Stack = createNativeStackNavigator<SeekerDiscoverStackParamList>();
@@ -44,6 +46,7 @@ export function SeekerDiscoverStack() {
       <Stack.Screen name="Ads" component={AdsStack} options={{ headerShown: false }} />
       <Stack.Screen name="Reviews" component={ReviewsListScreen} options={{ title: 'My reviews' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
+      <Stack.Screen name="StripeCheckout" component={StripeCheckoutScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

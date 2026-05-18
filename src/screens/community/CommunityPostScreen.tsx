@@ -54,6 +54,8 @@ export function CommunityPostScreen() {
   const [comments, setComments] = useState<CommunityCommentPayload[]>([]);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [reacting, setReacting] = useState<string | null>(null);
   const [descriptionWebViewHeight, setDescriptionWebViewHeight] = useState(160);
 
