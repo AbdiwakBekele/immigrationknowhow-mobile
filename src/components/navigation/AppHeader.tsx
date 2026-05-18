@@ -43,6 +43,8 @@ export function AppHeader(props: AppHeaderProps) {
 
   const iconColor = canvas === 'drawer' ? '#f8fafc' : colors.text.primary;
   const titleStyle = canvas === 'drawer' ? styles.titleDrawer : styles.title;
+  const stackIndex = props.navigation.getState()?.index ?? 0;
+  const showBackButton = Boolean(props.back) || stackIndex > 0;
 
   return (
     <View
@@ -62,9 +64,9 @@ export function AppHeader(props: AppHeaderProps) {
         />
       ) : null}
       <View style={styles.left}>
-        {props.back ? (
+        {showBackButton ? (
           <Pressable
-            onPress={props.navigation.goBack}
+            onPress={() => props.navigation.goBack()}
             hitSlop={12}
             style={styles.backButton}
             accessibilityRole="button"

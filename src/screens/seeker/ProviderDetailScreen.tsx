@@ -11,6 +11,7 @@ import { radii, screenPaddingX } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
+import { useAuth } from '../../context/AuthContext';
 import * as providersApi from '../../api/providersApi';
 import type { ProviderDetail } from '../../types/provider';
 import type { ProvidersStackParamList } from './ProvidersStack';
@@ -21,6 +22,7 @@ export function ProviderDetailScreen() {
   const route = useRoute<R>();
   const navigation = useNavigation<NativeStackNavigationProp<ProvidersStackParamList>>();
   const { slug } = route.params;
+  const { isAuthenticated, hasRole } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,23 @@ export function ProviderDetailScreen() {
   const title = provider.business_name || `${provider.user?.first_name ?? ''} ${provider.user?.last_name ?? ''}`.trim() || 'Provider';
   const avatarUrl = provider.user?.avatar_url as string | undefined;
   const serviceChips = (provider.service_types ?? []).filter(Boolean).slice(0, 4);
+  const canSwitchToSeeker = hasRole('user') && hasRole('provider');
+  const showContactCta = !isAuthenticated || canContact || canSwitchToSeeker;
+  const contactButtonTitle = !isAuthenticated
+    ? 'Sign in to contact'
+    : canContact
+      ? 'Contact provider'
+      : canSwitchToSeeker
+        ? 'Switch to seeker account'
+        : 'Contact unavailable';
+
+  function onContactPress() {
+    if (!canContact) {
+      navigation.getParent()?.navigate('Profile');
+      return;
+    }
+    navigation.navigate('ContactProvider', { slug });
+  }
 
   return (
     <AppScreen>
@@ -163,12 +182,14 @@ export function ProviderDetailScreen() {
               style={styles.secondaryAction}
             />
           ) : null}
-          <AppButton
-            title={canContact ? 'Contact provider' : 'Sign in as a seeker to contact'}
-            onPress={() => navigation.navigate('ContactProvider', { slug })}
-            disabled={!canContact}
-            style={canFavorite ? styles.primaryAction : undefined}
-          />
+          {showContactCta ? (
+            <AppButton
+              title={contactButtonTitle}
+              onPress={onContactPress}
+              disabled={isAuthenticated && !canContact && !canSwitchToSeeker}
+              style={canFavorite ? styles.primaryAction : undefined}
+            />
+          ) : null}
         </View>
 
         <View style={styles.section}>

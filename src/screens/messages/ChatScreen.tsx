@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
@@ -180,6 +180,12 @@ export function ChatScreen() {
   }
 
   const participant = role === 'provider' ? fullName(conversation?.user) : fullName(conversation?.provider_user);
+  const headerTitle = participant || 'Chat';
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: headerTitle });
+  }, [navigation, headerTitle]);
+
   const leadStatus = conversation?.lead?.status;
   const leadPill = leadStatusStyle(leadStatus);
   const leadContractUuid = conversation?.lead?.contract_uuid ?? null;

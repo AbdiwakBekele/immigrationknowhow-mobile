@@ -33,7 +33,7 @@ export function LeadsStack() {
         component={LeadDetailScreen}
         options={{ title: 'Lead details', header: leadDetailHeader }}
       />
-      <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat' }} />
+      <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat', headerBackVisible: true }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
     </Stack.Navigator>
   );
