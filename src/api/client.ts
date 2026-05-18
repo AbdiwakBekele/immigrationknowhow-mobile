@@ -2,6 +2,7 @@ import axios, { AxiosError, isAxiosError, type InternalAxiosRequestConfig } from
 import { API_DETAILED_LOGS, BASE_URL } from '../config/api';
 import { logTerminalError } from '../utils/terminalErrorLog';
 import type { ApiError } from './types';
+import { getActiveRole } from '../services/activeRoleStorage';
 import { getToken } from '../services/tokenStorage';
 
 type ConfigWithTimer = InternalAxiosRequestConfig & { __apiLogStart?: number };
@@ -109,6 +110,11 @@ apiClient.interceptors.request.use(async (config) => {
   if (token) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const activePortal = await getActiveRole();
+  if (activePortal === 'user' || activePortal === 'provider') {
+    config.headers = config.headers ?? {};
+    config.headers['X-Active-Portal'] = activePortal;
   }
   if (__DEV__) {
     const c = config as ConfigWithTimer;

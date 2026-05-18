@@ -10,6 +10,7 @@ import { AppButton } from '../../components/AppButton';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import { useAuth } from '../../context/AuthContext';
 import * as providersApi from '../../api/providersApi';
 import * as leadsApi from '../../api/leadsApi';
 import type { SeekerBottomTabParamList } from '../../navigation/SeekerBottomTabs';
@@ -26,10 +27,12 @@ export function ContactProviderScreen() {
   const route = useRoute<R>();
   const navigation = useNavigation<ContactProviderNav>();
   const { slug } = route.params;
+  const { role } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canContact, setCanContact] = useState(false);
 
   const [mode, setMode] = useState<ContactMode>('message');
   const [serviceType, setServiceType] = useState('');
@@ -45,12 +48,23 @@ export function ContactProviderScreen() {
         setError(res.message);
         return;
       }
+      setCanContact(!!res.data.canContactProvider);
       const firstType = (res.data.provider.service_types ?? [])[0];
       if (firstType) setServiceType(firstType);
     })();
-  }, [slug]);
+  }, [slug, role]);
+
+  useEffect(() => {
+    if (!loading && !canContact) {
+      setError('Switch to your seeker account to send an inquiry to this provider.');
+    }
+  }, [loading, canContact]);
 
   async function onSubmit() {
+    if (!canContact) {
+      setError('Switch to your seeker account to send an inquiry to this provider.');
+      return;
+    }
     setError(null);
     const normalizedServiceType = serviceType.trim();
     const normalizedMessage = message.trim();
@@ -181,6 +195,7 @@ export function ContactProviderScreen() {
           title={mode === 'offer' ? 'Send offer' : 'Send inquiry'}
           onPress={onSubmit}
           loading={submitting}
+          disabled={!canContact}
           style={{ marginTop: spacing.xl }}
         />
       </View>

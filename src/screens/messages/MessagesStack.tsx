@@ -20,7 +20,7 @@ export function MessagesStack() {
     <Stack.Navigator screenOptions={{ header: (p) => <AppHeader {...p} /> }}>
       <Stack.Screen name="MessagesList" component={MessagesListScreen} options={{ title: 'Messages' }} />
       <Stack.Screen name="ArchivedMessages" component={ArchivedMessagesScreen} options={{ title: 'Archived' }} />
-      <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat' }} />
+      <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat', headerBackVisible: true }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
     </Stack.Navigator>
   );
