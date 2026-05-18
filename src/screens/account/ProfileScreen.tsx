@@ -230,7 +230,7 @@ export function ProfileScreen() {
         ) : (
           <View style={styles.formStack}>
             <View style={styles.sectionCard}>
-              <SectionHeading>Basic profile</SectionHeading>
+              <SectionHeading>Profile details</SectionHeading>
               <InputField label="First name" value={firstName} onChangeText={setFirstName} placeholder="First name" />
               <InputField label="Last name" value={lastName} onChangeText={setLastName} placeholder="Last name" />
               <InputField label="Email" value={email} onChangeText={setEmail} placeholder="Email" />
@@ -238,7 +238,7 @@ export function ProfileScreen() {
             </View>
 
             <View style={styles.sectionCard}>
-              <SectionHeading>Location and language</SectionHeading>
+              <SectionHeading>Location & language</SectionHeading>
               <InputField label="City" value={city} onChangeText={setCity} placeholder="City" />
               <InputField label="State" value={state} onChangeText={setState} placeholder="State" />
               <InputField label="Country code" value={country} onChangeText={setCountry} placeholder="US" />

@@ -25,7 +25,7 @@ type ScreenRoute = RouteProp<OnboardingStackParamList, 'StripeCheckout'>;
 type ScreenNav = NativeStackNavigationProp<OnboardingStackParamList, 'StripeCheckout'>;
 
 export function StripeCheckoutScreen() {
-  const { refreshMe } = useAuth();
+  const { refreshMe, setActiveRole } = useAuth();
   const route = useRoute<ScreenRoute>();
   const navigation = useNavigation<ScreenNav>();
   const insets = useSafeAreaInsets();
@@ -39,6 +39,7 @@ export function StripeCheckoutScreen() {
     if (url.includes('checkout=success')) {
       void (async () => {
         await refreshMe();
+        await setActiveRole('provider');
         navigation.goBack();
       })();
       return false;
