@@ -4,7 +4,12 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
-import { LibraryCover } from '../../components/library/LibraryCover';
+import {
+  LibraryBookCard,
+  libraryItemHasAudio,
+  libraryItemHasPdf,
+} from '../../components/library/LibraryBookCard';
+import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -18,24 +23,10 @@ const NUM_COLUMNS = 2;
 
 type LibraryFilter = 'all' | 'ebook' | 'audio' | `category:${string}`;
 
-function formatPrice(item: any): string {
-  const amount = Number(item?.price || 0);
-  if (!amount) return 'Free';
-  return `${item.currency ?? 'USD'} ${amount.toFixed(2)}`;
-}
-
-function hasPdf(item: any): boolean {
-  return item?.type === 'ebook';
-}
-
-function hasAudio(item: any): boolean {
-  return item?.type === 'audiobook' || !!item?.has_audio_companion || !!item?.audio_file_path;
-}
-
 function matchesFilter(item: any, filter: LibraryFilter): boolean {
   if (filter === 'all') return true;
-  if (filter === 'ebook') return hasPdf(item);
-  if (filter === 'audio') return hasAudio(item);
+  if (filter === 'ebook') return libraryItemHasPdf(item);
+  if (filter === 'audio') return libraryItemHasAudio(item);
   if (filter.startsWith('category:')) {
     const wanted = filter.slice('category:'.length).trim().toLowerCase();
     return String(item?.category?.name ?? '').trim().toLowerCase() === wanted;
@@ -45,6 +36,8 @@ function matchesFilter(item: any, filter: LibraryFilter): boolean {
 
 export function LibraryMyScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
+  const { role } = useAuth();
+  const isProvider = role === 'provider';
   const [tab, setTab] = useState<'purchased' | 'available'>('available');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<any[]>([]);
@@ -113,7 +106,7 @@ export function LibraryMyScreen() {
         : 'No titles available right now.';
 
   return (
-    <AppScreen style={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.xl }}>
+    <AppScreen style={{ paddingHorizontal: isProvider ? spacing.lg : spacing.xl, paddingBottom: spacing.xl }}>
       <View style={s.tabRow}>
         <Pressable
           onPress={() => {
@@ -160,7 +153,7 @@ export function LibraryMyScreen() {
           {filter !== 'all' ? <View style={s.filterIndicator} /> : null}
         </Pressable>
       </View>
-      <Text style={s.filterSummary}>Filter: {activeFilterLabel}</Text>
+      {filter !== 'all' ? <Text style={s.filterSummary}>Showing: {activeFilterLabel}</Text> : null}
       {loading ? (
         <ActivityIndicator style={{ marginTop: spacing['3xl'] }} color={colors.primary[600]} />
       ) : visibleItems.length === 0 ? (
@@ -171,56 +164,25 @@ export function LibraryMyScreen() {
         <FlatList
           style={{ marginTop: spacing.lg }}
           data={visibleItems}
-          numColumns={NUM_COLUMNS}
-          columnWrapperStyle={{ gap: CARD_GAP }}
+          numColumns={isProvider ? 1 : NUM_COLUMNS}
+          key={isProvider ? 'list' : 'grid'}
+          columnWrapperStyle={isProvider ? undefined : { gap: CARD_GAP }}
+          contentContainerStyle={isProvider ? s.listContent : undefined}
           keyExtractor={(it) => String(it.slug ?? it.id)}
           renderItem={({ item }) => {
             const cover = resolveMediaUrl(item.cover_image_url);
-            const isPaid = Boolean(item.is_premium) || Number(item.price || 0) > 0;
             return (
-              <Pressable
+              <LibraryBookCard
+                item={item}
+                coverUri={cover}
+                variant={isProvider ? 'compact' : 'grid'}
+                width={isProvider ? undefined : cardWidth}
+                owned={tab === 'purchased'}
                 onPress={() => item.slug && navigation.navigate('LibraryDetail', { slug: item.slug })}
-                style={[s.card, { width: cardWidth }]}
-              >
-                <LibraryCover uri={cover} width={cardWidth} height={cardWidth * 1.25} borderRadius={radii.lg} />
-                <View style={s.cardBody}>
-                  <Text style={s.title} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  <Text style={s.author} numberOfLines={1}>
-                    {item.author ?? 'Unknown'}
-                  </Text>
-                  <View style={s.badgeRow}>
-                    {hasPdf(item) ? (
-                      <View style={[s.badge, s.badgeEbook]}>
-                        <Text style={[s.badgeText, s.badgeTextEbook]}>EBook</Text>
-                      </View>
-                    ) : null}
-                    {hasAudio(item) ? (
-                      <View style={[s.badge, s.badgeAudio]}>
-                        <Text style={[s.badgeText, s.badgeTextAudio]}>Audio</Text>
-                      </View>
-                    ) : null}
-                    {item?.category?.name ? (
-                      <View style={s.badge}>
-                        <Text style={s.badgeText} numberOfLines={1}>
-                          {item.category.name}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-                <View style={s.cardFooter}>
-                  {tab === 'purchased' ? (
-                    <Text style={[s.price, s.priceFree]}>Owned</Text>
-                  ) : (
-                    <Text style={[s.price, !isPaid && s.priceFree]}>{formatPrice(item)}</Text>
-                  )}
-                </View>
-              </Pressable>
+              />
             );
           }}
-          ItemSeparatorComponent={() => <View style={{ height: CARD_GAP }} />}
+          ItemSeparatorComponent={() => <View style={{ height: isProvider ? spacing.sm : CARD_GAP }} />}
         />
       )}
       <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
@@ -286,6 +248,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  listContent: {
+    gap: spacing.sm,
+  },
   searchInputWrap: {
     flex: 1,
     flexDirection: 'row',
@@ -296,7 +261,7 @@ const s = StyleSheet.create({
     borderRadius: radii.lg,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
-    height: 46,
+    height: 42,
   },
   searchInput: {
     flex: 1,
@@ -305,8 +270,8 @@ const s = StyleSheet.create({
     paddingVertical: 0,
   },
   filterButton: {
-    width: 46,
-    height: 46,
+    width: 42,
+    height: 42,
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.border,
@@ -380,78 +345,6 @@ const s = StyleSheet.create({
   },
   modalOptionTextActive: {
     color: colors.primary[700] ?? colors.primary[600],
-  },
-  card: {
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  cardBody: {
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.sm,
-    flex: 1,
-  },
-  title: {
-    fontWeight: typography.fontWeight.semibold,
-    fontSize: typography.fontSize.sm,
-    lineHeight: 18,
-    color: colors.text.primary,
-  },
-  author: {
-    marginTop: 2,
-    fontSize: typography.fontSize.xs,
-    color: colors.text.muted,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: spacing.xs,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radii.full,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    maxWidth: '100%',
-  },
-  badgeEbook: {
-    backgroundColor: colors.primary[50] ?? '#EFF6FF',
-    borderColor: colors.primary[100] ?? '#DBEAFE',
-  },
-  badgeAudio: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#D1FAE5',
-  },
-  badgeText: {
-    fontSize: 10,
-    color: colors.text.secondary,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  badgeTextEbook: {
-    color: colors.primary[700] ?? colors.primary[600],
-  },
-  badgeTextAudio: {
-    color: '#047857',
-  },
-  cardFooter: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    marginTop: spacing.sm,
-  },
-  price: {
-    fontWeight: typography.fontWeight.bold,
-    fontSize: typography.fontSize.sm,
-    color: colors.text.primary,
-  },
-  priceFree: {
-    color: '#059669',
   },
   empty: {
     marginTop: spacing['3xl'],

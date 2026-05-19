@@ -18,25 +18,24 @@ import type { WebViewNavigation } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
+import { formatLibraryPrice } from '../../components/library/LibraryBookCard';
 import { LibraryCover } from '../../components/library/LibraryCover';
+import { useAuth } from '../../context/AuthContext';
 import { BASE_URL } from '../../config/api';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { radii } from '../../theme/layout';
+import { shadows } from '../../theme/shadows';
 import * as libraryApi from '../../api/libraryApi';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import type { LibraryStackParamList } from './LibraryStack';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const COVER_WIDTH = SCREEN_WIDTH * 0.38;
+const COVER_WIDTH = SCREEN_WIDTH * 0.34;
 const COVER_HEIGHT = COVER_WIDTH * (4 / 3);
-
-function formatPrice(item: any): string {
-  const amount = Number(item?.price || 0);
-  if (!Number.isFinite(amount) || amount <= 0) return 'Free';
-  return `${item.currency ?? 'USD'} ${amount.toFixed(2)}`;
-}
+const COVER_WIDTH_COMPACT = 96;
+const COVER_HEIGHT_COMPACT = 128;
 
 function formatDuration(seconds: number | null | undefined): string | null {
   if (!seconds) return null;
@@ -105,10 +104,103 @@ function logPdfReaderError(message: string, details?: Record<string, unknown>) {
   console.error(`[LibraryReader] ${message}`);
 }
 
+function DetailActionBlock({
+  hasAccess,
+  isPaid,
+  item,
+  hasAudioCompanion,
+  checkoutLoading,
+  buyingFree,
+  onRead,
+  onPay,
+  onFree,
+  compact,
+}: {
+  hasAccess: boolean;
+  isPaid: boolean;
+  item: any;
+  hasAudioCompanion: boolean;
+  checkoutLoading: boolean;
+  buyingFree: boolean;
+  onRead: () => void;
+  onPay: () => void;
+  onFree: () => void;
+  compact?: boolean;
+}) {
+  const price = formatLibraryPrice(item);
+
+  if (hasAccess) {
+    return (
+      <>
+        {!compact ? (
+          <View style={s.accessBadge}>
+            <Ionicons name="checkmark-circle" size={18} color="#059669" />
+            <Text style={s.accessText}>Full access</Text>
+          </View>
+        ) : null}
+        <Pressable onPress={onRead} style={[s.primaryBtn, compact && s.primaryBtnCompact]}>
+          <Ionicons name={item?.type === 'ebook' ? 'book-outline' : 'play-outline'} size={18} color="#fff" />
+          <Text style={s.primaryBtnText}>
+            {hasAudioCompanion ? 'Read or Listen' : item?.type === 'ebook' ? 'Read Now' : 'Listen Now'}
+          </Text>
+        </Pressable>
+      </>
+    );
+  }
+
+  if (isPaid) {
+    return (
+      <>
+        {!compact ? (
+          <View style={s.priceRow}>
+            <View>
+              <Text style={s.priceLabel}>Price</Text>
+              <Text style={s.priceValue}>{price}</Text>
+            </View>
+            <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
+          </View>
+        ) : null}
+        <Pressable onPress={onPay} style={[s.primaryBtn, compact && s.primaryBtnCompact]} disabled={checkoutLoading}>
+          {checkoutLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="card-outline" size={18} color="#fff" />
+          )}
+          <Text style={s.primaryBtnText}>
+            {checkoutLoading ? 'Starting checkout…' : compact ? `Buy · ${price}` : `Continue to Payment · ${price}`}
+          </Text>
+        </Pressable>
+        {!compact ? (
+          <View style={s.secureNote}>
+            <Ionicons name="shield-checkmark-outline" size={14} color="#059669" />
+            <Text style={s.secureNoteText}>Secure checkout powered by Stripe</Text>
+          </View>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {!compact ? <Text style={s.freeLabel}>This title is free — add it to your library.</Text> : null}
+      <Pressable onPress={onFree} style={[s.primaryBtn, compact && s.primaryBtnCompact]} disabled={buyingFree}>
+        {buyingFree ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Ionicons name="add-circle-outline" size={18} color="#fff" />
+        )}
+        <Text style={s.primaryBtnText}>{buyingFree ? 'Adding…' : compact ? 'Add Free' : 'Add to Library'}</Text>
+      </Pressable>
+    </>
+  );
+}
+
 export function LibraryDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList, 'LibraryDetail'>>();
   const route = useRoute<RouteProp<LibraryStackParamList, 'LibraryDetail'>>();
   const insets = useSafeAreaInsets();
+  const { role } = useAuth();
+  const isProvider = role === 'provider';
   const { slug } = route.params;
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
@@ -556,137 +648,139 @@ render();
   const rt = formatReadingTime(item?.estimated_reading_minutes);
   if (rt) detailRows.push({ label: 'Reading Time', value: rt });
 
+  const coverWidth = isProvider ? COVER_WIDTH_COMPACT : COVER_WIDTH;
+  const coverHeight = isProvider ? COVER_HEIGHT_COMPACT : COVER_HEIGHT;
+  const providerDetailRows = isProvider
+    ? detailRows.filter((row) => ['Author', 'Published', 'Reading Time'].includes(row.label))
+    : detailRows;
+
+  const actionBlock = (
+    <DetailActionBlock
+      hasAccess={hasAccess}
+      isPaid={isPaid}
+      item={item}
+      hasAudioCompanion={hasAudioCompanion}
+      checkoutLoading={checkoutLoading}
+      buyingFree={buyingFree}
+      onRead={() => void openReader()}
+      onPay={() => void pay()}
+      onFree={() => void free()}
+      compact={isProvider}
+    />
+  );
+
   return (
     <AppScreen style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Hero section */}
-        <View style={s.hero}>
-          <LibraryCover uri={cover} width={COVER_WIDTH} height={COVER_HEIGHT} borderRadius={radii.lg} />
-          <View style={s.heroInfo}>
-            <View style={s.typeBadge}>
-              <Ionicons
-                name={item?.type === 'ebook' ? 'book-outline' : 'musical-notes-outline'}
-                size={12}
-                color={colors.primary[700]}
-              />
-              <Text style={s.typeBadgeText}>{typeLabel}</Text>
+      <ScrollView
+        contentContainerStyle={[s.scroll, isProvider && s.scrollCompact]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[s.hero, isProvider && s.heroCompact]}>
+          <LibraryCover uri={cover} width={coverWidth} height={coverHeight} borderRadius={radii.lg} />
+          <View style={[s.heroInfo, isProvider && s.heroInfoCompact]}>
+            <View style={[s.heroBadges, isProvider && s.heroBadgesCompact]}>
+              <View style={s.typeBadge}>
+                <Ionicons
+                  name={item?.type === 'ebook' ? 'book-outline' : 'musical-notes-outline'}
+                  size={12}
+                  color={colors.primary[700]}
+                />
+                <Text style={s.typeBadgeText}>{typeLabel}</Text>
+              </View>
+              {item?.category?.name ? (
+                <View style={s.categoryBadge}>
+                  <Text style={s.categoryText}>{item.category.name}</Text>
+                </View>
+              ) : null}
             </View>
-            <Text style={s.heroTitle} numberOfLines={3}>{item?.title}</Text>
+            <Text style={[s.heroTitle, isProvider && s.heroTitleCompact]} numberOfLines={isProvider ? 2 : 3}>
+              {item?.title}
+            </Text>
             {item?.author ? (
-              <Text style={s.heroAuthor}>
-                <Text style={{ color: colors.text.muted }}>by </Text>
-                {item.author}
+              <Text style={[s.heroAuthor, isProvider && s.heroAuthorCompact]} numberOfLines={1}>
+                {isProvider ? item.author : (
+                  <>
+                    <Text style={{ color: colors.text.muted }}>by </Text>
+                    {item.author}
+                  </>
+                )}
               </Text>
             ) : null}
-            {item?.category?.name ? (
-              <View style={s.categoryBadge}>
-                <Text style={s.categoryText}>{item.category.name}</Text>
+            {isProvider && isPaid && !hasAccess ? (
+              <Text style={s.heroPrice}>{formatLibraryPrice(item)}</Text>
+            ) : null}
+            {isProvider && hasAccess ? (
+              <View style={s.accessBadgeInline}>
+                <Ionicons name="checkmark-circle" size={14} color="#059669" />
+                <Text style={s.accessTextInline}>Owned</Text>
               </View>
             ) : null}
           </View>
         </View>
 
-        {/* Meta chips */}
-        {metaChips.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipsRow} contentContainerStyle={s.chipsContent}>
+        {metaChips.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[s.chipsRow, isProvider && s.chipsRowCompact]}
+            contentContainerStyle={s.chipsContent}
+          >
             {metaChips.map((chip, i) => (
-              <View key={i} style={s.chip}>
-                <Ionicons name={chip.icon as any} size={14} color={colors.text.muted} />
-                <Text style={s.chipText}>{chip.label}</Text>
+              <View key={i} style={[s.chip, isProvider && s.chipCompact]}>
+                <Ionicons name={chip.icon as any} size={13} color={colors.text.muted} />
+                <Text style={[s.chipText, isProvider && s.chipTextCompact]}>{chip.label}</Text>
               </View>
             ))}
           </ScrollView>
-        )}
+        ) : null}
 
-        {/* Price & Action section */}
-        <View style={s.actionCard}>
-          {hasAccess ? (
-            <>
-              <View style={s.accessBadge}>
-                <Ionicons name="checkmark-circle" size={20} color="#059669" />
-                <Text style={s.accessText}>You have full access</Text>
-              </View>
-              <Pressable onPress={() => void openReader()} style={s.primaryBtn}>
-                <Ionicons name={item?.type === 'ebook' ? 'book-outline' : 'play-outline'} size={18} color="#fff" />
-                <Text style={s.primaryBtnText}>
-                  {hasAudioCompanion ? 'Read or Listen' : item?.type === 'ebook' ? 'Read Now' : 'Listen Now'}
-                </Text>
-              </Pressable>
-            </>
-          ) : isPaid ? (
-            <>
-              <View style={s.priceRow}>
-                <View>
-                  <Text style={s.priceLabel}>Price</Text>
-                  <Text style={s.priceValue}>{formatPrice(item)}</Text>
-                </View>
-                <Ionicons name="lock-closed-outline" size={28} color={colors.border} />
-              </View>
-              <Pressable onPress={() => void pay()} style={s.primaryBtn} disabled={checkoutLoading}>
-                {checkoutLoading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="card-outline" size={18} color="#fff" />
-                )}
-                <Text style={s.primaryBtnText}>
-                  {checkoutLoading ? 'Starting checkout…' : `Continue to Payment · ${formatPrice(item)}`}
-                </Text>
-              </Pressable>
-              <View style={s.secureNote}>
-                <Ionicons name="shield-checkmark-outline" size={14} color="#059669" />
-                <Text style={s.secureNoteText}>Secure checkout powered by Stripe</Text>
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={s.freeLabel}>This title is free — add it to your library.</Text>
-              <Pressable onPress={() => void free()} style={s.primaryBtn} disabled={buyingFree}>
-                {buyingFree ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="add-circle-outline" size={18} color="#fff" />
-                )}
-                <Text style={s.primaryBtnText}>
-                  {buyingFree ? 'Adding…' : 'Add to Library'}
-                </Text>
-              </Pressable>
-            </>
-          )}
-        </View>
+        {!isProvider ? <View style={s.actionCard}>{actionBlock}</View> : null}
 
-        {/* Detail rows */}
-        {detailRows.length > 0 && (
-          <View style={s.detailCard}>
-            <Text style={s.sectionTitle}>Details</Text>
-            {detailRows.map((row, i) => (
-              <View key={i} style={[s.detailRow, i < detailRows.length - 1 && s.detailRowBorder]}>
-                <Text style={s.detailLabel}>{row.label}</Text>
-                <Text style={s.detailValue}>{row.value}</Text>
+        {providerDetailRows.length > 0 ? (
+          <View style={[s.detailCard, isProvider && s.detailCardCompact]}>
+            {!isProvider ? <Text style={s.sectionTitle}>Details</Text> : null}
+            {providerDetailRows.map((row, i) => (
+              <View
+                key={row.label}
+                style={[
+                  s.detailRow,
+                  isProvider && s.detailRowCompact,
+                  i < providerDetailRows.length - 1 && s.detailRowBorder,
+                ]}
+              >
+                <Text style={[s.detailLabel, isProvider && s.detailLabelCompact]}>{row.label}</Text>
+                <Text style={[s.detailValue, isProvider && s.detailValueCompact]} numberOfLines={2}>
+                  {row.value}
+                </Text>
               </View>
             ))}
           </View>
-        )}
+        ) : null}
 
-        {/* Description */}
         {item?.description ? (
-          <View style={s.descriptionCard}>
-            <Text style={s.sectionTitle}>
-              About this {item.type === 'ebook' ? 'book' : 'audiobook'}
+          <View style={[s.descriptionCard, isProvider && s.descriptionCardCompact]}>
+            <Text style={[s.sectionTitle, isProvider && s.sectionTitleCompact]}>
+              {isProvider ? 'About' : `About this ${item.type === 'ebook' ? 'book' : 'audiobook'}`}
             </Text>
-            <Text style={s.descriptionText}>{item.description}</Text>
+            <Text style={[s.descriptionText, isProvider && s.descriptionTextCompact]}>{item.description}</Text>
           </View>
         ) : null}
 
-        {/* AI Summary — only visible after purchase */}
         {hasAccess && item?.ai_summary ? (
-          <View style={s.descriptionCard}>
-            <Text style={s.sectionTitle}>AI Summary</Text>
-            <Text style={s.descriptionText}>{item.ai_summary}</Text>
+          <View style={[s.descriptionCard, isProvider && s.descriptionCardCompact]}>
+            <Text style={[s.sectionTitle, isProvider && s.sectionTitleCompact]}>Summary</Text>
+            <Text style={[s.descriptionText, isProvider && s.descriptionTextCompact]}>{item.ai_summary}</Text>
           </View>
         ) : null}
 
-        <View style={{ height: spacing['3xl'] }} />
+        <View style={{ height: isProvider ? 100 + insets.bottom : spacing['3xl'] }} />
       </ScrollView>
+
+      {isProvider ? (
+        <View style={[s.stickyFooter, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+          {actionBlock}
+        </View>
+      ) : null}
     </AppScreen>
   );
 }
@@ -695,13 +789,36 @@ const s = StyleSheet.create({
   scroll: {
     padding: spacing.xl,
   },
+  scrollCompact: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
   hero: {
     flexDirection: 'row',
     gap: spacing.lg,
   },
+  heroCompact: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   heroInfo: {
     flex: 1,
     paddingTop: spacing.xs,
+  },
+  heroInfoCompact: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 0,
+  },
+  heroBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  heroBadgesCompact: {
+    justifyContent: 'center',
   },
   typeBadge: {
     flexDirection: 'row',
@@ -714,7 +831,6 @@ const s = StyleSheet.create({
     backgroundColor: colors.primary[50] ?? '#EFF6FF',
     borderWidth: 1,
     borderColor: colors.primary[100] ?? '#DBEAFE',
-    marginBottom: spacing.sm,
   },
   typeBadgeText: {
     fontSize: 11,
@@ -727,14 +843,40 @@ const s = StyleSheet.create({
     color: colors.text.primary,
     lineHeight: 26,
   },
+  heroTitleCompact: {
+    fontSize: typography.fontSize.lg,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
   heroAuthor: {
     marginTop: 4,
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
   },
+  heroAuthorCompact: {
+    textAlign: 'center',
+    fontSize: typography.fontSize.xs,
+    color: colors.text.muted,
+  },
+  heroPrice: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
+  },
+  accessBadgeInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
+  },
+  accessTextInline: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: '#059669',
+  },
   categoryBadge: {
     alignSelf: 'flex-start',
-    marginTop: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderRadius: radii.full,
@@ -750,6 +892,9 @@ const s = StyleSheet.create({
   chipsRow: {
     marginTop: spacing.lg,
   },
+  chipsRowCompact: {
+    marginTop: spacing.md,
+  },
   chipsContent: {
     gap: spacing.sm,
   },
@@ -764,17 +909,35 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
+  chipCompact: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
   chipText: {
     fontSize: 12,
     color: colors.text.secondary,
+  },
+  chipTextCompact: {
+    fontSize: 11,
   },
   actionCard: {
     marginTop: spacing.xl,
     padding: spacing.lg,
     borderRadius: radii.xl,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...shadows.soft,
+  },
+  stickyFooter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    ...shadows.softLg,
   },
   accessBadge: {
     flexDirection: 'row',
@@ -833,6 +996,9 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: radii.lg,
   },
+  primaryBtnCompact: {
+    paddingVertical: 12,
+  },
   primaryBtnText: {
     color: '#fff',
     fontSize: typography.fontSize.sm,
@@ -854,8 +1020,13 @@ const s = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: radii.xl,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...shadows.soft,
+  },
+  detailCardCompact: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.lg,
   },
   sectionTitle: {
     fontSize: typography.fontSize.md,
@@ -863,11 +1034,18 @@ const s = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.md,
   },
+  sectionTitleCompact: {
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.sm,
+  },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.sm,
+  },
+  detailRowCompact: {
+    paddingVertical: 6,
   },
   detailRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -877,6 +1055,9 @@ const s = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.muted,
   },
+  detailLabelCompact: {
+    fontSize: typography.fontSize.xs,
+  },
   detailValue: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
@@ -885,18 +1066,29 @@ const s = StyleSheet.create({
     flex: 1,
     marginLeft: spacing.md,
   },
+  detailValueCompact: {
+    fontSize: typography.fontSize.xs,
+  },
   descriptionCard: {
     marginTop: spacing.lg,
     padding: spacing.lg,
     borderRadius: radii.xl,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...shadows.soft,
+  },
+  descriptionCardCompact: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radii.lg,
   },
   descriptionText: {
     fontSize: typography.fontSize.sm,
     lineHeight: 22,
     color: colors.text.secondary,
+  },
+  descriptionTextCompact: {
+    fontSize: typography.fontSize.xs,
+    lineHeight: 18,
   },
   readerContainer: {
     flex: 1,
