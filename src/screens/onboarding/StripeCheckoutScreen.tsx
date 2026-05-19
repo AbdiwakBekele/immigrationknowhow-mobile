@@ -72,6 +72,17 @@ function isCheckoutCancelled(url: string): boolean {
   return url.includes('purchase/cancel');
 }
 
+function isAiAssistantActivated(res: { success: boolean; message?: string; data?: { state: aiApi.AiAssistantState } }): boolean {
+  if (!res.success) {
+    return false;
+  }
+  if (res.data?.state.is_addon_active) {
+    return true;
+  }
+  const msg = (res.message ?? '').toLowerCase();
+  return msg.includes('subscription is active');
+}
+
 async function confirmAiAssistantWithRetry(
   sessionId: string,
   fallbackSessionId?: string,
@@ -79,28 +90,42 @@ async function confirmAiAssistantWithRetry(
   const ids = [sessionId, fallbackSessionId].filter((id): id is string => Boolean(id && id.trim()));
   const uniqueIds = [...new Set(ids)];
 
-  for (let attempt = 0; attempt < 5; attempt++) {
+  let lastMessage = 'Payment was received but your subscription is not active yet. Please try again in a moment.';
+
+  for (let attempt = 0; attempt < 6; attempt++) {
     for (const id of uniqueIds) {
       const res = await aiApi.confirmAiAssistantCheckout(id);
-      if (res.success && res.data.state.is_addon_active) {
-        return { ok: true, state: res.data.state };
+      if (isAiAssistantActivated(res)) {
+        const state =
+          res.data?.state ??
+          (await aiApi.getAiAssistant()).data?.state ??
+          ({
+            subscription: null,
+            is_addon_active: true,
+            monthly_price: '4.99',
+            currency: 'USD',
+            chat_messages: [],
+          } satisfies aiApi.AiAssistantState);
+        return { ok: true, state };
       }
-      if (res.success && !res.data.state.is_addon_active) {
-        continue;
+      if (res.message) {
+        lastMessage = res.message;
       }
-      if (!res.success && attempt === 4) {
+      if (!res.success && attempt === 5) {
         return { ok: false, message: res.message };
       }
     }
-    if (attempt < 4) {
-      await new Promise((resolve) => setTimeout(resolve, 800));
+    if (attempt < 5) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
     }
   }
 
-  return {
-    ok: false,
-    message: 'Payment was received but your subscription is not active yet. Please try again in a moment.',
-  };
+  const refresh = await aiApi.getAiAssistant();
+  if (refresh.success && refresh.data.state.is_addon_active) {
+    return { ok: true, state: refresh.data.state };
+  }
+
+  return { ok: false, message: lastMessage };
 }
 
 export function StripeCheckoutScreen() {

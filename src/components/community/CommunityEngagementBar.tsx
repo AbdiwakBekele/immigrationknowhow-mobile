@@ -19,6 +19,8 @@ type Props = {
   onBookmark: () => void;
   disabled?: boolean;
   compact?: boolean;
+  /** Instagram / Facebook style icon row */
+  variant?: 'default' | 'social';
 };
 
 function CountPill({ value }: { value: number }) {
@@ -26,6 +28,42 @@ function CountPill({ value }: { value: number }) {
     <View style={styles.countPill}>
       <Text style={styles.countPillText}>{value}</Text>
     </View>
+  );
+}
+
+function SocialAction({
+  icon,
+  activeIcon,
+  label,
+  count,
+  active,
+  activeColor,
+  onPress,
+  disabled,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  activeIcon?: keyof typeof Ionicons.glyphMap;
+  label: string;
+  count: number;
+  active?: boolean;
+  activeColor?: string;
+  onPress?: () => void;
+  disabled?: boolean;
+}) {
+  const name = active && activeIcon ? activeIcon : icon;
+  const color = active && activeColor ? activeColor : colors.text.primary;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || !onPress}
+      style={({ pressed }) => [styles.socialAction, pressed && !disabled ? styles.socialActionPressed : null]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name={name} size={24} color={color} />
+      {count > 0 ? <Text style={styles.socialCount}>{count}</Text> : null}
+    </Pressable>
   );
 }
 
@@ -42,7 +80,55 @@ export function CommunityEngagementBar({
   onBookmark,
   disabled = false,
   compact = false,
+  variant = 'default',
 }: Props) {
+  if (variant === 'social') {
+    const totalEngagement = likes + comments + shares;
+    return (
+      <View>
+        {totalEngagement > 0 ? (
+          <Text style={styles.socialSummary}>
+            {likes > 0 ? `${likes} like${likes === 1 ? '' : 's'}` : null}
+            {likes > 0 && comments > 0 ? ' · ' : null}
+            {comments > 0 ? `${comments} comment${comments === 1 ? '' : 's'}` : null}
+          </Text>
+        ) : null}
+        <View style={styles.socialRow}>
+          <View style={styles.socialLeft}>
+            <SocialAction
+              icon="heart-outline"
+              activeIcon="heart"
+              label="Like"
+              count={likes}
+              active={liked}
+              activeColor="#e11d48"
+              onPress={onLike}
+              disabled={disabled}
+            />
+            <SocialAction
+              icon="chatbubble-outline"
+              label="Comment"
+              count={comments}
+              onPress={onComment}
+              disabled={disabled}
+            />
+            <SocialAction icon="paper-plane-outline" label="Share" count={shares} onPress={onShare} disabled={disabled} />
+          </View>
+          <SocialAction
+            icon="bookmark-outline"
+            activeIcon="bookmark"
+            label="Save"
+            count={bookmarks}
+            active={bookmarked}
+            activeColor={colors.primary[700]}
+            onPress={onBookmark}
+            disabled={disabled}
+          />
+        </View>
+      </View>
+    );
+  }
+
   const iconSize = compact ? 16 : 18;
   const labelStyle = compact ? styles.labelCompact : styles.label;
 
@@ -118,6 +204,38 @@ export function CommunityEngagementBar({
 }
 
 const styles = StyleSheet.create({
+  socialSummary: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  socialLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  socialAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingVertical: 4,
+  },
+  socialActionPressed: {
+    opacity: 0.65,
+  },
+  socialCount: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    minWidth: 16,
+  },
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -32,6 +32,43 @@ export function commentInitials(name?: string | null): string {
     .join('');
 }
 
+export function youtubeThumbnailUrl(videoId: string): string {
+  return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+}
+
+export function youtubeEmbedUrl(videoId: string, autoplay = false): string {
+  const params = new URLSearchParams({
+    playsinline: '1',
+    rel: '0',
+    modestbranding: '1',
+    enablejsapi: '1',
+  });
+  if (autoplay) {
+    params.set('autoplay', '1');
+  }
+  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
+}
+
+/** HTML for an inline WebView player (direct .mp4 / hosted files, not YouTube). */
+export function directVideoPlayerHtml(videoUrl: string, autoplay: boolean): string {
+  const safeUrl = videoUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  const autoplayAttr = autoplay ? 'autoplay' : '';
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; }
+    video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+  </style>
+</head>
+<body>
+  <video src="${safeUrl}" ${autoplayAttr} playsinline webkit-playsinline controls></video>
+</body>
+</html>`;
+}
+
 export function youtubeVideoIdFromUrl(url?: string | null): string | null {
   if (!url) return null;
   try {

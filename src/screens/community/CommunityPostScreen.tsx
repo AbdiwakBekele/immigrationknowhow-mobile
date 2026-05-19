@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -16,9 +15,9 @@ import { useRoute, useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
 import { AppScreen } from '../../components/AppScreen';
-import { AppImage } from '../../components/AppImage';
 import { CommunityCommentRow } from '../../components/community/CommunityCommentRow';
 import { CommunityEngagementBar } from '../../components/community/CommunityEngagementBar';
+import { CommunityPostMedia } from '../../components/community/CommunityPostMedia';
 import { CommunityPostSharePanel } from '../../components/community/CommunityPostSharePanel';
 import { CommunityShareSheet } from '../../components/community/CommunityShareSheet';
 import { colors } from '../../theme/colors';
@@ -29,9 +28,8 @@ import { shadows } from '../../theme/shadows';
 import * as communityApi from '../../api/communityApi';
 import type { CommunityCommentPayload, CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
-import { communitySectionLabel, formatCommunityDate, youtubeVideoIdFromUrl } from '../../utils/communityDisplay';
-import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
-import { buildCommunityDescriptionDocument } from '../../utils/communityContent';
+import { communitySectionLabel, formatCommunityDate } from '../../utils/communityDisplay';
+import { buildCommunityDescriptionDocument, communityDescriptionPlainText } from '../../utils/communityContent';
 
 function mergeReactions(prev: string[] | undefined, type: 'like' | 'share' | 'bookmark', active: boolean): string[] {
   const set = new Set(prev ?? []);
@@ -176,8 +174,9 @@ export function CommunityPostScreen() {
   const reactions = post.user_reactions ?? [];
   const liked = reactions.includes('like');
   const bookmarked = reactions.includes('bookmark');
-  const youtubeId = youtubeVideoIdFromUrl(post.video_url);
   const publishedAt = formatCommunityDate(post.created_at);
+  const plainDescription = communityDescriptionPlainText(post.description, 2000);
+  const useRichDescription = Boolean(post.description?.trim()) && !plainDescription;
 
   return (
     <AppScreen style={styles.screen}>
@@ -189,53 +188,49 @@ export function CommunityPostScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.article}>
-            <View style={styles.headerBand}>
-              <View style={styles.categoryPill}>
+            <CommunityPostMedia post={post} variant="detail" />
+
+            <View style={styles.articleBody}>
+              <View style={styles.metaRow}>
                 <Text style={styles.categoryPillText}>
                   {communitySectionLabel(post.category)}
                   {post.tag ? ` · ${post.tag}` : ''}
                 </Text>
+                {!!publishedAt && <Text style={styles.timestamp}>{publishedAt}</Text>}
               </View>
+
               <Text style={styles.title}>{post.title}</Text>
-              {!!publishedAt && <Text style={styles.timestamp}>{publishedAt}</Text>}
-            </View>
 
-            <View style={styles.articleBody}>
-              {!!post.image_url && (
-                <AppImage uri={resolveMediaUrl(post.image_url)} height={240} style={styles.heroImage} contentFit="cover" />
+              {!!plainDescription && (
+                <Text style={styles.body}>{plainDescription}</Text>
               )}
 
-              {!!post.video_url && !youtubeId && (
-                <Pressable onPress={() => void Linking.openURL(post.video_url!)} style={styles.videoLink} accessibilityRole="link">
-                  <Text style={styles.videoLinkText}>Open video</Text>
-                </Pressable>
+              {useRichDescription && (
+                <WebView
+                  originWhitelist={['*']}
+                  source={{ html: buildCommunityDescriptionDocument(post.description) }}
+                  style={[styles.descriptionWebView, { height: descriptionWebViewHeight }]}
+                  scrollEnabled={false}
+                  showsVerticalScrollIndicator={false}
+                  onMessage={(event) => {
+                    const height = Number(event.nativeEvent.data);
+                    if (Number.isFinite(height) && height > 0) {
+                      setDescriptionWebViewHeight(Math.min(Math.max(height, 80), 2400));
+                    }
+                  }}
+                  injectedJavaScript={`
+                    setTimeout(function () {
+                      window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));
+                    }, 120);
+                    true;
+                  `}
+                />
               )}
 
-          {!!post?.description && (
-            <WebView
-              originWhitelist={['*']}
-              source={{ html: buildCommunityDescriptionDocument(post.description) }}
-              style={[styles.descriptionWebView, { height: descriptionWebViewHeight }]}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-              onMessage={(event) => {
-                const height = Number(event.nativeEvent.data);
-                if (Number.isFinite(height) && height > 0) {
-                  setDescriptionWebViewHeight(Math.min(Math.max(height, 80), 2400));
-                }
-              }}
-              injectedJavaScript={`
-                setTimeout(function () {
-                  window.ReactNativeWebView.postMessage(String(document.body.scrollHeight));
-                }, 120);
-                true;
-              `}
-            />
-          )}
-
-              {!!post.description && <Text style={styles.body}>{post.description}</Text>}
+              <View style={styles.divider} />
 
               <CommunityEngagementBar
+                variant="social"
                 liked={liked}
                 bookmarked={bookmarked}
                 likes={post.likes_count ?? 0}
@@ -323,76 +318,47 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.soft,
   },
-  headerBand: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#F8FBFF',
-    padding: spacing.lg,
-  },
-  categoryPill: {
-    alignSelf: 'flex-start',
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    backgroundColor: 'rgba(219, 234, 254, 0.7)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    marginBottom: spacing.sm,
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   categoryPillText: {
+    flex: 1,
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
   },
   title: {
-    fontSize: typography.fontSize['2xl'],
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: '#0F172A',
-    lineHeight: 32,
+    lineHeight: 28,
   },
   timestamp: {
-    marginTop: spacing.xs,
     fontSize: typography.fontSize.xs,
     color: '#64748B',
   },
   articleBody: {
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: spacing.md,
+    gap: spacing.sm,
   },
-  heroImage: {
-    width: '100%',
-    borderRadius: radii.xl,
-    backgroundColor: '#E5E7EB',
+  body: {
+    fontSize: typography.fontSize.md,
+    lineHeight: 24,
+    color: colors.text.secondary,
   },
-  videoLink: {
-    alignSelf: 'flex-start',
-  },
-  videoLinkText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
-  },
-  videoFrame: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: radii.xl,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-  },
-  videoWebView: {
-    flex: 1,
-    backgroundColor: '#000',
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E2E8F0',
+    marginVertical: spacing.sm,
   },
   descriptionWebView: {
-    marginTop: spacing.lg,
     width: '100%',
     backgroundColor: 'transparent',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginTop: spacing.xl,
   },
   commentsCard: {
     marginTop: spacing.lg,

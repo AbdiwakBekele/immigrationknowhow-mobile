@@ -1,18 +1,14 @@
 import React from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CommunityPostPayload } from '../../api/communityApi';
-import { AppImage } from '../AppImage';
 import { CommunityEngagementBar } from './CommunityEngagementBar';
+import { CommunityPostMedia } from './CommunityPostMedia';
 import { colors } from '../../theme/colors';
-import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
-import { youtubeVideoIdFromUrl } from '../../utils/communityDisplay';
-import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
-
-const FEED_IMAGE_HEIGHT = 160;
+import { communityDescriptionPlainText } from '../../utils/communityContent';
+import { communitySectionLabel, formatCommunityDate } from '../../utils/communityDisplay';
 
 export type CommunityFeedEngagement = {
   liked: boolean;
@@ -44,128 +40,116 @@ export function CommunityPostFeedCard({
   onBookmark,
   reacting = false,
 }: Props) {
-  const youtubeId = youtubeVideoIdFromUrl(post.video_url);
+  const plainDescription = communityDescriptionPlainText(post.description, 320);
+  const publishedAt = formatCommunityDate(post.created_at);
+  const section = communitySectionLabel(post.category);
 
   return (
     <View style={styles.card}>
-      <Pressable onPress={onOpen} style={({ pressed }) => [styles.contentPressable, pressed ? styles.contentPressed : null]}>
-        {!!post.image_url && (
-          <AppImage
-            uri={resolveMediaUrl(post.image_url)}
-            height={FEED_IMAGE_HEIGHT}
-            style={styles.heroImage}
-            contentFit="cover"
-          />
-        )}
-        {!!post.video_url && !youtubeId && (
-          <Pressable onPress={() => void Linking.openURL(post.video_url!)} style={styles.videoLink} accessibilityRole="link">
-            <Text style={styles.videoLinkText}>Open video</Text>
-          </Pressable>
-        )}
-        {!!youtubeId && (
-          <View style={styles.videoFrame}>
-            <WebView
-              source={{ uri: `https://www.youtube.com/embed/${youtubeId}` }}
-              style={styles.videoWebView}
-              allowsFullscreenVideo
-              javaScriptEnabled
-              domStorageEnabled
-              scrollEnabled={false}
-            />
+      <CommunityPostMedia post={post} variant="feed" onMediaPress={onOpen} />
+
+      <Pressable
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={`Open post: ${post.title}`}
+        style={({ pressed }) => [pressed && styles.pressed]}
+      >
+        <View style={styles.body}>
+          <View style={styles.metaRow}>
+            <Text style={styles.metaText} numberOfLines={1}>
+              {section}
+              {post.tag ? ` · ${post.tag}` : ''}
+            </Text>
+            {!!publishedAt && <Text style={styles.metaDate}>{publishedAt}</Text>}
           </View>
-        )}
-        {!!post.tag && (
-          <View style={styles.tagPill}>
-            <Text style={styles.tagText}>{post.tag}</Text>
-          </View>
-        )}
-        <Text style={styles.title}>{post.title ?? `Post #${post.id}`}</Text>
-        {!!post.description && (
-          <Text style={styles.description} numberOfLines={3}>
-            {post.description}
-          </Text>
-        )}
+
+          <Text style={styles.title}>{post.title ?? `Post #${post.id}`}</Text>
+
+          {!!plainDescription && (
+            <Text style={styles.description} numberOfLines={4}>
+              {plainDescription}
+            </Text>
+          )}
+        </View>
       </Pressable>
 
-      <CommunityEngagementBar
-        liked={engagement.liked}
-        bookmarked={engagement.bookmarked}
-        likes={engagement.likes}
-        comments={engagement.comments}
-        shares={engagement.shares}
-        bookmarks={engagement.bookmarks}
-        onLike={onLike}
-        onComment={onComment}
-        onShare={onShare}
-        onBookmark={onBookmark}
-        disabled={reacting}
-      />
+      <View style={styles.divider} />
+
+      <View style={styles.actions}>
+        <CommunityEngagementBar
+          variant="social"
+          liked={engagement.liked}
+          bookmarked={engagement.bookmarked}
+          likes={engagement.likes}
+          comments={engagement.comments}
+          shares={engagement.shares}
+          bookmarks={engagement.bookmarks}
+          onLike={onLike}
+          onComment={onComment}
+          onShare={onShare}
+          onBookmark={onBookmark}
+          disabled={reacting}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    marginBottom: spacing.md,
-    borderRadius: radii.xl,
-    borderWidth: 1,
+    marginBottom: spacing.lg,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#E2E8F0',
     backgroundColor: colors.surfaceElevated,
-    padding: spacing.lg,
-    gap: spacing.md,
+    overflow: 'hidden',
     ...shadows.soft,
   },
-  contentPressable: {
+  pressed: {
+    opacity: 0.98,
+  },
+  body: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  contentPressed: {
-    opacity: 0.96,
-  },
-  heroImage: {
-    width: '100%',
-    borderRadius: radii.lg,
-    backgroundColor: '#E5E7EB',
-  },
-  videoLink: {
-    alignSelf: 'flex-start',
-  },
-  videoLinkText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
-  },
-  videoFrame: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    borderRadius: radii.lg,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-  },
-  videoWebView: {
+  metaText: {
     flex: 1,
-    backgroundColor: '#000',
-  },
-  tagPill: {
-    alignSelf: 'flex-start',
-    borderRadius: radii.full,
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-  tagText: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.semibold,
-    color: '#3730A3',
+    color: colors.primary[700],
+    textTransform: 'uppercase',
+    letterSpacing: 0.35,
+  },
+  metaDate: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.muted,
   },
   title: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
-    color: '#111827',
+    color: colors.text.primary,
     lineHeight: 26,
   },
   description: {
-    fontSize: 15,
+    fontSize: typography.fontSize.md,
     lineHeight: 22,
-    color: '#4B5563',
+    color: colors.text.secondary,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: spacing.md,
+  },
+  actions: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
 });
