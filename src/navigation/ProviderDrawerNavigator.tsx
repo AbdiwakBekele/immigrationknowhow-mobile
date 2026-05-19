@@ -106,6 +106,16 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
     navigation.closeDrawer();
   };
 
+  const goProviderNotifications = () => {
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'Dashboard', params: { screen: 'ProviderNotifications' } },
+      })
+    );
+    navigation.closeDrawer();
+  };
+
   const goMessagesList = () => {
     navigation.dispatch(
       CommonActions.navigate({
@@ -129,6 +139,7 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
         <DrawerGradientLink icon="speedometer-outline" label="Dashboard" onPress={() => goMain('Dashboard')} />
 
         <DrawerCollapsibleSection title="Account" defaultOpen>
+          <DrawerGradientLink icon="notifications-outline" label="Notifications" onPress={goProviderNotifications} indent />
           <DrawerGradientLink icon="mail-unread-outline" label="Leads" onPress={() => goMain('Leads')} indent />
           <DrawerGradientLink icon="chatbubbles-outline" label="Messages" onPress={goMessagesList} indent />
           <DrawerGradientLink icon="person-circle-outline" label="Profile" onPress={() => goMain('Profile')} indent />

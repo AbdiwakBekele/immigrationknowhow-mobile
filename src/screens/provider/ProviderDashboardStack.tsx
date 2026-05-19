@@ -2,7 +2,8 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ProviderDashboardScreen } from './ProviderDashboardScreen';
 import { ProviderNotificationsScreen } from './ProviderNotificationsScreen';
-import { ProviderHubStack } from '../discover/ProviderHubStack';
+import { ProviderHubStack, type ProviderHubStackParamList } from '../discover/ProviderHubStack';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import { ProviderSubscriptionsScreen } from './ProviderSubscriptionsScreen';
 import { AppHeader } from '../../components/navigation/AppHeader';
 import { ProviderAnalyticsScreen } from './ProviderAnalyticsScreen';
@@ -14,7 +15,7 @@ import { StripeCheckoutScreen, type StripeCheckoutParams } from '../onboarding/S
 export type ProviderDashboardStackParamList = {
   ProviderDashboardHome: undefined;
   ProviderNotifications: undefined;
-  ProviderHub: undefined;
+  ProviderHub: NavigatorScreenParams<ProviderHubStackParamList> | undefined;
   ProviderSubscription: undefined;
   ProviderAnalytics: undefined;
   ProviderBackgroundCheck: undefined;

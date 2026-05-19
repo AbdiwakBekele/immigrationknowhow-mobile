@@ -192,6 +192,38 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
   },
+  conversionCard: {
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  conversionBar: {
+    marginTop: spacing.md,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#f1f5f9',
+    overflow: 'hidden',
+  },
+  conversionFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: colors.primary[600],
+  },
+  quickActionRow: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickActionLabel: {
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
+  },
 });
 
 type Nav = CompositeNavigationProp<
@@ -273,7 +305,14 @@ export function ProviderDashboardScreen() {
   const recentLeads = dashboard?.recent_leads ?? [];
   const recentReviews = dashboard?.recent_reviews ?? [];
   const bgStatus = provider?.background_check_status ?? undefined;
-  const showBgBanner = !!authUser?.requires_background_check && bgStatus !== 'clear';
+  const requiresBackgroundCheck = provider?.requires_background_check ?? !!authUser?.requires_background_check;
+  const requiresCertificateUpload = !!provider?.requires_certificate_upload;
+  const needsCertificateUpload = !!provider?.needs_certificate_upload;
+  const showBgBanner = requiresBackgroundCheck && bgStatus !== 'clear';
+  const firstName = authUser?.first_name?.trim() || 'there';
+  const conversionRate = typeof stats?.conversionRate === 'number' ? stats.conversionRate : 0;
+  const canStartBackgroundCheck =
+    requiresBackgroundCheck && !['clear', 'invited', 'completed'].includes(bgStatus ?? '');
 
   return (
     <AppScreen variant="gradient" style={styles.mainScreen}>
@@ -298,17 +337,32 @@ export function ProviderDashboardScreen() {
             style={styles.heroGradient}
           />
           <View style={styles.heroContent}>
-            <Text style={styles.heroKicker}>Service provider</Text>
-            <Text style={styles.heroTitle}>{provider?.business_name?.trim() || 'Dashboard'}</Text>
-            {!!provider?.average_rating && (
-              <Text style={styles.heroMeta}>
-                {Number(provider.average_rating).toFixed(1)} rating · {provider.total_reviews ?? 0} reviews
+            <Text style={styles.heroKicker}>Provider overview</Text>
+            <Text style={styles.heroTitle}>Welcome back, {firstName}</Text>
+            <Text style={styles.heroMeta}>
+              Track leads, profile visibility, reviews, and conversion performance in one place.
+            </Text>
+            {!!provider?.business_name?.trim() && (
+              <Text style={[styles.heroMeta, { marginTop: spacing.sm, fontWeight: typography.fontWeight.semibold }]}>
+                {provider.business_name.trim()}
+                {provider.average_rating != null
+                  ? ` · ${Number(provider.average_rating).toFixed(1)} rating (${provider.total_reviews ?? 0} reviews)`
+                  : ''}
               </Text>
             )}
             <View style={styles.heroActions}>
-              <QuickAction label="Leads" onPress={() => navigation.navigate('Leads')} tone="blue" />
-              <QuickAction label="Messages" onPress={() => navigation.navigate('Messages')} tone="violet" />
-              <QuickAction label="Profile" onPress={() => navigation.navigate('Profile')} tone="emerald" />
+              <QuickAction label="View profile" onPress={() => navigation.navigate('Profile')} tone="emerald" />
+              <QuickAction label="Subscriptions" onPress={() => navigation.navigate('ProviderSubscription')} tone="blue" />
+              {requiresCertificateUpload ? (
+                <QuickAction
+                  label={needsCertificateUpload ? 'Upload certificate' : 'Certificates'}
+                  onPress={() => navigation.navigate('Profile')}
+                  tone="violet"
+                />
+              ) : null}
+              {canStartBackgroundCheck ? (
+                <QuickAction label="Get verified" onPress={() => navigation.navigate('ProviderBackgroundCheck')} tone="violet" />
+              ) : null}
             </View>
           </View>
         </View>
@@ -351,6 +405,27 @@ export function ProviderDashboardScreen() {
           </View>
         )}
 
+        {needsCertificateUpload && requiresCertificateUpload && (
+          <View
+            style={{
+              marginTop: spacing.lg,
+              padding: spacing.lg,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: '#c7d2fe',
+              backgroundColor: '#eef2ff',
+            }}
+          >
+            <Text style={{ fontWeight: typography.fontWeight.semibold, color: '#3730a3' }}>Certificate upload required</Text>
+            <Text style={{ marginTop: spacing.sm, color: '#4f46e5', lineHeight: 20 }}>
+              Upload your service certificate in your profile so clients can trust your listing.
+            </Text>
+            <Pressable onPress={() => navigation.navigate('Profile')} style={{ marginTop: spacing.md, alignSelf: 'flex-start' }}>
+              <Text style={{ color: colors.primary[700], fontWeight: typography.fontWeight.semibold }}>Upload certificate</Text>
+            </Pressable>
+          </View>
+        )}
+
         {showBgBanner && (
           <View
             style={{
@@ -384,26 +459,55 @@ export function ProviderDashboardScreen() {
               <StatCard
                 label="Total leads"
                 value={String(stats.totalLeads ?? 0)}
-                chip={typeof stats.leadsTrend === 'number' ? `${stats.leadsTrend >= 0 ? '+' : ''}${stats.leadsTrend}%` : undefined}
+                sublabel="All inquiries received"
+                chip={typeof stats.leadsTrend === 'number' ? `${Math.abs(stats.leadsTrend)}%` : undefined}
                 trendUp={typeof stats.leadsTrend === 'number' ? stats.leadsTrend >= 0 : undefined}
+                onPress={() => navigation.navigate('Leads')}
               />
               <StatCard
                 label="Open leads"
                 value={String(stats.openLeads ?? 0)}
                 sublabel={`${stats.newLeads ?? 0} new`}
+                onPress={() => navigation.navigate('Leads')}
               />
               <StatCard
-                label="Conversion"
-                value={typeof stats.conversionRate === 'number' ? `${stats.conversionRate}%` : '—'}
-                sublabel="All time"
+                label="Average rating"
+                value={
+                  provider?.average_rating != null && String(provider.average_rating).trim() !== ''
+                    ? Number(provider.average_rating).toFixed(1)
+                    : '—'
+                }
+                sublabel={`${provider?.total_reviews ?? 0} reviews`}
+                onPress={() => navigation.navigate('ProviderReviews')}
               />
               <StatCard
-                label="Profile views"
+                label="Profile views (30d)"
                 value={String(stats.profileViews ?? 0)}
-                chip={typeof stats.viewsTrend === 'number' && stats.viewsTrend !== 0 ? `${stats.viewsTrend >= 0 ? '+' : ''}${stats.viewsTrend}%` : undefined}
+                sublabel="Visibility in marketplace"
+                chip={typeof stats.viewsTrend === 'number' && stats.viewsTrend !== 0 ? `${Math.abs(stats.viewsTrend)}%` : undefined}
                 trendUp={typeof stats.viewsTrend === 'number' ? stats.viewsTrend >= 0 : undefined}
+                onPress={() => navigation.navigate('ProviderAnalytics')}
               />
             </View>
+
+            <Pressable onPress={() => navigation.navigate('ProviderAnalytics')} style={styles.conversionCard}>
+              <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>Conversion rate</Text>
+              <View style={{ marginTop: spacing.sm, flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.text.secondary, fontSize: typography.fontSize.sm }}>Leads converted</Text>
+                <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>{conversionRate}%</Text>
+              </View>
+              <View style={styles.conversionBar}>
+                <View style={[styles.conversionFill, { width: `${Math.min(100, Math.max(0, conversionRate))}%` }]} />
+              </View>
+              <View style={{ marginTop: spacing.md, flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
+                  {stats.convertedLeads ?? 0} converted
+                </Text>
+                <Text style={{ color: colors.text.secondary, fontSize: typography.fontSize.sm }}>
+                  {stats.totalLeads ?? 0} total
+                </Text>
+              </View>
+            </Pressable>
           </View>
         )}
 
@@ -470,18 +574,47 @@ export function ProviderDashboardScreen() {
             <Text style={styles.empty}>No reviews yet.</Text>
           ) : (
             recentReviews.map((rev, idx) => (
-              <View key={rev.id ?? idx} style={styles.reviewRow}>
+              <Pressable
+                key={rev.uuid ?? rev.id ?? idx}
+                onPress={() => navigation.navigate('ProviderReviews')}
+                style={styles.reviewRow}
+              >
                 <Text style={styles.reviewTitle}>
                   {fullName(rev.user)} · {typeof rev.rating === 'number' ? `${rev.rating}/5` : '—'}
                 </Text>
+                {!!rev.created_at && (
+                  <Text style={{ marginTop: spacing.xs, color: colors.text.muted, fontSize: typography.fontSize.xs }}>
+                    {formatTimeAgo(rev.created_at)}
+                  </Text>
+                )}
                 {!!rev.comment?.trim() && (
                   <Text style={styles.reviewBody} numberOfLines={4}>
                     {rev.comment}
                   </Text>
                 )}
-              </View>
+              </Pressable>
             ))
           )}
+        </Card>
+
+        <SectionTitle title="Quick actions" />
+        <Card>
+          <QuickLink label="My profile" onPress={() => navigation.navigate('Profile')} />
+          <QuickLink label="My library" onPress={() => navigation.navigate('ProviderHub', { screen: 'Library' })} />
+          <QuickLink label="Edit listing details" onPress={() => navigation.navigate('Profile')} />
+          {needsCertificateUpload && requiresCertificateUpload ? (
+            <QuickLink label="Upload certificate" onPress={() => navigation.navigate('Profile')} highlight />
+          ) : null}
+          {requiresBackgroundCheck && bgStatus !== 'clear' ? (
+            <QuickLink label="Get verified" onPress={() => navigation.navigate('ProviderBackgroundCheck')} />
+          ) : null}
+          <QuickLink label="View analytics" onPress={() => navigation.navigate('ProviderAnalytics')} />
+          <QuickLink label="Community" onPress={() => navigation.navigate('ProviderHub', { screen: 'Community' })} />
+          <QuickLink
+            label="Notifications"
+            onPress={() => navigation.navigate('ProviderNotifications')}
+            last
+          />
         </Card>
 
         <View style={{ height: spacing['3xl'] }} />
@@ -528,20 +661,48 @@ function QuickAction({
   );
 }
 
+function QuickLink({
+  label,
+  onPress,
+  highlight,
+  last,
+}: {
+  label: string;
+  onPress: () => void;
+  highlight?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.quickActionRow,
+        last ? { borderBottomWidth: 0 } : null,
+        highlight ? { backgroundColor: '#eef2ff', marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg } : null,
+      ]}
+    >
+      <Text style={[styles.quickActionLabel, highlight ? { color: '#3730a3' } : null]}>{label}</Text>
+      <Text style={{ color: colors.text.muted }}>→</Text>
+    </Pressable>
+  );
+}
+
 function StatCard({
   label,
   value,
   sublabel,
   chip,
   trendUp,
+  onPress,
 }: {
   label: string;
   value: string;
   sublabel?: string;
   chip?: string;
   trendUp?: boolean;
+  onPress?: () => void;
 }) {
-  return (
+  const body = (
     <View style={styles.statCard}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={styles.statValue}>{value}</Text>
@@ -561,4 +722,6 @@ function StatCard({
       )}
     </View>
   );
+  if (!onPress) return body;
+  return <Pressable onPress={onPress}>{body}</Pressable>;
 }

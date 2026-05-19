@@ -21,6 +21,7 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as seekerDashboardApi from '../../api/seekerDashboardApi';
+import type { ProviderListItem } from '../../types/provider';
 import * as authApi from '../../api/authApi';
 import { useAuth } from '../../context/AuthContext';
 
@@ -28,16 +29,6 @@ type SeekerDashboardNav = CompositeNavigationProp<
   BottomTabNavigationProp<SeekerBottomTabParamList>,
   NativeStackNavigationProp<SeekerDashboardStackParamList, 'SeekerDashboardHome'>
 >;
-
-type LeadRow = {
-  uuid: string;
-  message?: string | null;
-  status?: string | null;
-  created_at?: string | null;
-  service_type?: string;
-  service_provider?: { slug?: string; business_name?: string | null };
-  conversation?: { uuid: string } | null;
-};
 
 type ConversationPreviewRow = seekerDashboardApi.SeekerDashboardData['recent_messages'][number];
 
@@ -134,6 +125,23 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     color: colors.text.secondary,
     fontSize: typography.fontSize.xs,
+  },
+  actionBadge: {
+    position: 'absolute',
+    right: spacing.sm,
+    top: spacing.sm,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: 999,
+    backgroundColor: '#f43f5e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBadgeText: {
+    color: colors.text.inverse,
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
   },
   sectionTitle: {
     marginTop: spacing['2xl'],
@@ -260,6 +268,25 @@ export function SeekerDashboardScreen() {
       params: { screen: 'ProviderDetail', params: { slug } },
     });
   };
+
+  const openLibraryItem = (slug: string | undefined) => {
+    if (!slug) return;
+    navigation.navigate('Discover', {
+      screen: 'Library',
+      params: { screen: 'LibraryDetail', params: { slug } },
+    });
+  };
+
+  const openLeadConversation = (lead: seekerDashboardApi.SeekerDashboardLead) => {
+    const conversationUuid = lead.conversation?.uuid;
+    if (conversationUuid) {
+      navigation.navigate('Messages', { screen: 'Chat', params: { uuid: conversationUuid } });
+      return;
+    }
+    if (lead.service_provider?.slug) {
+      openProviderDetail(lead.service_provider.slug);
+    }
+  };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -323,17 +350,18 @@ export function SeekerDashboardScreen() {
   }
 
   const stats = dash?.stats;
-  const recentLeads = (dash?.recent_leads ?? []) as LeadRow[];
+  const recentLeads = dash?.recent_leads ?? [];
   const recentMessages = dash?.recent_messages ?? [];
   const recommended = dash?.recommended_providers ?? [];
   const savedProviders = dash?.saved_providers ?? [];
-  const libraryItems = (dash?.library_items ?? []) as Array<{ uuid: string; title?: string; type?: string }>;
-  const purchasedItems = (dash?.purchased_items ?? []) as Array<{
-    item?: { title?: string; uuid?: string };
-  }>;
+  const libraryItems = dash?.library_items ?? [];
+  const purchasedItems = dash?.purchased_items ?? [];
   const firstName = user?.first_name?.trim() || 'there';
   const profileCompletion = stats?.profileCompletion ?? 0;
   const profileTone = profileCompletion >= 90 ? 'Almost done' : profileCompletion >= 60 ? 'Great progress' : 'Keep going';
+  const unreadMessages = stats?.unreadMessages ?? 0;
+  const unreadBadge = unreadMessages > 0 ? (unreadMessages > 9 ? '9+' : String(unreadMessages)) : undefined;
+  const preferredLanguageLabel = stats?.preferredLanguageLabel?.trim() || null;
 
   return (
     <AppScreen variant="gradient" style={styles.screen}>
@@ -360,8 +388,13 @@ export function SeekerDashboardScreen() {
           <Text style={styles.heroTitle}>Welcome back, {firstName}!</Text>
           <Text style={styles.heroBody}>Here is what is happening with your immigration journey.</Text>
           <View style={styles.heroChips}>
+            {preferredLanguageLabel ? (
+              <View style={styles.chip}>
+                <Text style={styles.chipText}>{preferredLanguageLabel}</Text>
+              </View>
+            ) : null}
             <View style={styles.chip}>
-              <Text style={styles.chipText}>{profileCompletion}% complete</Text>
+              <Text style={styles.chipText}>{profileCompletion}% profile complete</Text>
             </View>
             <View style={styles.chip}>
               <Text style={styles.chipText}>{profileTone}</Text>
@@ -408,18 +441,8 @@ export function SeekerDashboardScreen() {
         )}
 
         <View style={styles.actionGrid}>
-          <ActionCard
-            title="Find providers"
-            subtitle="Search for services"
-            onPress={openProvidersList}
-          />
-          <ActionCard title="Saved" subtitle="Your shortlist" onPress={openSavedProviders} />
-          <ActionCard title="Messages" subtitle={`${stats?.unreadMessages ?? 0} unread`} onPress={() => navigation.navigate('Messages')} />
-          <ActionCard
-            title="Contracts"
-            subtitle="Offers & agreements"
-            onPress={() => navigation.navigate('Discover', { screen: 'Contracts' })}
-          />
+          <ActionCard title="Find providers" subtitle="Search for services" onPress={openProvidersList} />
+          <ActionCard title="Messages" subtitle={`${unreadMessages} unread`} badge={unreadBadge} onPress={() => navigation.navigate('Messages')} />
           <ActionCard title="Library" subtitle="E-books & audiobooks" onPress={() => navigation.navigate('Discover', { screen: 'Library' })} />
           <ActionCard title="Profile" subtitle="Update your info" onPress={() => navigation.navigate('Profile')} />
           <ActionCard title="Community" subtitle="Join discussions" onPress={() => navigation.navigate('Discover', { screen: 'Community' })} />
@@ -428,6 +451,10 @@ export function SeekerDashboardScreen() {
             subtitle="Offers & agreements"
             onPress={() => navigation.navigate('Discover', { screen: 'Contracts' })}
           />
+          <ActionCard title="Reviews" subtitle="Your feedback" onPress={() => navigation.navigate('Discover', { screen: 'Reviews' })} />
+          <ActionCard title="AI Assistant" subtitle="Ask questions" onPress={() => navigation.navigate('Discover', { screen: 'AiAssistant' })} />
+          <ActionCard title="Videos" subtitle="Expert content" onPress={() => navigation.navigate('Discover', { screen: 'Videos' })} />
+          <ActionCard title="My Ads" subtitle="Promote services" onPress={() => navigation.navigate('Discover', { screen: 'Ads' })} />
         </View>
 
         {profileCompletion < 100 && (
@@ -468,12 +495,7 @@ export function SeekerDashboardScreen() {
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.sm }}>
             {savedProviders.map((item) => (
-              <ProviderCard
-                key={item.slug}
-                title={item.business_name ?? 'Provider'}
-                subtitle={item.location_display ?? ''}
-                onPress={() => openProviderDetail(item.slug)}
-              />
+              <ProviderCard key={item.slug} provider={item} onPress={() => openProviderDetail(item.slug)} />
             ))}
           </ScrollView>
         )}
@@ -484,12 +506,7 @@ export function SeekerDashboardScreen() {
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md, paddingVertical: spacing.sm }}>
             {recommended.map((item) => (
-              <ProviderCard
-                key={item.slug}
-                title={item.business_name ?? 'Provider'}
-                subtitle={item.location_display ?? ''}
-                onPress={() => openProviderDetail(item.slug)}
-              />
+              <ProviderCard key={item.slug} provider={item} onPress={() => openProviderDetail(item.slug)} />
             ))}
           </ScrollView>
         )}
@@ -497,12 +514,17 @@ export function SeekerDashboardScreen() {
         <SectionTitle title="Your inquiries" />
         <Card>
           {recentLeads.length === 0 ? (
-            <Text style={styles.empty}>No inquiries yet.</Text>
+            <View style={{ paddingVertical: spacing.lg }}>
+              <Text style={styles.empty}>No inquiries yet.</Text>
+              <Pressable onPress={openProvidersList} style={{ marginTop: spacing.md }}>
+                <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>Find a provider →</Text>
+              </Pressable>
+            </View>
           ) : (
             recentLeads.map((lead, idx) => {
               const st = statusStyle(lead.status);
               return (
-                <Pressable key={lead.uuid} onPress={() => lead.service_provider?.slug && openProviderDetail(lead.service_provider.slug)} style={[styles.row, idx === recentLeads.length - 1 ? styles.rowLast : null]}>
+                <Pressable key={lead.uuid} onPress={() => openLeadConversation(lead)} style={[styles.row, idx === recentLeads.length - 1 ? styles.rowLast : null]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md }}>
                     <Text style={[styles.rowTitle, { flex: 1 }]} numberOfLines={1}>
                       {lead.service_provider?.business_name ?? 'Inquiry'}
@@ -535,7 +557,14 @@ export function SeekerDashboardScreen() {
             <SectionTitle title="From the library" />
             <Card>
               {libraryItems.map((item, idx) => (
-                <SimpleRow key={item.uuid} title={item.title ?? 'Item'} subtitle={item.type} isLast={idx === libraryItems.length - 1} />
+                <SimpleRow
+                  key={item.uuid}
+                  title={item.title ?? 'Item'}
+                  subtitle={[item.author, item.type].filter(Boolean).join(' · ') || item.type}
+                  meta={formatLibraryPrice(item)}
+                  onPress={() => openLibraryItem(item.slug)}
+                  isLast={idx === libraryItems.length - 1}
+                />
               ))}
             </Card>
           </>
@@ -549,6 +578,15 @@ export function SeekerDashboardScreen() {
                 <SimpleRow
                   key={row.item?.uuid ?? String(idx)}
                   title={row.item?.title ?? 'Purchase'}
+                  subtitle={
+                    row.item?.author
+                      ? `${row.item.author}${row.purchased_at ? ` · Bought ${formatTimeAgo(row.purchased_at)}` : ''}`
+                      : row.purchased_at
+                        ? `Bought ${formatTimeAgo(row.purchased_at)}`
+                        : undefined
+                  }
+                  meta={formatPurchasePrice(row)}
+                  onPress={() => openLibraryItem(row.item?.slug)}
                   isLast={idx === purchasedItems.length - 1}
                 />
               ))}
@@ -609,24 +647,49 @@ function Card({ children }: { children: React.ReactNode }) {
   return <View style={styles.card}>{children}</View>;
 }
 
-function ActionCard({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+function ActionCard({
+  title,
+  subtitle,
+  onPress,
+  badge,
+}: {
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  badge?: string;
+}) {
   return (
     <Pressable onPress={onPress} style={styles.actionCard}>
+      {badge ? (
+        <View style={styles.actionBadge}>
+          <Text style={styles.actionBadgeText}>{badge}</Text>
+        </View>
+      ) : null}
       <Text style={styles.actionTitle}>{title}</Text>
       <Text style={styles.actionBody}>{subtitle}</Text>
     </Pressable>
   );
 }
 
-function ProviderCard({ title, subtitle, onPress }: { title: string; subtitle: string; onPress: () => void }) {
+function ProviderCard({ provider, onPress }: { provider: ProviderListItem; onPress: () => void }) {
+  const ratingLabel = formatProviderRating(provider.average_rating);
+  const reviewCount = provider.total_reviews ?? 0;
   return (
     <Pressable onPress={onPress} style={styles.providerCard}>
       <Text style={styles.providerCardTitle} numberOfLines={2}>
-        {title}
+        {provider.business_name ?? 'Provider'}
       </Text>
       <Text style={styles.providerCardBody} numberOfLines={1}>
-        {subtitle}
+        {ratingLabel} · {reviewCount} reviews
       </Text>
+      {provider.free_consultation ? (
+        <Text style={{ marginTop: spacing.xs, color: '#047857', fontSize: typography.fontSize.xs }}>Free consultation</Text>
+      ) : null}
+      {!!provider.location_display && (
+        <Text style={[styles.providerCardBody, { marginTop: spacing.xs }]} numberOfLines={1}>
+          {provider.location_display}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -682,6 +745,37 @@ function messagePreviewTitle(row: ConversationPreviewRow) {
   const firstName = row.provider_user?.first_name?.trim() ?? '';
   const lastName = row.provider_user?.last_name?.trim() ?? '';
   return [firstName, lastName].filter(Boolean).join(' ') || (row.subject ?? '').trim() || 'Conversation';
+}
+
+function formatProviderRating(rating: number | null | undefined): string {
+  if (rating === null || rating === undefined) {
+    return 'New';
+  }
+  const value = Number(rating);
+  return Number.isFinite(value) ? value.toFixed(1) : 'New';
+}
+
+function formatLibraryPrice(item: seekerDashboardApi.SeekerLibraryItem): string | undefined {
+  const price = item.price;
+  if (price != null && Number(price) > 0) {
+    return `${item.currency ?? 'USD'} ${price}`;
+  }
+  if (item.is_premium) {
+    return 'Paid';
+  }
+  return 'Free';
+}
+
+function formatPurchasePrice(row: seekerDashboardApi.SeekerPurchasedItem): string | undefined {
+  const paid = row.purchase_amount;
+  if (paid !== null && paid !== undefined && String(paid).trim() !== '' && Number(paid) > 0) {
+    return `${row.purchase_currency ?? 'USD'} ${paid}`;
+  }
+  const itemPrice = row.item?.price;
+  if (itemPrice != null && Number(itemPrice) > 0) {
+    return `${row.item?.currency ?? 'USD'} ${itemPrice}`;
+  }
+  return undefined;
 }
 
 function formatTimeAgo(date: string) {

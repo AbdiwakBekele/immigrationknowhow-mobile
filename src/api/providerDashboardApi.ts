@@ -24,13 +24,18 @@ export type ProviderDashboardProvider = {
   subscription_plan?: string | null;
   subscription_expires_at?: string | null;
   stripe_subscription_status?: string | null;
+  requires_background_check?: boolean;
+  requires_certificate_upload?: boolean;
+  needs_certificate_upload?: boolean;
 };
 
 export type ProviderRecentReview = {
   id?: number;
+  uuid?: string;
   rating?: number;
   comment?: string | null;
   created_at?: string | null;
+  provider_response?: string | null;
   user?: { first_name?: string | null; last_name?: string | null } | null;
 };
 

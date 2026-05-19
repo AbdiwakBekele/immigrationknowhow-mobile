@@ -3,7 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { DiscoverHomeScreen } from './DiscoverHomeScreen';
 import { DvLotteryScreen } from './DvLotteryScreen';
 import { AiAssistantScreen } from './AiAssistantScreen';
-import { LibraryStack } from '../library/LibraryStack';
+import { LibraryStack, type LibraryStackParamList } from '../library/LibraryStack';
 import { VideosStack } from '../videos/VideosStack';
 import { CommunityStack } from '../community/CommunityStack';
 import { AdsStack } from '../ads/AdsStack';
@@ -19,7 +19,7 @@ export type SeekerDiscoverStackParamList = {
   DiscoverHome: undefined;
   DvLottery: undefined;
   AiAssistant: undefined;
-  Library: undefined;
+  Library: NavigatorScreenParams<LibraryStackParamList> | undefined;
   Videos: undefined;
   Community: undefined;
   Ads: undefined;
