@@ -2,13 +2,53 @@ import { apiClient, normalizeApiError } from './client';
 import type { ApiResponse } from './types';
 import type { ProviderListItem } from '../types/provider';
 
+export type SeekerLibraryItem = {
+  uuid: string;
+  slug: string;
+  title?: string;
+  author?: string | null;
+  type?: string;
+  cover_image_url?: string | null;
+  is_premium?: boolean;
+  price?: number | null;
+  currency?: string | null;
+};
+
+export type SeekerPurchasedItem = {
+  access_id?: number;
+  purchased_at?: string | null;
+  purchase_amount?: number | string | null;
+  purchase_currency?: string | null;
+  item?: {
+    uuid?: string;
+    slug?: string;
+    title?: string;
+    author?: string | null;
+    type?: string;
+    cover_image_url?: string | null;
+    price?: number | null;
+    currency?: string | null;
+  };
+};
+
+export type SeekerDashboardLead = {
+  uuid: string;
+  message?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  service_type?: string;
+  service_provider?: { slug?: string; business_name?: string | null };
+  conversation?: { uuid: string } | null;
+};
+
 export type SeekerDashboardData = {
   stats: {
     totalLeads: number;
     unreadMessages: number;
     profileCompletion: number;
+    preferredLanguageLabel?: string | null;
   };
-  recent_leads: unknown[];
+  recent_leads: SeekerDashboardLead[];
   recent_messages: Array<{
     uuid: string;
     subject: string | null;
@@ -25,8 +65,8 @@ export type SeekerDashboardData = {
   }>;
   recommended_providers: ProviderListItem[];
   saved_providers: ProviderListItem[];
-  library_items: unknown[];
-  purchased_items: unknown[];
+  library_items: SeekerLibraryItem[];
+  purchased_items: SeekerPurchasedItem[];
 };
 
 export async function getSeekerDashboard(): Promise<ApiResponse<{ dashboard: SeekerDashboardData }>> {
