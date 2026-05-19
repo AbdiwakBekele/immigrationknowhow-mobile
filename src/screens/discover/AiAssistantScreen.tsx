@@ -21,9 +21,13 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as aiApi from '../../api/aiAssistantApi';
 import type { ChatMessage } from '../../api/aiAssistantApi';
+import { setAiAssistantFabSuppressed } from '../../navigation/aiAssistantFabVisibility';
 import type { StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
 
 type LocalMessage = ChatMessage & { pending?: boolean };
+
+/** Must match Laravel validation on POST /api/mobile/ai-assistant/ask */
+const MIN_QUESTION_LENGTH = 6;
 
 type AiAssistantNav = NativeStackNavigationProp<{
   StripeCheckout: StripeCheckoutParams;
@@ -52,8 +56,11 @@ export function AiAssistantScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setAiAssistantFabSuppressed(true);
       void load();
-    }, [])
+
+      return () => setAiAssistantFabSuppressed(false);
+    }, []),
   );
 
   const subscribe = async () => {
@@ -61,6 +68,14 @@ export function AiAssistantScreen() {
     const res = await aiApi.checkoutAiAssistant();
     if (!res.success) {
       setErr(res.message);
+      return;
+    }
+    if (res.data.already_subscribed) {
+      const nextState = res.data.state ?? (await aiApi.getAiAssistant()).data?.state;
+      if (nextState) {
+        setState(nextState);
+        setMessages(nextState.chat_messages ?? []);
+      }
       return;
     }
     const url = res.data.checkout_url;
@@ -75,7 +90,7 @@ export function AiAssistantScreen() {
 
   const send = async () => {
     const q = input.trim();
-    if (q.length < 2 || sending) return;
+    if (q.length < MIN_QUESTION_LENGTH || sending) return;
 
     const userMsg: LocalMessage = {
       id: `local-${Date.now()}`,
@@ -131,7 +146,8 @@ export function AiAssistantScreen() {
           <Ionicons name="sparkles" size={40} color={colors.primary[600]} />
           <Text style={styles.gateTitle}>AI Assistant</Text>
           <Text style={styles.gateBody}>
-            Get instant answers about immigration programs, USCIS processes, and more with our AI-powered assistant.
+            Get instant answers about immigration programs, USCIS processes, and more. One subscription covers both
+            service seeker and provider accounts.
           </Text>
           <Text style={styles.gatePrice}>
             {state?.currency ?? 'USD'} {state?.monthly_price ?? '4.99'} / month
@@ -203,7 +219,7 @@ export function AiAssistantScreen() {
         <TextInput
           value={input}
           onChangeText={setInput}
-          placeholder="Type your question…"
+          placeholder={`Ask a question (at least ${MIN_QUESTION_LENGTH} characters)…`}
           placeholderTextColor={colors.text.tertiary}
           multiline
           style={styles.textInput}
@@ -215,10 +231,10 @@ export function AiAssistantScreen() {
             void send();
             Keyboard.dismiss();
           }}
-          disabled={sending || input.trim().length < 2}
+          disabled={sending || input.trim().length < MIN_QUESTION_LENGTH}
           style={({ pressed }) => [
             styles.sendBtn,
-            (sending || input.trim().length < 2) && styles.sendBtnDisabled,
+            (sending || input.trim().length < MIN_QUESTION_LENGTH) && styles.sendBtnDisabled,
             pressed && styles.sendBtnPressed,
           ]}
         >

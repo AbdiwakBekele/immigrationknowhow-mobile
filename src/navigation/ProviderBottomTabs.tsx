@@ -1,17 +1,15 @@
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
-import { useNavigation, CommonActions, useNavigationState } from '@react-navigation/native';
-import type { DrawerNavigationProp } from '@react-navigation/drawer';
-import { Ionicons } from '@expo/vector-icons';
+import { CommonActions } from '@react-navigation/native';
 import { ProfileStack } from '../screens/account/ProfileStack';
 import { MessagesStack, type MessagesStackParamList } from '../screens/messages/MessagesStack';
 import { LeadsStack, type LeadsStackParamList } from '../screens/provider/LeadsStack';
 import { ProviderDashboardStack, type ProviderDashboardStackParamList } from '../screens/provider/ProviderDashboardStack';
+import { AiAssistantFab } from '../components/AiAssistantFab';
 import { tabBarIcon, useModernTabBarOptions } from './tabBar';
-import { getActiveRouteName, navigationStateHasReaderMode, routeHasReaderMode } from './readerMode';
-import { colors } from '../theme/colors';
+import { routeHasReaderMode } from './readerMode';
 
 /** Primary provider destinations in the bottom bar; hub & billing live in the drawer. */
 export type ProviderBottomTabParamList = {
@@ -22,66 +20,6 @@ export type ProviderBottomTabParamList = {
 };
 
 const Tab = createBottomTabNavigator<ProviderBottomTabParamList>();
-
-const fabStyles = StyleSheet.create({
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 90,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary[600],
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.95 }],
-  },
-});
-
-function AiAssistantFab() {
-  const drawer = useNavigation<DrawerNavigationProp<{ Main: undefined }>>();
-  const { activeRoute, isReaderMode } = useNavigationState((state) => {
-    try {
-      return {
-        activeRoute: getActiveRouteName(state),
-        isReaderMode: navigationStateHasReaderMode(state),
-      };
-    } catch {
-      return { activeRoute: '', isReaderMode: false };
-    }
-  });
-
-  if (activeRoute === 'ProviderAiAssistant' || isReaderMode) return null;
-
-  return (
-    <Pressable
-      onPress={() => {
-        drawer.dispatch(
-          CommonActions.navigate({
-            name: 'Main',
-            params: {
-              screen: 'Dashboard',
-              params: { screen: 'ProviderAiAssistant' },
-            },
-          })
-        );
-      }}
-      accessibilityRole="button"
-      accessibilityLabel="Open AI Assistant"
-      style={({ pressed }) => [fabStyles.fab, pressed && fabStyles.fabPressed]}
-    >
-      <Ionicons name="sparkles" size={26} color="#fff" />
-    </Pressable>
-  );
-}
 
 export function ProviderBottomTabs() {
   const modernTabBarOptions = useModernTabBarOptions();
@@ -123,7 +61,7 @@ export function ProviderBottomTabs() {
         <Tab.Screen name="Messages" component={MessagesStack} options={{ tabBarIcon: tabBarIcon('chatbubbles-outline') }} />
         <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarIcon: tabBarIcon('person-circle-outline') }} />
       </Tab.Navigator>
-      <AiAssistantFab />
+      <AiAssistantFab variant="provider" />
     </View>
   );
 }

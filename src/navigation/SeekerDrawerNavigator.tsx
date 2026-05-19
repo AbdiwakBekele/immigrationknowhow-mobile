@@ -108,7 +108,6 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
           {dvInMenu ? (
             <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
           ) : null}
-          <DrawerGradientLink icon="sparkles-outline" label="AI Assistant" onPress={() => goDiscover('AiAssistant')} indent />
           <DrawerGradientLink icon="library-outline" label="My Library" onPress={() => goDiscover('Library')} indent />
           <DrawerGradientLink icon="play-circle-outline" label="Videos" onPress={() => goDiscover('Videos')} indent />
           <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goDiscover('Community')} indent />

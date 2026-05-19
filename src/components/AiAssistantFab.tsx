@@ -1,61 +1,101 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useNavigationState } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { navigationStateHasReaderMode } from '../navigation/readerMode';
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import type { DrawerNavigationProp } from '@react-navigation/drawer';
+import { useAiAssistantFabSuppressed } from '../navigation/aiAssistantFabVisibility';
+import { focusedRouteChainIncludes, navigationStateHasReaderMode } from '../navigation/readerMode';
 import { colors } from '../theme/colors';
-import { spacing } from '../theme/spacing';
 
-export function AiAssistantFab() {
-  const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = 64 + 10 + insets.bottom;
-  const isReaderMode = useNavigationState((state) => navigationStateHasReaderMode(state));
+const AI_ASSISTANT_ROUTE_NAMES = new Set(['AiAssistant', 'ProviderAiAssistant']);
 
-  if (isReaderMode) return null;
+type AiAssistantFabProps = {
+  /** Seeker & advertiser: Discover → AiAssistant. Provider: Dashboard → ProviderAiAssistant. */
+  variant: 'seeker' | 'provider' | 'advertiser';
+};
+
+export function AiAssistantFab({ variant }: AiAssistantFabProps) {
+  const drawer = useNavigation<DrawerNavigationProp<{ Main: undefined }>>();
+  const suppressedByScreen = useAiAssistantFabSuppressed();
+  const [navigationHidesFab, setNavigationHidesFab] = useState(false);
+
+  useEffect(() => {
+    const syncFromNavigation = () => {
+      try {
+        const state = drawer.getState();
+        setNavigationHidesFab(
+          focusedRouteChainIncludes(state, AI_ASSISTANT_ROUTE_NAMES)
+            || navigationStateHasReaderMode(state),
+        );
+      } catch {
+        setNavigationHidesFab(false);
+      }
+    };
+
+    syncFromNavigation();
+    return drawer.addListener('state', syncFromNavigation);
+  }, [drawer]);
+
+  if (suppressedByScreen || navigationHidesFab) {
+    return null;
+  }
+
+  function openAiAssistant() {
+    if (variant === 'provider') {
+      drawer.dispatch(
+        CommonActions.navigate({
+          name: 'Main',
+          params: {
+            screen: 'Dashboard',
+            params: { screen: 'ProviderAiAssistant' },
+          },
+        }),
+      );
+      return;
+    }
+
+    drawer.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: {
+          screen: 'Discover',
+          params: { screen: 'AiAssistant' },
+        },
+      }),
+    );
+  }
 
   return (
-    <View pointerEvents="box-none" style={[styles.wrap, { bottom: tabBarHeight + spacing.md }]}>
-      <Pressable
-        onPress={() => {
-          // @ts-expect-error: app-defined route names
-          navigation.navigate('Discover', { screen: 'AiAssistant' });
-        }}
-        style={({ pressed }) => [styles.fab, pressed && { opacity: 0.92 }]}
-        accessibilityRole="button"
-        accessibilityLabel="Open AI Assistant"
-      >
-        <Ionicons name="sparkles" size={22} color={colors.text.inverse} />
-        <Text style={styles.label}>AI</Text>
-      </Pressable>
-    </View>
+    <Pressable
+      onPress={openAiAssistant}
+      accessibilityRole="button"
+      accessibilityLabel="Open AI Assistant"
+      style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+    >
+      <Ionicons name="sparkles" size={26} color="#fff" />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    alignSelf: 'center',
-  },
   fab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    position: 'absolute',
+    right: 20,
+    bottom: 90,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.primary[600],
-    paddingHorizontal: 14,
-    height: 48,
-    borderRadius: 24,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  label: {
-    color: colors.text.inverse,
-    fontWeight: '800',
-    letterSpacing: 0.2,
+  fabPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.95 }],
   },
 });
-

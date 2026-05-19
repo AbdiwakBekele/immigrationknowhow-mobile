@@ -185,12 +185,19 @@ export function normalizeApiError(error: unknown): ApiError {
       };
     }
 
+    const status = axiosError.response?.status;
+
     const serverMessage =
       typeof data?.message === 'string'
         ? data.message
         : typeof data?.error === 'string'
           ? data.error
           : undefined;
+
+    const gatewayMessage =
+      status === 502 || status === 503 || status === 504
+        ? 'The server is temporarily unavailable. Please try again in a moment.'
+        : undefined;
 
     const isTimeout =
       axiosError.code === 'ECONNABORTED' ||
@@ -201,7 +208,8 @@ export function normalizeApiError(error: unknown): ApiError {
 
     return {
       success: false,
-      message: serverMessage ?? networkMessage ?? axiosError.message ?? 'Network request failed',
+      message: serverMessage ?? gatewayMessage ?? networkMessage ?? axiosError.message ?? 'Network request failed',
+      errors: data?.errors,
     };
   }
 
