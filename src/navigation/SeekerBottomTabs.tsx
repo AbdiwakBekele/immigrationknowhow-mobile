@@ -1,10 +1,12 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { ProfileStack } from '../screens/account/ProfileStack';
 import { SeekerDashboardStack } from '../screens/seeker/SeekerDashboardStack';
 import { MessagesStack, type MessagesStackParamList } from '../screens/messages/MessagesStack';
 import { SeekerDiscoverStack, type SeekerDiscoverStackParamList } from '../screens/discover/SeekerDiscoverStack';
+import { AiAssistantFab } from '../components/AiAssistantFab';
 import { tabBarIcon, useModernTabBarOptions } from './tabBar';
 import { routeHasReaderMode } from './readerMode';
 
@@ -20,23 +22,27 @@ const Tab = createBottomTabNavigator<SeekerBottomTabParamList>();
 
 export function SeekerBottomTabs() {
   const modernTabBarOptions = useModernTabBarOptions();
+
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        ...modernTabBarOptions,
-        tabBarStyle: routeHasReaderMode(route)
-          ? [modernTabBarOptions.tabBarStyle, { display: 'none' }]
-          : modernTabBarOptions.tabBarStyle,
-      })}
-    >
-      <Tab.Screen
-        name="Dashboard"
-        component={SeekerDashboardStack}
-        options={{ title: 'Home', tabBarIcon: tabBarIcon('home-outline') }}
-      />
-      <Tab.Screen name="Discover" component={SeekerDiscoverStack} options={{ tabBarIcon: tabBarIcon('compass-outline') }} />
-      <Tab.Screen name="Messages" component={MessagesStack} options={{ tabBarIcon: tabBarIcon('chatbubbles-outline') }} />
-      <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarIcon: tabBarIcon('person-circle-outline') }} />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          ...modernTabBarOptions,
+          tabBarStyle: routeHasReaderMode(route)
+            ? [modernTabBarOptions.tabBarStyle, { display: 'none' }]
+            : modernTabBarOptions.tabBarStyle,
+        })}
+      >
+        <Tab.Screen
+          name="Dashboard"
+          component={SeekerDashboardStack}
+          options={{ title: 'Home', tabBarIcon: tabBarIcon('home-outline') }}
+        />
+        <Tab.Screen name="Discover" component={SeekerDiscoverStack} options={{ tabBarIcon: tabBarIcon('compass-outline') }} />
+        <Tab.Screen name="Messages" component={MessagesStack} options={{ tabBarIcon: tabBarIcon('chatbubbles-outline') }} />
+        <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarIcon: tabBarIcon('person-circle-outline') }} />
+      </Tab.Navigator>
+      <AiAssistantFab variant="seeker" />
+    </View>
   );
 }

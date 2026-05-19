@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ProfileStack } from '../screens/account/ProfileStack';
 import { SeekerDiscoverStack } from '../screens/discover/SeekerDiscoverStack';
@@ -16,7 +17,7 @@ const Tab = createBottomTabNavigator<AdvertiserBottomTabParamList>();
 export function AdvertiserBottomTabs() {
   const modernTabBarOptions = useModernTabBarOptions();
   return (
-    <>
+    <View style={{ flex: 1 }}>
       <Tab.Navigator
         screenOptions={({ route }) => ({
           ...modernTabBarOptions,
@@ -28,7 +29,7 @@ export function AdvertiserBottomTabs() {
         <Tab.Screen name="Discover" component={SeekerDiscoverStack} options={{ tabBarIcon: tabBarIcon('compass-outline') }} />
         <Tab.Screen name="Profile" component={ProfileStack} options={{ tabBarIcon: tabBarIcon('person-circle-outline') }} />
       </Tab.Navigator>
-      <AiAssistantFab />
-    </>
+      <AiAssistantFab variant="advertiser" />
+    </View>
   );
 }

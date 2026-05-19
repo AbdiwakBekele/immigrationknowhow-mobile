@@ -38,10 +38,28 @@ export function navigationStateHasReaderMode(state: unknown): boolean {
 }
 
 export function getActiveRouteName(state: unknown): string {
-  const navigationState = asNavigationState(state);
-  if (!navigationState || navigationState.routes.length === 0) return '';
+  const chain = getFocusedRouteChain(state);
 
-  const route = navigationState.routes[navigationState.index ?? 0];
-  const childState = asNavigationState(route.state);
-  return childState ? getActiveRouteName(childState) : route.name ?? '';
+  return chain.length > 0 ? chain[chain.length - 1] : '';
+}
+
+/** Deepest-first chain of focused route names (e.g. Main → Discover → AiAssistant). */
+export function getFocusedRouteChain(state: unknown): string[] {
+  const chain: string[] = [];
+  let current = asNavigationState(state);
+
+  while (current && current.routes.length > 0) {
+    const route = current.routes[current.index ?? 0];
+    if (!route?.name) {
+      break;
+    }
+    chain.push(route.name);
+    current = asNavigationState(route.state);
+  }
+
+  return chain;
+}
+
+export function focusedRouteChainIncludes(state: unknown, names: ReadonlySet<string>): boolean {
+  return getFocusedRouteChain(state).some((name) => names.has(name));
 }

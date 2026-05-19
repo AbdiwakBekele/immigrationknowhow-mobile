@@ -15,7 +15,6 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
-import { AppImage } from '../../components/AppImage';
 import { CommunityPostFeedCard, type CommunityFeedEngagement } from '../../components/community/CommunityPostFeedCard';
 import { CommunityShareSheet } from '../../components/community/CommunityShareSheet';
 import { colors } from '../../theme/colors';
@@ -26,11 +25,7 @@ import { shadows } from '../../theme/shadows';
 import * as communityApi from '../../api/communityApi';
 import type { CommunityPostPayload } from '../../api/communityApi';
 import type { CommunityStackParamList } from './CommunityStack';
-import { communityDescriptionPlainText } from '../../utils/communityContent';
 import { COMMUNITY_SECTION_LABELS } from '../../utils/communityDisplay';
-import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
-
-const THUMB = 88;
 
 const SECTIONS: Array<{ key: string; label: string }> = [
   { key: 'feed', label: COMMUNITY_SECTION_LABELS.feed },
@@ -53,11 +48,27 @@ function buildEngagement(post: CommunityPostPayload): CommunityFeedEngagement {
   };
 }
 
+function mergeEngagement(
+  posts: CommunityPostPayload[],
+  existing: Record<number, CommunityFeedEngagement>,
+): Record<number, CommunityFeedEngagement> {
+  const next = { ...existing };
+  for (const post of posts) {
+    if (!next[post.id]) {
+      next[post.id] = buildEngagement(post);
+    }
+  }
+  return next;
+}
+
 export function CommunityListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<CommunityStackParamList>>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [posts, setPosts] = useState<CommunityPostPayload[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [category, setCategory] = useState('feed');
   const [search, setSearch] = useState('');
   const [sharePost, setSharePost] = useState<CommunityPostPayload | null>(null);
@@ -66,33 +77,73 @@ export function CommunityListScreen() {
 
   const sectionTitle = useMemo(() => COMMUNITY_SECTION_LABELS[category] ?? 'Community', [category]);
 
-  const load = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const load = async (opts: { refresh?: boolean; page?: number; append?: boolean } = {}) => {
+    const { refresh = false, page: pageToLoad = 1, append = false } = opts;
+
+    if (refresh) {
+      setRefreshing(true);
+    } else if (append) {
+      if (loadingMore || !hasMore) return;
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+
     const res = await communityApi.listCommunityPosts({
+      page: pageToLoad,
       ...(category !== 'feed' ? { category } : {}),
       search: search.trim(),
     });
-    if (isRefresh) setRefreshing(false);
+
+    if (refresh) setRefreshing(false);
+    else if (append) setLoadingMore(false);
     else setLoading(false);
+
     if (!res.success) return;
-    const nextPosts = res.data?.posts?.data ?? [];
-    setPosts(nextPosts);
-    setEngagement(
-      nextPosts.reduce<Record<number, CommunityFeedEngagement>>((acc, post) => {
-        acc[post.id] = buildEngagement(post);
-        return acc;
-      }, {})
-    );
+
+    const pageData = res.data?.posts;
+    const nextPosts = pageData?.data ?? [];
+    const currentPage = pageData?.current_page ?? pageToLoad;
+    const lastPage = pageData?.last_page ?? currentPage;
+
+    setPage(currentPage);
+    setHasMore(currentPage < lastPage);
+
+    if (append) {
+      setPosts((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...nextPosts.filter((p) => !seen.has(p.id))];
+      });
+      setEngagement((eng) => mergeEngagement(nextPosts, eng));
+    } else {
+      setPosts(nextPosts);
+      setEngagement(
+        nextPosts.reduce<Record<number, CommunityFeedEngagement>>((acc, post) => {
+          acc[post.id] = buildEngagement(post);
+          return acc;
+        }, {}),
+      );
+    }
   };
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [category])
+      setPage(1);
+      setHasMore(true);
+      void load({ page: 1 });
+    }, [category]),
   );
 
-  const onSearchSubmit = () => void load();
+  const onSearchSubmit = () => {
+    setPage(1);
+    setHasMore(true);
+    void load({ page: 1 });
+  };
+
+  const loadMore = () => {
+    if (loading || loadingMore || refreshing || !hasMore) return;
+    void load({ page: page + 1, append: true });
+  };
 
   const updateEngagement = (postId: number, patch: Partial<CommunityFeedEngagement>) => {
     setEngagement((current) => ({
@@ -202,7 +253,23 @@ export function CommunityListScreen() {
         data={loading ? [] : posts}
         keyExtractor={(p) => String(p.id)}
         ListHeaderComponent={listHeader}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setPage(1);
+              setHasMore(true);
+              void load({ refresh: true, page: 1 });
+            }}
+          />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.35}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator style={styles.footerLoader} color={colors.primary[600]} />
+          ) : null
+        }
         ListEmptyComponent={
           loading ? null : (
             <View style={styles.emptyWrap}>
@@ -213,52 +280,21 @@ export function CommunityListScreen() {
         }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => navigation.navigate('CommunityPost', { id: item.id })}
-            style={styles.postCard}
-          >
-            <View style={styles.postRow}>
-              {item.image_url ? (
-                <AppImage
-                  uri={resolveMediaUrl(item.image_url)}
-                  style={styles.thumb}
-                  contentFit="cover"
-                  height={THUMB}
-                />
-              ) : (
-                <View style={styles.thumbPlaceholder}>
-                  <Ionicons name="document-text-outline" size={28} color={colors.text.muted} />
-                </View>
-              )}
-              <View style={styles.postTextCol}>
-                <Text style={styles.postTitle} numberOfLines={2}>
-                  {item.title ?? `Post #${item.id}`}
-                </Text>
-                {!!item.tag && <Text style={styles.postTag}>{item.tag}</Text>}
-                {!!item.description && (
-                  <Text style={styles.postDesc} numberOfLines={2}>
-                    {communityDescriptionPlainText(item.description)}
-                  </Text>
-                )}
-                <View style={styles.metrics}>
-                  <View style={styles.metric}>
-                    <Ionicons name="heart-outline" size={15} color={colors.text.muted} />
-                    <Text style={styles.metricText}>{item.likes_count ?? 0}</Text>
-                  </View>
-                  <View style={styles.metric}>
-                    <Ionicons name="chatbubble-outline" size={15} color={colors.text.muted} />
-                    <Text style={styles.metricText}>{item.comments_count ?? 0}</Text>
-                  </View>
-                  <View style={styles.metric}>
-                    <Ionicons name="share-outline" size={15} color={colors.text.muted} />
-                    <Text style={styles.metricText}>{item.shares_count ?? 0}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const postEngagement = engagement[item.id] ?? buildEngagement(item);
+          return (
+            <CommunityPostFeedCard
+              post={item}
+              engagement={postEngagement}
+              reacting={reactingPostId === item.id}
+              onOpen={() => navigation.navigate('CommunityPost', { id: item.id })}
+              onLike={() => void onToggleReaction(item.id, 'like')}
+              onComment={() => navigation.navigate('CommunityPost', { id: item.id, focusComments: true })}
+              onShare={() => setSharePost(item)}
+              onBookmark={() => void onToggleReaction(item.id, 'bookmark')}
+            />
+          );
+        }}
       />
       <CommunityShareSheet
         visible={!!sharePost}
@@ -433,72 +469,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: typography.fontSize.sm,
   },
-  postCard: {
-    marginBottom: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: colors.surfaceElevated,
-    overflow: 'hidden',
-    ...shadows.soft,
-  },
-  postRow: {
-    flexDirection: 'row',
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  thumb: {
-    width: THUMB,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-  },
-  thumbPlaceholder: {
-    width: THUMB,
-    height: THUMB,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  postTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  postTitle: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    lineHeight: 22,
-  },
-  postTag: {
-    marginTop: spacing.xs,
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  postDesc: {
-    marginTop: spacing.xs,
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    lineHeight: 20,
-  },
-  metrics: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
-  metric: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metricText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.muted,
+  footerLoader: {
+    marginVertical: spacing.lg,
   },
 });

@@ -37,10 +37,30 @@ export type CommunityNewsItem = {
   image?: string | null;
 };
 
-export async function listCommunityPosts(params: Record<string, unknown> = {}): Promise<ApiResponse<{ posts: { data: CommunityPostPayload[]; total?: number } }>> {
+export type CommunityPostsPage = {
+  data: CommunityPostPayload[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+  next_page_url: string | null;
+};
+
+export async function listCommunityPosts(
+  params: Record<string, unknown> = {},
+): Promise<ApiResponse<{ posts: CommunityPostsPage }>> {
   try {
     const res = await apiClient.get(`${PREFIX}/posts`, { params });
-    return { success: true, message: 'OK', data: { posts: res.data?.posts } };
+    const raw = res.data?.posts;
+    const posts: CommunityPostsPage = {
+      data: Array.isArray(raw?.data) ? raw.data : [],
+      current_page: Number(raw?.current_page ?? 1),
+      last_page: Number(raw?.last_page ?? 1),
+      per_page: Number(raw?.per_page ?? 20),
+      total: Number(raw?.total ?? 0),
+      next_page_url: typeof raw?.next_page_url === 'string' ? raw.next_page_url : null,
+    };
+    return { success: true, message: 'OK', data: { posts } };
   } catch (e) {
     return normalizeApiError(e);
   }
