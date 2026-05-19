@@ -1,5 +1,5 @@
-const LOCAL_HERD_BASE = 'https://hub.immigrantknowhow.com';
-// const LOCAL_HERD_BASE = 'http://web.immigrationknowhow.test';
+// const LOCAL_HERD_BASE = 'https://hub.immigrantknowhow.com';
+const LOCAL_HERD_BASE = 'https://xcdg8ebjuz.sharedwithexpose.com';
 
 // export const BASE_URL = LOCAL_HERD_BASE;
 // export const BASE_URL = 'https://hub.immigrantknowhow.com';

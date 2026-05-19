@@ -18,7 +18,13 @@ const Stack = createNativeStackNavigator<ProvidersStackParamList>();
 export function ProvidersStack() {
   return (
     <Stack.Navigator screenOptions={{ header: (p) => <AppHeader {...p} /> }}>
-      <Stack.Screen name="ProvidersList" component={ProvidersListScreen} options={{ title: 'Providers' }} />
+      <Stack.Screen
+        name="ProvidersList"
+        component={ProvidersListScreen}
+        options={({ route }) => ({
+          title: route.params?.favoritesOnly ? 'Saved' : 'Find Provider',
+        })}
+      />
       <Stack.Screen name="ProviderDetail" component={ProviderDetailScreen} options={{ title: 'Provider' }} />
       <Stack.Screen name="ContactProvider" component={ContactProviderScreen} options={{ title: 'Contact' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />

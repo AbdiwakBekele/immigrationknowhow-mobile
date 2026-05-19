@@ -244,7 +244,10 @@ export function SeekerDashboardScreen() {
   const { user, refreshMe } = useAuth();
 
   const openProvidersList = () => {
-    navigation.navigate('Discover', { screen: 'Providers' });
+    navigation.navigate('Discover', {
+      screen: 'Providers',
+      params: { screen: 'ProvidersList', params: { favoritesOnly: false } },
+    });
   };
 
   const openSavedProviders = () => {
