@@ -15,6 +15,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
+import { AppImage } from '../../components/AppImage';
 import { CommunityPostFeedCard, type CommunityFeedEngagement } from '../../components/community/CommunityPostFeedCard';
 import { CommunityShareSheet } from '../../components/community/CommunityShareSheet';
 import { colors } from '../../theme/colors';
@@ -28,6 +29,8 @@ import type { CommunityStackParamList } from './CommunityStack';
 import { communityDescriptionPlainText } from '../../utils/communityContent';
 import { COMMUNITY_SECTION_LABELS } from '../../utils/communityDisplay';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
+
+const THUMB = 88;
 
 const SECTIONS: Array<{ key: string; label: string }> = [
   { key: 'feed', label: COMMUNITY_SECTION_LABELS.feed },
@@ -429,5 +432,73 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#64748B',
     fontSize: typography.fontSize.sm,
+  },
+  postCard: {
+    marginBottom: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: colors.surfaceElevated,
+    overflow: 'hidden',
+    ...shadows.soft,
+  },
+  postRow: {
+    flexDirection: 'row',
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  thumb: {
+    width: THUMB,
+    borderRadius: radii.md,
+    overflow: 'hidden',
+  },
+  thumbPlaceholder: {
+    width: THUMB,
+    height: THUMB,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  postTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  postTitle: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    lineHeight: 22,
+  },
+  postTag: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  postDesc: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: 20,
+  },
+  metrics: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  metric: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metricText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.muted,
   },
 });

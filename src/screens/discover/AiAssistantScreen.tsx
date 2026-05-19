@@ -4,7 +4,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Keyboard,
-  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -13,7 +12,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
 import { colors } from '../../theme/colors';
@@ -21,10 +21,16 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as aiApi from '../../api/aiAssistantApi';
 import type { ChatMessage } from '../../api/aiAssistantApi';
+import type { StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
 
 type LocalMessage = ChatMessage & { pending?: boolean };
 
+type AiAssistantNav = NativeStackNavigationProp<{
+  StripeCheckout: StripeCheckoutParams;
+}>;
+
 export function AiAssistantScreen() {
+  const navigation = useNavigation<AiAssistantNav>();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<aiApi.AiAssistantState | null>(null);
@@ -58,7 +64,13 @@ export function AiAssistantScreen() {
       return;
     }
     const url = res.data.checkout_url;
-    if (url) await Linking.openURL(url);
+    if (url) {
+      navigation.navigate('StripeCheckout', {
+        checkoutUrl: url,
+        variant: 'aiAssistant',
+        checkoutSessionId: res.data.checkout_session_id || undefined,
+      });
+    }
   };
 
   const send = async () => {

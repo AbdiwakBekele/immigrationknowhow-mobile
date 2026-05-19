@@ -9,6 +9,7 @@ import { ProviderAnalyticsScreen } from './ProviderAnalyticsScreen';
 import { ProviderBackgroundCheckScreen } from './ProviderBackgroundCheckScreen';
 import { ProviderReviewsScreen } from './ProviderReviewsScreen';
 import { AiAssistantScreen } from '../discover/AiAssistantScreen';
+import { StripeCheckoutScreen, type StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
 
 export type ProviderDashboardStackParamList = {
   ProviderDashboardHome: undefined;
@@ -20,6 +21,7 @@ export type ProviderDashboardStackParamList = {
   ProviderReviews: undefined;
   ProviderAiAssistant: undefined;
   Notifications: undefined;
+  StripeCheckout: StripeCheckoutParams;
 };
 
 const Stack = createNativeStackNavigator<ProviderDashboardStackParamList>();
@@ -40,6 +42,7 @@ export function ProviderDashboardStack() {
       />
       <Stack.Screen name="Notifications" component={ProviderNotificationsScreen} options={{ title: 'Notifications' }} />
       <Stack.Screen name="ProviderAiAssistant" component={AiAssistantScreen} options={{ title: 'AI Assistant' }} />
+      <Stack.Screen name="StripeCheckout" component={StripeCheckoutScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
