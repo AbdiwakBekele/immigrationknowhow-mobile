@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 import type { NavigatorScreenParams } from '@react-navigation/native';
@@ -48,19 +48,12 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
     navigation.dispatch(
       CommonActions.navigate({
         name: 'Main',
-        params: { screen: 'Discover', params: { screen: 'Providers' } },
-      })
-    );
-    navigation.closeDrawer();
-  };
-
-  const goSavedProviders = () => {
-    navigation.dispatch(
-      CommonActions.navigate({
-        name: 'Main',
         params: {
           screen: 'Discover',
-          params: { screen: 'Providers', params: { screen: 'ProvidersList', params: { favoritesOnly: true } } },
+          params: {
+            screen: 'Providers',
+            params: { screen: 'ProvidersList', params: { favoritesOnly: false } },
+          },
         },
       })
     );
@@ -98,6 +91,7 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
         <Text style={drawerBrandStyles.brandSub}>Service seeker</Text>
 
         <DrawerGradientLink icon="home-outline" label="Dashboard" onPress={() => goMain('Dashboard')} />
+        <DrawerGradientLink icon="search-outline" label="Find Provider" onPress={goProvidersList} />
 
         <DrawerCollapsibleSection title="Home & account" defaultOpen>
           <DrawerGradientLink icon="chatbubbles-outline" label="Messages" onPress={goMessagesList} indent />
@@ -113,11 +107,6 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
           <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goDiscover('Community')} indent />
           <DrawerGradientLink icon="megaphone-outline" label="My Ads" onPress={() => goDiscover('Ads')} indent />
           <DrawerGradientLink icon="star-outline" label="My reviews" onPress={() => goDiscover('Reviews')} indent />
-        </DrawerCollapsibleSection>
-
-        <DrawerCollapsibleSection title="Providers" defaultOpen>
-          <DrawerGradientLink icon="search-outline" label="Browse providers" onPress={goProvidersList} indent />
-          <DrawerGradientLink icon="heart-outline" label="Saved providers" onPress={goSavedProviders} indent />
         </DrawerCollapsibleSection>
 
         <DrawerCollapsibleSection title="Contracts" defaultOpen>

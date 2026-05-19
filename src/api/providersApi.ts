@@ -4,7 +4,9 @@ import type { ProviderDetail, ProviderListItem } from '../types/provider';
 
 export type ProvidersQuery = {
   service_type?: string;
+  service_types?: string[];
   language?: string;
+  languages?: string[];
   location?: string;
   search?: string;
   favorites?: boolean;

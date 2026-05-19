@@ -46,7 +46,11 @@ const marketplaceLinks: Array<{
     icon: 'search-outline',
     iconBg: '#DBEAFE',
     iconColor: '#2563EB',
-    onPress: (nav) => nav.navigate('Providers'),
+    onPress: (nav) =>
+      nav.navigate('Providers', {
+        screen: 'ProvidersList',
+        params: { favoritesOnly: false },
+      }),
   },
   {
     title: 'My contracts',
