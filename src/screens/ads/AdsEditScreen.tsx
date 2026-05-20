@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
 import { AdvertiserScreenLayout } from '../../components/advertiser/AdvertiserScreenLayout';
 import { useAuth } from '../../context/AuthContext';
+import { useAdvertiserStyles } from '../../context/AdvertiserLayoutContext';
 import { colors } from '../../theme/colors';
 import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
@@ -47,6 +48,7 @@ export function AdsEditScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AdsStackParamList>>();
   const { role } = useAuth();
   const isAdvertiserPortal = role === 'advertiser';
+  const advertiserUi = useAdvertiserStyles();
   const ScreenWrap = isAdvertiserPortal ? AdvertiserScreenLayout : AppScreen;
   const screenWrapProps = isAdvertiserPortal
     ? { fill: true as const }
@@ -159,11 +161,11 @@ export function AdsEditScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
       >
         <ScrollView
-          style={styles.flex}
+          style={[styles.flex, isAdvertiserPortal && advertiserUi.scroll]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isAdvertiserPortal && advertiserUi.scrollContent]}
           automaticallyAdjustKeyboardInsets
         >
           <Text style={styles.subtitle}>Status: {adStatusLabel(status)}</Text>

@@ -46,7 +46,7 @@ export function AdsListScreen() {
   const advertiserLayout = useAdvertiserLayout();
   const advertiserUi = useAdvertiserStyles();
   const seekerLayout = useResponsiveLayout();
-  const listColumns = isAdvertiserPortal ? 1 : seekerLayout.listColumns;
+  const listColumns = isAdvertiserPortal ? advertiserLayout.listColumns : seekerLayout.listColumns;
   const stackActions = isAdvertiserPortal ? advertiserLayout.stackActions : seekerLayout.stackActions;
   const ScreenWrap = isAdvertiserPortal ? AdvertiserScreenLayout : AppScreen;
   const screenWrapProps = isAdvertiserPortal
@@ -535,6 +535,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  adActionsStacked: {
+    flexDirection: 'column',
+  },
+  adActionFullWidth: {
+    flex: 0,
+    width: '100%',
+    minWidth: '100%',
   },
   adActionSecondary: {
     flex: 1,
