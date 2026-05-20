@@ -30,17 +30,17 @@ const Tab = createBottomTabNavigator<AdvertiserBottomTabParamList>();
 const PRIMARY_TABS = ['Dashboard', 'MyAds', 'Analytics'] as const;
 
 export function AdvertiserBottomTabs() {
-  const modernTabBarOptions = useModernTabBarOptions();
+  const tabBarOptions = useModernTabBarOptions();
   return (
     <View style={{ flex: 1, width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
       <Tab.Navigator
         initialRouteName="Dashboard"
         screenOptions={({ route }) => ({
-          ...modernTabBarOptions,
+          ...tabBarOptions,
           ...advertiserTabScreenOptions,
           tabBarStyle: routeHasReaderMode(route)
-            ? [modernTabBarOptions.tabBarStyle, { display: 'none' }]
-            : modernTabBarOptions.tabBarStyle,
+            ? [tabBarOptions.tabBarStyle, { display: 'none' }]
+            : tabBarOptions.tabBarStyle,
         })}
         screenListeners={({ navigation, route }) => ({
           tabPress: (e) => {

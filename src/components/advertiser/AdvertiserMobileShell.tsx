@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: STRICT_MOBILE_MAX_WIDTH,
-    overflow: 'hidden',
+    overflow: 'visible',
     backgroundColor: colors.background,
     ...(Platform.OS === 'web'
       ? {
