@@ -85,11 +85,16 @@ function logResponseError(err: AxiosError) {
     `│ message: ${msg}\n` +
     `│ body:    ${preview}`;
   console.error(summary);
-  logTerminalError('API REQUEST FAILED', new Error(msg), {
+  const apiMessage =
+    typeof raw === 'object' && raw !== null && 'message' in raw && typeof (raw as { message?: unknown }).message === 'string'
+      ? (raw as { message: string }).message
+      : undefined;
+  logTerminalError('API REQUEST FAILED', new Error(apiMessage ?? msg), {
     status: status ?? 'unknown',
     url,
     code: code ?? '—',
     ms: ms ?? '—',
+    ...(apiMessage ? { apiMessage } : {}),
   });
 }
 

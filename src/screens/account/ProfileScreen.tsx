@@ -3,6 +3,8 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppScreen } from '../../components/AppScreen';
+import { AdvertiserScreenLayout } from '../../components/advertiser/AdvertiserScreenLayout';
+import { useAdvertiserStyles } from '../../context/AdvertiserLayoutContext';
 import { AppButton } from '../../components/AppButton';
 import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
@@ -18,6 +20,8 @@ import { RoleAccountSection } from '../../components/account/RoleAccountSection'
 
 export function ProfileScreen() {
   const { user, role, signOut, refreshMe } = useAuth();
+  const isAdvertiserPortal = role === 'advertiser';
+  const advertiserUi = useAdvertiserStyles();
   const [profileUser, setProfileUser] = useState<profileApi.MobileProfileData['user'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -175,11 +179,11 @@ export function ProfileScreen() {
     await refreshMe();
   };
 
-  return (
-    <AppScreen variant="gradient" style={styles.screen}>
+  const body = (
       <ScrollView
+        style={isAdvertiserPortal ? advertiserUi.scroll : undefined}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isAdvertiserPortal && advertiserUi.scrollContent]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroCard}>
@@ -240,6 +244,15 @@ export function ProfileScreen() {
           <AppButton title="Log out" onPress={() => void signOut()} variant="ghost" />
         </View>
       </ScrollView>
+  );
+
+  if (isAdvertiserPortal) {
+    return <AdvertiserScreenLayout>{body}</AdvertiserScreenLayout>;
+  }
+
+  return (
+    <AppScreen variant="gradient" style={styles.screen}>
+      {body}
     </AppScreen>
   );
 }

@@ -5,7 +5,6 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -15,20 +14,19 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppImage } from '../../components/AppImage';
 import { AppScreen } from '../../components/AppScreen';
+import { AdvertiserScreenLayout } from '../../components/advertiser/AdvertiserScreenLayout';
+import { useAuth } from '../../context/AuthContext';
+import { useAdvertiserLayout, useAdvertiserStyles } from '../../context/AdvertiserLayoutContext';
+import { useResponsiveLayout } from '../../hooks/useResponsiveLayout';
 import { colors } from '../../theme/colors';
 import { radii } from '../../theme/layout';
 import { shadows } from '../../theme/shadows';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
+import { adStatusLabel, adStatusStyle, formatAdPrice } from '../../utils/adUi';
 import * as adsApi from '../../api/adsApi';
 import type { AdsStackParamList } from './AdsStack';
-
-type AdsSummary = {
-  views?: number;
-  clicks?: number;
-  ctr?: number;
-};
 
 type AdItem = {
   uuid: string;
@@ -41,59 +39,34 @@ type AdItem = {
   analytics?: { views?: number; clicks?: number; ctr?: number };
 };
 
-function adStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    published: 'Published',
-    pending_payment: 'Pending payment',
-    pending_approval: 'Pending approval',
-    draft: 'Draft',
-    rejected: 'Rejected',
-    suspended: 'Suspended',
-    pending: 'Pending',
-  };
-  return labels[status] ?? status.replace(/_/g, ' ');
-}
-
-function adStatusStyle(status: string): { bg: string; text: string; border: string } {
-  switch (status) {
-    case 'published':
-      return { bg: '#d1fae5', text: '#047857', border: '#a7f3d0' };
-    case 'pending_payment':
-      return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' };
-    case 'pending_approval':
-      return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' };
-    case 'rejected':
-      return { bg: '#ffe4e6', text: '#be123c', border: '#fecdd3' };
-    case 'suspended':
-      return { bg: '#ede9fe', text: '#6d28d9', border: '#ddd6fe' };
-    default:
-      return { bg: colors.surfaceElevated, text: colors.text.secondary, border: colors.border };
-  }
-}
-
-function formatAdPrice(cents?: number, currency?: string): string | null {
-  if (cents == null) return null;
-  const code = (currency ?? 'USD').toUpperCase();
-  return `${code} ${(cents / 100).toFixed(2)}`;
-}
-
 export function AdsListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AdsStackParamList>>();
+  const { role } = useAuth();
+  const isAdvertiserPortal = role === 'advertiser';
+  const advertiserLayout = useAdvertiserLayout();
+  const advertiserUi = useAdvertiserStyles();
+  const seekerLayout = useResponsiveLayout();
+  const listColumns = isAdvertiserPortal ? 1 : seekerLayout.listColumns;
+  const stackActions = isAdvertiserPortal ? advertiserLayout.stackActions : seekerLayout.stackActions;
+  const ScreenWrap = isAdvertiserPortal ? AdvertiserScreenLayout : AppScreen;
+  const screenWrapProps = isAdvertiserPortal
+    ? { fill: true as const }
+    : { variant: 'gradient' as const, safeAreaEdges: ['left', 'right'] as const, constrained: true as const };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [payingUuid, setPayingUuid] = useState<string | null>(null);
   const [ads, setAds] = useState<AdItem[]>([]);
-  const [summary, setSummary] = useState<AdsSummary | null>(null);
+  const [postingPrice, setPostingPrice] = useState<{ amount_cents?: number; currency?: string } | null>(null);
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
-    const [res, ares] = await Promise.all([adsApi.listAds(), adsApi.getAdsAnalytics()]);
+    const res = await adsApi.listAds();
     if (isRefresh) setRefreshing(false);
     else setLoading(false);
     if (!res.success) return;
     setAds(res.data?.ads ?? []);
-    if (ares.success) setSummary(ares.data?.summary ?? null);
+    setPostingPrice(res.data?.ad_posting_price ?? null);
   };
 
   useFocusEffect(
@@ -137,23 +110,21 @@ export function AdsListScreen() {
     }
   };
 
-  const ctrDisplay = summary?.ctr != null ? `${summary.ctr}%` : '—';
+  const publishFee = formatAdPrice(postingPrice?.amount_cents, postingPrice?.currency);
 
   const listHeader = (
     <View style={styles.header}>
-      <Text style={styles.subtitle}>Track performance across all your sponsored ads.</Text>
-      {summary ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
-          <MiniStat label="Views" value={String(summary.views ?? 0)} accent="#0ea5e9" />
-          <MiniStat label="Clicks" value={String(summary.clicks ?? 0)} accent="#059669" />
-          <MiniStat label="CTR" value={ctrDisplay} accent={colors.primary[600]} />
-        </ScrollView>
-      ) : null}
+      <Text style={styles.pageTitle}>My ads</Text>
+      <Text style={styles.subtitle}>
+        {publishFee
+          ? `One-time publish fee: ${publishFee} per ad. Create, edit, and pay to publish sponsored ads.`
+          : 'Create, edit, and manage your sponsored ads.'}
+      </Text>
     </View>
   );
 
   return (
-    <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
+    <ScreenWrap {...screenWrapProps} style={styles.screen}>
       {loading && !refreshing ? (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.primary[600]} />
@@ -178,11 +149,14 @@ export function AdsListScreen() {
         </View>
       ) : (
         <FlatList
-          style={styles.list}
+          key={`ads-cols-${listColumns}`}
+          style={[styles.list, isAdvertiserPortal && advertiserUi.scroll]}
           data={ads}
           keyExtractor={(a) => a.uuid}
+          numColumns={listColumns}
+          columnWrapperStyle={listColumns > 1 ? styles.columnRow : undefined}
           ListHeaderComponent={listHeader}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, isAdvertiserPortal && advertiserUi.scrollContent]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
           ListFooterComponent={
             <Pressable onPress={() => navigation.navigate('AdsCreate')} style={[styles.createButton, styles.createButtonFooter]}>
@@ -193,6 +167,8 @@ export function AdsListScreen() {
           renderItem={({ item }) => (
             <AdCard
               item={item}
+              multiColumn={listColumns > 1}
+              stackActions={stackActions}
               paying={payingUuid === item.uuid}
               onPay={() => void startCheckout(item.uuid)}
               onEdit={() => navigation.navigate('AdsEdit', { uuid: item.uuid })}
@@ -201,18 +177,22 @@ export function AdsListScreen() {
           )}
         />
       )}
-    </AppScreen>
+    </ScreenWrap>
   );
 }
 
 function AdCard({
   item,
+  multiColumn,
+  stackActions,
   paying,
   onPay,
   onEdit,
   onDelete,
 }: {
   item: AdItem;
+  multiColumn: boolean;
+  stackActions: boolean;
   paying: boolean;
   onPay: () => void;
   onEdit: () => void;
@@ -225,7 +205,7 @@ function AdCard({
   const ctr = item.analytics?.ctr ?? 0;
 
   return (
-    <View style={styles.adCard}>
+    <View style={[styles.adCard, multiColumn && styles.adCardColumn]}>
       <View style={styles.adMedia}>
         {item.image_url ? (
           <AppImage uri={resolveMediaUrl(item.image_url)} style={styles.adImage} contentFit="cover" height={160} />
@@ -237,16 +217,20 @@ function AdCard({
         )}
         <View style={styles.adMediaOverlay}>
           <View style={styles.previewPill}>
-            <Text style={styles.previewPillText}>Ad preview</Text>
+            <Text style={styles.previewPillText} numberOfLines={1}>
+              Ad preview
+            </Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: st.bg, borderColor: st.border }]}>
-            <Text style={[styles.statusBadgeText, { color: st.text }]}>{adStatusLabel(item.status)}</Text>
+          <View style={[styles.statusBadge, styles.statusBadgeOverlay, { backgroundColor: st.bg, borderColor: st.border }]}>
+            <Text style={[styles.statusBadgeText, { color: st.text }]} numberOfLines={1}>
+              {adStatusLabel(item.status)}
+            </Text>
           </View>
         </View>
       </View>
 
       <View style={styles.adBody}>
-        <Text style={styles.adTitle} numberOfLines={1}>
+        <Text style={styles.adTitle} numberOfLines={2}>
           {item.title}
         </Text>
         {!!item.description && (
@@ -281,12 +265,12 @@ function AdCard({
           </View>
         </View>
 
-        <View style={styles.adActionsRow}>
-          <Pressable onPress={onEdit} style={styles.adActionSecondary}>
+        <View style={[styles.adActionsRow, stackActions && styles.adActionsStacked]}>
+          <Pressable onPress={onEdit} style={[styles.adActionSecondary, stackActions && styles.adActionFullWidth]}>
             <Ionicons name="create-outline" size={16} color={colors.primary[700]} />
             <Text style={styles.adActionSecondaryText}>Edit</Text>
           </Pressable>
-          <Pressable onPress={onDelete} style={styles.adActionDanger}>
+          <Pressable onPress={onDelete} style={[styles.adActionDanger, stackActions && styles.adActionFullWidth]}>
             <Ionicons name="trash-outline" size={16} color="#be123c" />
             <Text style={styles.adActionDangerText}>Delete</Text>
           </Pressable>
@@ -313,20 +297,14 @@ function AdCard({
   );
 }
 
-function MiniStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <View style={styles.miniStat}>
-      <Text style={styles.miniStatLabel}>{label}</Text>
-      <Text style={[styles.miniStatValue, { color: accent ?? colors.text.primary }]}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: {
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: 0,
+  },
+  columnRow: {
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   list: {
     flex: 1,
@@ -344,9 +322,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing['3xl'],
   },
+  adCardColumn: {
+    flex: 1,
+    marginBottom: 0,
+  },
   emptyCard: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 420,
     alignItems: 'center',
     paddingVertical: spacing['3xl'],
     paddingHorizontal: spacing.xl,
@@ -387,32 +369,16 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: spacing.lg,
   },
+  pageTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
   subtitle: {
+    marginTop: spacing.xs,
     color: colors.text.secondary,
     fontSize: typography.fontSize.sm,
-    marginBottom: spacing.md,
-  },
-  statsRow: {
-    gap: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  miniStat: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minWidth: 96,
-    ...shadows.soft,
-  },
-  miniStatLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.muted,
-  },
-  miniStatValue: {
-    marginTop: 2,
-    fontWeight: typography.fontWeight.bold,
+    lineHeight: 20,
   },
   createButton: {
     marginTop: spacing.xl,
@@ -435,6 +401,8 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
   },
   adCard: {
+    width: '100%',
+    maxWidth: '100%',
     marginBottom: spacing.lg,
     borderRadius: radii.xl,
     borderWidth: 1,
@@ -473,10 +441,16 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   previewPill: {
+    flexShrink: 1,
+    maxWidth: '48%',
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radii.full,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
+  },
+  statusBadgeOverlay: {
+    flexShrink: 1,
+    maxWidth: '48%',
   },
   previewPillText: {
     fontSize: typography.fontSize.xs,
@@ -498,6 +472,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   adTitle: {
+    flexShrink: 1,
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
@@ -557,7 +532,7 @@ const styles = StyleSheet.create({
   },
   adActionsRow: {
     flexDirection: 'row',
-    flexWrap: 'nowrap',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
@@ -580,6 +555,7 @@ const styles = StyleSheet.create({
   },
   adActionDanger: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

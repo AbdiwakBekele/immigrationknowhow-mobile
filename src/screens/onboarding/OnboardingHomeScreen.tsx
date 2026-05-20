@@ -563,12 +563,8 @@ export function OnboardingHomeScreen({
   async function handleSeekerSendPhoneOtp(): Promise<boolean> {
     setBusy(true);
     setError(null);
+    // Phone step only — address was saved on step 2 (matches web `OnboardingPhoneVerification`).
     const res = await onboardingApi.sendOtp({
-      city: seekerCity.trim(),
-      state: seekerState.trim(),
-      country: seekerCountry,
-      postal_code: seekerPostal.trim(),
-      preferred_language: seekerLanguage,
       phone: fullPhoneDigits,
     });
     setBusy(false);
@@ -683,12 +679,6 @@ export function OnboardingHomeScreen({
     setBusy(true);
     setError(null);
     const res = await onboardingApi.sendOtp({
-      address: advStreet.trim(),
-      city: advCity.trim(),
-      state: advState.trim(),
-      country: advCountry,
-      postal_code: advPostal.trim(),
-      preferred_language: advLanguage,
       phone: fullPhoneDigits,
     });
     setBusy(false);

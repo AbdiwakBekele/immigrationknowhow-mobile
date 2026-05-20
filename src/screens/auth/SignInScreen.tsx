@@ -16,7 +16,6 @@ import { AppButton } from '../../components/AppButton';
 import { BrandWordmark } from '../../components/BrandWordmark';
 import { colors } from '../../theme/colors';
 import { radii } from '../../theme/layout';
-import { screenPaddingX } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
@@ -45,7 +44,7 @@ export function SignInScreen() {
   }
 
   return (
-    <AppScreen variant="muted">
+    <AppScreen variant="muted" constrained>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -109,7 +108,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: screenPaddingX,
     paddingBottom: spacing['3xl'],
     paddingTop: spacing.md,
   },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { createDrawerNavigator, DrawerContentScrollView } from '@react-navigation/drawer';
 import type { DrawerContentComponentProps } from '@react-navigation/drawer';
 import type { NavigatorScreenParams } from '@react-navigation/native';
@@ -7,19 +7,21 @@ import { CommonActions } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AdvertiserBottomTabs, type AdvertiserBottomTabParamList } from './AdvertiserBottomTabs';
-import type { SeekerDiscoverStackParamList } from '../screens/discover/SeekerDiscoverStack';
+import { ProfileStack } from '../screens/account/ProfileStack';
+import { AdvertiserMobileShell } from '../components/advertiser/AdvertiserMobileShell';
+import { useAdvertiserLayout } from '../context/AdvertiserLayoutContext';
+import { advertiserSceneStyle } from './advertiserNavigationOptions';
 import { drawerGradient } from '../theme/gradients';
 import { spacing } from '../theme/spacing';
 import {
-  DrawerCollapsibleSection,
   DrawerGradientLink,
   drawerBrandStyles,
   drawerScrollPadding,
 } from '../components/drawer/DrawerCollapsibleSection';
-import { useDvLottery } from '../context/DvLotteryContext';
 
 export type AdvertiserDrawerParamList = {
   Main: NavigatorScreenParams<AdvertiserBottomTabParamList>;
+  Profile: undefined;
 };
 
 const Drawer = createDrawerNavigator<AdvertiserDrawerParamList>();
@@ -27,21 +29,30 @@ const Drawer = createDrawerNavigator<AdvertiserDrawerParamList>();
 function AdvertiserDrawerContent(props: DrawerContentComponentProps) {
   const { navigation } = props;
   const insets = useSafeAreaInsets();
-  const { showInMenu: dvInMenu } = useDvLottery();
 
   const goMain = (screen: keyof AdvertiserBottomTabParamList) => {
-    navigation.dispatch(CommonActions.navigate({ name: 'Main', params: { screen } }));
     navigation.closeDrawer();
-  };
-
-  const goDiscover = (screen: keyof SeekerDiscoverStackParamList) => {
     navigation.dispatch(
       CommonActions.navigate({
         name: 'Main',
-        params: { screen: 'Discover', params: { screen } },
+        params: { screen },
       })
     );
+  };
+
+  const goCreateAd = () => {
     navigation.closeDrawer();
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'Main',
+        params: { screen: 'MyAds', params: { screen: 'AdsCreate' } },
+      })
+    );
+  };
+
+  const goProfile = () => {
+    navigation.closeDrawer();
+    navigation.navigate('Profile');
   };
 
   return (
@@ -54,23 +65,11 @@ function AdvertiserDrawerContent(props: DrawerContentComponentProps) {
         <Text style={drawerBrandStyles.brand}>ImmigrationKnowHow</Text>
         <Text style={drawerBrandStyles.brandSub}>Advertiser</Text>
 
-        <DrawerCollapsibleSection title="Account" defaultOpen>
-          <DrawerGradientLink icon="compass-outline" label="Discover" onPress={() => goMain('Discover')} indent />
-          <DrawerGradientLink icon="person-circle-outline" label="Profile" onPress={() => goMain('Profile')} indent />
-        </DrawerCollapsibleSection>
-
-        <DrawerCollapsibleSection title="Discover" defaultOpen>
-          <DrawerGradientLink icon="planet-outline" label="Discover home" onPress={() => goDiscover('DiscoverHome')} indent />
-          {dvInMenu ? (
-            <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
-          ) : null}
-          <DrawerGradientLink icon="sparkles-outline" label="AI Assistant" onPress={() => goDiscover('AiAssistant')} indent />
-          <DrawerGradientLink icon="library-outline" label="My Library" onPress={() => goDiscover('Library')} indent />
-          <DrawerGradientLink icon="play-circle-outline" label="Videos" onPress={() => goDiscover('Videos')} indent />
-          <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goDiscover('Community')} indent />
-          <DrawerGradientLink icon="megaphone-outline" label="My Ads" onPress={() => goDiscover('Ads')} indent />
-          <DrawerGradientLink icon="star-outline" label="My reviews" onPress={() => goDiscover('Reviews')} indent />
-        </DrawerCollapsibleSection>
+        <DrawerGradientLink icon="speedometer-outline" label="Dashboard" onPress={() => goMain('Dashboard')} />
+        <DrawerGradientLink icon="megaphone-outline" label="My Ads" onPress={() => goMain('MyAds')} />
+        <DrawerGradientLink icon="add-circle-outline" label="Create ad" onPress={goCreateAd} />
+        <DrawerGradientLink icon="stats-chart-outline" label="Ad analytics" onPress={() => goMain('Analytics')} />
+        <DrawerGradientLink icon="person-circle-outline" label="Account" onPress={goProfile} />
       </DrawerContentScrollView>
     </LinearGradient>
   );
@@ -82,17 +81,29 @@ const styles = StyleSheet.create({
 
 export function AdvertiserDrawerNavigator() {
   return (
+    <AdvertiserMobileShell>
+      <AdvertiserDrawerInner />
+    </AdvertiserMobileShell>
+  );
+}
+
+function AdvertiserDrawerInner() {
+  const { drawerWidth } = useAdvertiserLayout();
+
+  return (
     <Drawer.Navigator
       id="AdvertiserRootDrawer"
       drawerContent={(p) => <AdvertiserDrawerContent {...p} />}
       screenOptions={{
         headerShown: false,
         drawerType: 'slide',
-        drawerStyle: { width: 320, backgroundColor: 'transparent' },
+        drawerStyle: { width: drawerWidth, backgroundColor: 'transparent' },
         overlayColor: 'rgba(15,23,42,0.45)',
+        sceneStyle: advertiserSceneStyle,
       }}
     >
-      <Drawer.Screen name="Main" component={AdvertiserBottomTabs} options={{ title: 'Home' }} />
+      <Drawer.Screen name="Main" component={AdvertiserBottomTabs} options={{ title: 'Ads' }} />
+      <Drawer.Screen name="Profile" component={ProfileStack} options={{ title: 'Account' }} />
     </Drawer.Navigator>
   );
 }

@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { AppScreen } from '../../components/AppScreen';
 import { colors } from '../../theme/colors';
-import { radii, screenPaddingX } from '../../theme/layout';
+import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
@@ -83,7 +83,7 @@ export function DiscoverHomeScreen() {
   const { showInMenu: dvInMenu } = useDvLottery();
 
   return (
-    <AppScreen variant="gradient" style={styles.screen}>
+    <AppScreen variant="gradient" constrained style={styles.screen}>
       <Text style={styles.title}>Discover</Text>
       <Text style={styles.lead}>Tools and content to support your immigration journey.</Text>
 
@@ -152,7 +152,6 @@ export function DiscoverHomeScreen() {
 
 const styles = StyleSheet.create({
   screen: {
-    paddingHorizontal: screenPaddingX,
     paddingTop: spacing.md,
   },
   title: {

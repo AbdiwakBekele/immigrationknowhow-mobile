@@ -10,7 +10,7 @@ import { colors } from '../theme/colors';
 const AI_ASSISTANT_ROUTE_NAMES = new Set(['AiAssistant', 'ProviderAiAssistant']);
 
 type AiAssistantFabProps = {
-  /** Seeker & advertiser: Discover → AiAssistant. Provider: Dashboard → ProviderAiAssistant. */
+  /** Seeker: Discover → AiAssistant. Advertiser: Explore → AiAssistant. Provider: Dashboard → ProviderAiAssistant. */
   variant: 'seeker' | 'provider' | 'advertiser';
 };
 
@@ -58,7 +58,7 @@ export function AiAssistantFab({ variant }: AiAssistantFabProps) {
       CommonActions.navigate({
         name: 'Main',
         params: {
-          screen: 'Discover',
+          screen: variant === 'advertiser' ? 'Explore' : 'Discover',
           params: { screen: 'AiAssistant' },
         },
       }),

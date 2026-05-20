@@ -1,10 +1,11 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import type { ComponentProps } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
+import { STRICT_MOBILE_MAX_WIDTH } from '../theme/responsive';
 
 export type IonIconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -16,6 +17,8 @@ export function tabBarIcon(name: IonIconName) {
 
 export function useModernTabBarOptions(): BottomTabNavigationOptions {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const tabBarWidth = Math.min(width, STRICT_MOBILE_MAX_WIDTH);
   const baseBottomPad = Platform.OS === 'ios' ? 12 : 10;
   const baseMinHeight = Platform.OS === 'ios' ? 72 : 64;
 
@@ -44,6 +47,9 @@ export function useModernTabBarOptions(): BottomTabNavigationOptions {
       shadowOpacity: 0.06,
       shadowRadius: 12,
       shadowOffset: { width: 0, height: -4 },
+      width: '100%',
+      maxWidth: tabBarWidth,
+      alignSelf: 'center' as const,
     },
   };
 }

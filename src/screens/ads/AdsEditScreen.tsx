@@ -17,6 +17,8 @@ import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
+import { AdvertiserScreenLayout } from '../../components/advertiser/AdvertiserScreenLayout';
+import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
@@ -43,6 +45,12 @@ function adStatusLabel(status: string): string {
 export function AdsEditScreen() {
   const route = useRoute<Route>();
   const navigation = useNavigation<NativeStackNavigationProp<AdsStackParamList>>();
+  const { role } = useAuth();
+  const isAdvertiserPortal = role === 'advertiser';
+  const ScreenWrap = isAdvertiserPortal ? AdvertiserScreenLayout : AppScreen;
+  const screenWrapProps = isAdvertiserPortal
+    ? { fill: true as const }
+    : { variant: 'gradient' as const, safeAreaEdges: ['left', 'right'] as const, constrained: true as const };
   const insets = useSafeAreaInsets();
   const keyboardVerticalOffset = insets.top + HEADER_BAR_HEIGHT;
 
@@ -135,16 +143,16 @@ export function AdsEditScreen() {
 
   if (loading) {
     return (
-      <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
+      <ScreenWrap {...screenWrapProps} style={styles.screen}>
         <View style={styles.centered}>
           <ActivityIndicator color={colors.primary[600]} />
         </View>
-      </AppScreen>
+      </ScreenWrap>
     );
   }
 
   return (
-    <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
+    <ScreenWrap {...screenWrapProps} style={styles.screen}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -219,7 +227,7 @@ export function AdsEditScreen() {
           <View style={{ height: spacing['3xl'] }} />
         </ScrollView>
       </KeyboardAvoidingView>
-    </AppScreen>
+    </ScreenWrap>
   );
 }
 
@@ -229,6 +237,8 @@ function label() {
 
 function inp() {
   return {
+    width: '100%',
+    alignSelf: 'stretch',
     marginTop: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -243,7 +253,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   screen: {
     flex: 1,
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: 0,
   },
