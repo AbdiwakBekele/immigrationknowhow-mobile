@@ -17,6 +17,7 @@ import {
   drawerScrollPadding,
 } from '../components/drawer/DrawerCollapsibleSection';
 import { useDvLottery } from '../context/DvLotteryContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 export type SeekerDrawerParamList = {
   Main: NavigatorScreenParams<SeekerBottomTabParamList>;
@@ -124,6 +125,8 @@ const styles = StyleSheet.create({
 });
 
 export function SeekerDrawerNavigator() {
+  const { drawerWidth } = useResponsiveLayout();
+
   return (
     <Drawer.Navigator
       id="SeekerRootDrawer"
@@ -131,7 +134,7 @@ export function SeekerDrawerNavigator() {
       screenOptions={{
         headerShown: false,
         drawerType: 'slide',
-        drawerStyle: { width: 320, backgroundColor: 'transparent' },
+        drawerStyle: { width: drawerWidth, backgroundColor: 'transparent' },
         overlayColor: 'rgba(15,23,42,0.45)',
       }}
     >

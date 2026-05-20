@@ -17,6 +17,7 @@ import {
 } from '../components/drawer/DrawerCollapsibleSection';
 import { useDvLottery } from '../context/DvLotteryContext';
 import { useAuth } from '../context/AuthContext';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 export type ProviderDrawerParamList = {
   Main: NavigatorScreenParams<ProviderBottomTabParamList>;
@@ -175,6 +176,8 @@ const styles = StyleSheet.create({
 });
 
 export function ProviderDrawerNavigator() {
+  const { drawerWidth } = useResponsiveLayout();
+
   return (
     <Drawer.Navigator
       id="ProviderRootDrawer"
@@ -182,7 +185,7 @@ export function ProviderDrawerNavigator() {
       screenOptions={{
         headerShown: false,
         drawerType: 'slide',
-        drawerStyle: { width: 320, backgroundColor: 'transparent' },
+        drawerStyle: { width: drawerWidth, backgroundColor: 'transparent' },
         overlayColor: 'rgba(15,23,42,0.45)',
       }}
     >

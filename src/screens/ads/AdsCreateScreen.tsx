@@ -16,6 +16,8 @@ import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
+import { AdvertiserScreenLayout } from '../../components/advertiser/AdvertiserScreenLayout';
+import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -25,6 +27,12 @@ const HEADER_BAR_HEIGHT = 56;
 
 export function AdsCreateScreen() {
   const navigation = useNavigation();
+  const { role } = useAuth();
+  const isAdvertiserPortal = role === 'advertiser';
+  const ScreenWrap = isAdvertiserPortal ? AdvertiserScreenLayout : AppScreen;
+  const screenWrapProps = isAdvertiserPortal
+    ? { fill: true as const }
+    : { variant: 'gradient' as const, safeAreaEdges: ['left', 'right'] as const, constrained: true as const };
   const insets = useSafeAreaInsets();
   const keyboardVerticalOffset = insets.top + HEADER_BAR_HEIGHT;
   const [busy, setBusy] = useState(false);
@@ -76,7 +84,7 @@ export function AdsCreateScreen() {
   };
 
   return (
-    <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
+    <ScreenWrap {...screenWrapProps} style={styles.screen}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -151,7 +159,7 @@ export function AdsCreateScreen() {
           <View style={{ height: spacing['3xl'] }} />
         </ScrollView>
       </KeyboardAvoidingView>
-    </AppScreen>
+    </ScreenWrap>
   );
 }
 
@@ -161,6 +169,8 @@ function label() {
 
 function inp() {
   return {
+    width: '100%',
+    alignSelf: 'stretch',
     marginTop: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -177,7 +187,6 @@ const styles = StyleSheet.create({
   },
   screen: {
     flex: 1,
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: 0,
   },
