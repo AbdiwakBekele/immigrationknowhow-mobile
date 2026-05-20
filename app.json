@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile.ikh",
+    "name": "IKH",
     "slug": "mobile-ikh",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,19 +16,28 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.immigrantknowhow.ikh",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": []
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "710e80e5-4c19-4d06-a4a8-1a061c5db28e"
+      }
+    }
   }
 }
