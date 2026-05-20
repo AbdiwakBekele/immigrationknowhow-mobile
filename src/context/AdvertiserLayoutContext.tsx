@@ -1,78 +1,82 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 import {
-  ADVERTISER_PAGE_PADDING,
+  BREAKPOINTS,
   DRAWER_MAX_WIDTH,
-  STRICT_MOBILE_MAX_WIDTH,
+  getAdvertiserFrameWidth,
 } from '../theme/responsive';
+import { spacing } from '../theme/spacing';
 
 export type AdvertiserLayoutMetrics = {
   windowWidth: number;
+  windowHeight: number;
   frameWidth: number;
   contentWidth: number;
   paddingX: number;
   drawerWidth: number;
+  isWeb: boolean;
   isCompact: boolean;
+  isMediumUp: boolean;
+  isTablet: boolean;
+  isDesktop: boolean;
   stackActions: boolean;
   heroTitleSize: number;
   statCardMinWidthPercent: string;
+  listColumns: number;
 };
 
 const AdvertiserLayoutContext = createContext<AdvertiserLayoutMetrics | null>(null);
 
+function computeMetrics(windowWidth: number, windowHeight: number): AdvertiserLayoutMetrics {
+  const frameWidth = getAdvertiserFrameWidth(windowWidth);
+  const isWeb = Platform.OS === 'web';
+  const isCompact = frameWidth < BREAKPOINTS.compact;
+  const isMediumUp = windowWidth >= BREAKPOINTS.medium;
+  const isTablet = windowWidth >= BREAKPOINTS.tablet;
+  const isDesktop = windowWidth >= BREAKPOINTS.desktop;
+
+  const paddingX = isCompact ? spacing.sm : isTablet ? spacing['2xl'] : spacing.lg;
+  const contentWidth = Math.max(0, frameWidth - paddingX * 2);
+
+  return {
+    windowWidth,
+    windowHeight,
+    frameWidth,
+    contentWidth,
+    paddingX,
+    drawerWidth: Math.min(DRAWER_MAX_WIDTH, Math.round(frameWidth * 0.88)),
+    isWeb,
+    isCompact,
+    isMediumUp,
+    isTablet,
+    isDesktop,
+    stackActions: isCompact || frameWidth < 360,
+    heroTitleSize: isCompact ? 20 : isTablet ? 28 : 24,
+    statCardMinWidthPercent: isCompact ? '100%' : isTablet ? '23%' : '47%',
+    listColumns: isTablet ? 2 : 1,
+  };
+}
+
 export function AdvertiserLayoutProvider({ children }: { children: React.ReactNode }) {
-  const { width: windowWidth, height } = useWindowDimensions();
-
-  const value = useMemo((): AdvertiserLayoutMetrics => {
-    const frameWidth = Math.min(windowWidth, STRICT_MOBILE_MAX_WIDTH);
-    const paddingX = ADVERTISER_PAGE_PADDING;
-    const contentWidth = Math.max(0, frameWidth - paddingX * 2);
-    const isCompact = frameWidth < 400;
-
-    return {
-      windowWidth,
-      frameWidth,
-      contentWidth,
-      paddingX,
-      drawerWidth: Math.min(DRAWER_MAX_WIDTH, Math.round(frameWidth * 0.88)),
-      isCompact,
-      stackActions: true,
-      heroTitleSize: isCompact ? 20 : 24,
-      statCardMinWidthPercent: isCompact ? '100%' : '47%',
-    };
-  }, [windowWidth, height]);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const value = useMemo(() => computeMetrics(windowWidth, windowHeight), [windowWidth, windowHeight]);
 
   return <AdvertiserLayoutContext.Provider value={value}>{children}</AdvertiserLayoutContext.Provider>;
 }
 
 export function useAdvertiserLayout(): AdvertiserLayoutMetrics {
   const ctx = useContext(AdvertiserLayoutContext);
-  const { width: windowWidth, height } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   return useMemo(() => {
     if (ctx) return ctx;
-
-    const frameWidth = Math.min(windowWidth, STRICT_MOBILE_MAX_WIDTH);
-    const paddingX = ADVERTISER_PAGE_PADDING;
-    const isCompact = frameWidth < 400;
-
-    return {
-      windowWidth,
-      frameWidth,
-      contentWidth: Math.max(0, frameWidth - paddingX * 2),
-      paddingX,
-      drawerWidth: Math.min(DRAWER_MAX_WIDTH, Math.round(frameWidth * 0.88)),
-      isCompact,
-      stackActions: true,
-      heroTitleSize: isCompact ? 20 : 24,
-      statCardMinWidthPercent: isCompact ? '100%' : '47%',
-    };
-  }, [ctx, windowWidth, height]);
+    return computeMetrics(windowWidth, windowHeight);
+  }, [ctx, windowWidth, windowHeight]);
 }
 
 /** Reusable flex styles for advertiser screens. */
 export function useAdvertiserStyles() {
-  const { paddingX, contentWidth } = useAdvertiserLayout();
+  const { paddingX, contentWidth, frameWidth } = useAdvertiserLayout();
 
   return useMemo(
     () => ({
@@ -80,6 +84,7 @@ export function useAdvertiserStyles() {
         flex: 1,
         width: '100%' as const,
         maxWidth: '100%' as const,
+        alignSelf: 'stretch' as const,
         paddingHorizontal: paddingX,
         overflow: 'hidden' as const,
       },
@@ -100,7 +105,8 @@ export function useAdvertiserStyles() {
         alignSelf: 'stretch' as const,
       },
       contentWidth,
+      frameWidth,
     }),
-    [paddingX, contentWidth]
+    [paddingX, contentWidth, frameWidth]
   );
 }

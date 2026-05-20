@@ -1,36 +1,38 @@
 import React, { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { AdvertiserLayoutProvider } from '../../context/AdvertiserLayoutContext';
-import { STRICT_MOBILE_MAX_WIDTH } from '../../theme/responsive';
 import { colors } from '../../theme/colors';
 
 const ADVERTISER_ROOT_ID = 'advertiser-app-root';
 
-/**
- * Phone-first shell: 100% width on device, max 480px centered on desktop web.
- */
+/** Full-screen advertiser shell on web and native. */
 export function AdvertiserMobileShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
 
     const id = 'ikh-advertiser-web-style';
-    if (document.getElementById(id)) return;
+    let style = document.getElementById(id) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = id;
+      document.head.appendChild(style);
+    }
 
-    const style = document.createElement('style');
-    style.id = id;
     style.textContent = `
       html, body, #root {
         width: 100% !important;
         max-width: 100vw !important;
+        height: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
         overflow-x: hidden !important;
       }
       #${ADVERTISER_ROOT_ID} {
         width: 100% !important;
-        max-width: ${STRICT_MOBILE_MAX_WIDTH}px !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
+        max-width: 100% !important;
+        margin: 0 !important;
         flex: 1 !important;
-        min-height: 100%;
+        min-height: 100vh;
         overflow-x: hidden !important;
         box-sizing: border-box !important;
       }
@@ -48,7 +50,6 @@ export function AdvertiserMobileShell({ children }: { children: React.ReactNode 
         max-width: 100%;
       }
     `;
-    document.head.appendChild(style);
   }, []);
 
   return (
@@ -64,15 +65,14 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     width: '100%',
-    alignItems: 'center',
-    backgroundColor: colors.backgroundMuted,
+    alignSelf: 'stretch',
+    backgroundColor: colors.background,
     overflow: 'hidden',
   },
   frame: {
     flex: 1,
     width: '100%',
-    maxWidth: STRICT_MOBILE_MAX_WIDTH,
-    overflow: 'visible',
+    overflow: 'hidden',
     backgroundColor: colors.background,
     ...(Platform.OS === 'web'
       ? {

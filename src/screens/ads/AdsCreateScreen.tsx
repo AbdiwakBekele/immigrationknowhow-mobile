@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
 import { AdvertiserScreenLayout } from '../../components/advertiser/AdvertiserScreenLayout';
 import { useAuth } from '../../context/AuthContext';
+import { useAdvertiserStyles } from '../../context/AdvertiserLayoutContext';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -29,6 +30,7 @@ export function AdsCreateScreen() {
   const navigation = useNavigation();
   const { role } = useAuth();
   const isAdvertiserPortal = role === 'advertiser';
+  const advertiserUi = useAdvertiserStyles();
   const ScreenWrap = isAdvertiserPortal ? AdvertiserScreenLayout : AppScreen;
   const screenWrapProps = isAdvertiserPortal
     ? { fill: true as const }
@@ -91,11 +93,11 @@ export function AdsCreateScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
       >
         <ScrollView
-          style={styles.flex}
+          style={[styles.flex, isAdvertiserPortal && advertiserUi.scroll]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, isAdvertiserPortal && advertiserUi.scrollContent]}
           automaticallyAdjustKeyboardInsets
         >
           <Text style={styles.subtitle}>Your ad will be reviewed (and may require payment) before publishing.</Text>

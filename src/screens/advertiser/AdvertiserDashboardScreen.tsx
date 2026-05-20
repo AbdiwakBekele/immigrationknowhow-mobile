@@ -177,7 +177,7 @@ export function AdvertiserDashboardScreen() {
 
 function StatCard({ label, value, minWidth }: { label: string; value: string; minWidth: string }) {
   return (
-    <View style={[styles.statCard, { minWidth }]}>
+    <View style={[styles.statCard, { flexBasis: minWidth, minWidth }]}>
       <Text style={styles.statLabel}>{label}</Text>
       <Text style={styles.statValue}>{value}</Text>
     </View>
@@ -279,7 +279,9 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flexGrow: 1,
-    flexShrink: 0,
+    flexShrink: 1,
+    flexBasis: '47%',
+    minWidth: 0,
     padding: spacing.md,
     borderRadius: radii.lg,
     borderWidth: 1,

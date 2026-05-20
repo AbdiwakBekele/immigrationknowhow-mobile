@@ -40,7 +40,7 @@ type Nav = CompositeNavigationProp<
 
 export function AdvertiserAnalyticsScreen() {
   const navigation = useNavigation<Nav>();
-  const { stackActions, isCompact } = useAdvertiserLayout();
+  const { isCompact, isTablet } = useAdvertiserLayout();
   const ui = useAdvertiserStyles();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,9 +93,9 @@ export function AdvertiserAnalyticsScreen() {
         </View>
 
         <View style={styles.summaryRow}>
-          <SummaryStat label="Total views" value={String(summary?.views ?? 0)} compact={isCompact} />
-          <SummaryStat label="Total clicks" value={String(summary?.clicks ?? 0)} compact={isCompact} />
-          <SummaryStat label="Overall CTR" value={`${summary?.ctr ?? 0}%`} compact={isCompact} />
+          <SummaryStat label="Total views" value={String(summary?.views ?? 0)} compact={isCompact && !isTablet} />
+          <SummaryStat label="Total clicks" value={String(summary?.clicks ?? 0)} compact={isCompact && !isTablet} />
+          <SummaryStat label="Overall CTR" value={`${summary?.ctr ?? 0}%`} compact={isCompact && !isTablet} />
         </View>
 
         <View style={styles.sectionCard}>
@@ -218,6 +218,7 @@ const styles = StyleSheet.create({
   summaryStat: {
     flexGrow: 1,
     flexShrink: 1,
+    flexBasis: '30%',
     minWidth: 100,
     padding: spacing.md,
     borderRadius: radii.lg,
