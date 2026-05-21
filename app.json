@@ -13,18 +13,35 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.immigrantknowhow.ikhapp",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "IKH needs camera access so users can take photos for profile pictures, documents, certificates, and service-related uploads.",
+        "NSPhotoLibraryUsageDescription": "IKH needs photo library access so users can select and upload profile pictures, documents, certificates, and service-related images.",
+        "NSPhotoLibraryAddUsageDescription": "IKH may save selected or processed images when required by the user.",
+        "NSMicrophoneUsageDescription": "IKH may need microphone access if users record or upload videos with audio.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.immigrantknowhow.ikh",
+      "package": "com.immigrantknowhow.android",
       "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "permissions": []
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png",
