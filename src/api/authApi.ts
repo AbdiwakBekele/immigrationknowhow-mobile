@@ -36,6 +36,39 @@ export async function registerMeta(): Promise<ApiResponse<RegisterMeta>> {
   }
 }
 
+export type ForgotPasswordPayload = {
+  email: string;
+};
+
+export type ResetPasswordPayload = {
+  token: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+};
+
+export async function forgotPassword(
+  payload: ForgotPasswordPayload
+): Promise<ApiResponse<Record<string, never>>> {
+  try {
+    const res = await apiClient.post('/api/mobile/auth/forgot-password', payload);
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function resetPassword(
+  payload: ResetPasswordPayload
+): Promise<ApiResponse<Record<string, never>>> {
+  try {
+    const res = await apiClient.post('/api/mobile/auth/reset-password', payload);
+    return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
 export async function login(payload: LoginPayload): Promise<ApiResponse<AuthTokenResponse>> {
   try {
     const res = await apiClient.post('/api/mobile/auth/login', payload);
