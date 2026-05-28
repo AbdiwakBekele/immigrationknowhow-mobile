@@ -28,7 +28,9 @@
       "package": "com.immigrantknowhow.android",
       "versionCode": 1,
       "permissions": [
-        "android.permission.CAMERA",
+        "android.permission.CAMERA"
+      ],
+      "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
