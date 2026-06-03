@@ -28,7 +28,9 @@ import { typography } from '../../theme/typography';
 import { radii } from '../../theme/layout';
 import { shadows } from '../../theme/shadows';
 import * as libraryApi from '../../api/libraryApi';
+import { purchaseLibraryTitle } from '../../services/appleIapService';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
+import { shouldUseAppleIap } from '../../utils/platformPayments';
 import type { LibraryStackParamList } from './LibraryStack';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -111,6 +113,7 @@ function DetailActionBlock({
   hasAudioCompanion,
   checkoutLoading,
   buyingFree,
+  useAppleIap,
   onRead,
   onPay,
   onFree,
@@ -122,6 +125,7 @@ function DetailActionBlock({
   hasAudioCompanion: boolean;
   checkoutLoading: boolean;
   buyingFree: boolean;
+  useAppleIap: boolean;
   onRead: () => void;
   onPay: () => void;
   onFree: () => void;
@@ -167,13 +171,23 @@ function DetailActionBlock({
             <Ionicons name="card-outline" size={18} color="#fff" />
           )}
           <Text style={s.primaryBtnText}>
-            {checkoutLoading ? 'Starting checkout…' : compact ? `Buy · ${price}` : `Continue to Payment · ${price}`}
+            {checkoutLoading
+              ? useAppleIap
+                ? 'Processing…'
+                : 'Starting checkout…'
+              : compact
+                ? `Buy · ${price}`
+                : useAppleIap
+                  ? `Buy with Apple · ${price}`
+                  : `Continue to Payment · ${price}`}
           </Text>
         </Pressable>
         {!compact ? (
           <View style={s.secureNote}>
             <Ionicons name="shield-checkmark-outline" size={14} color="#059669" />
-            <Text style={s.secureNoteText}>Secure checkout powered by Stripe</Text>
+            <Text style={s.secureNoteText}>
+              {useAppleIap ? 'Secure purchase through the App Store' : 'Secure checkout powered by Stripe'}
+            </Text>
           </View>
         ) : null}
       </>
@@ -240,18 +254,43 @@ export function LibraryDetailScreen() {
     navigation.setParams({ slug, readerMode: isReaderMode });
   }, [navigation, slug, isReaderMode]);
 
+  const useAppleIap = shouldUseAppleIap();
+  const appleProductId =
+    typeof data?.apple_product_id === 'string' && data.apple_product_id.trim() !== ''
+      ? data.apple_product_id
+      : typeof data?.item?.uuid === 'string'
+        ? `com.immigrantknowhow.ikhapp.library.${data.item.uuid}`
+        : null;
+
   const pay = async () => {
     setCheckoutLoading(true);
-    const res = await libraryApi.libraryStripeCheckout(slug);
-    setCheckoutLoading(false);
-    if (!res.success) {
-      Alert.alert('Checkout', res.message);
-      return;
-    }
-    const url = res.data?.checkout_url;
-    if (url) {
-      setWebViewLoading(true);
-      setCheckoutUrl(url);
+    try {
+      if (useAppleIap) {
+        if (!appleProductId) {
+          Alert.alert('Purchase', 'This title is not available for In-App Purchase yet.');
+          return;
+        }
+        await purchaseLibraryTitle(slug, appleProductId);
+        await load();
+        Alert.alert('Purchase', 'Thank you! This title is now in your library.');
+        return;
+      }
+
+      const res = await libraryApi.libraryStripeCheckout(slug);
+      if (!res.success) {
+        Alert.alert('Checkout', res.message);
+        return;
+      }
+      const url = res.data?.checkout_url;
+      if (url) {
+        setWebViewLoading(true);
+        setCheckoutUrl(url);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Purchase could not be completed.';
+      Alert.alert('Purchase', message);
+    } finally {
+      setCheckoutLoading(false);
     }
   };
 
@@ -662,6 +701,7 @@ render();
       hasAudioCompanion={hasAudioCompanion}
       checkoutLoading={checkoutLoading}
       buyingFree={buyingFree}
+      useAppleIap={useAppleIap}
       onRead={() => void openReader()}
       onPay={() => void pay()}
       onFree={() => void free()}

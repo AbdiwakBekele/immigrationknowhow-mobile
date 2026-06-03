@@ -1,5 +1,16 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +26,8 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { radii } from '../../theme/layout';
 import * as libraryApi from '../../api/libraryApi';
+import { restoreApplePurchasesOnDevice } from '../../services/appleIapService';
+import { shouldUseAppleIap } from '../../utils/platformPayments';
 import type { LibraryStackParamList } from './LibraryStack';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
@@ -44,6 +57,7 @@ export function LibraryMyScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = (screenWidth - spacing.xl * 2 - CARD_GAP) / NUM_COLUMNS;
@@ -127,6 +141,40 @@ export function LibraryMyScreen() {
           <Text style={[s.tabText, tab === 'purchased' && s.tabTextActive]}>Purchased</Text>
         </Pressable>
       </View>
+      {shouldUseAppleIap() ? (
+        <Pressable
+          onPress={() => {
+            void (async () => {
+              setRestoring(true);
+              try {
+                const result = await restoreApplePurchasesOnDevice();
+                await load();
+                const detail =
+                  result.errors.length > 0
+                    ? `\n\nSome items could not be restored:\n${result.errors.slice(0, 3).join('\n')}`
+                    : '';
+                Alert.alert(
+                  'Restore purchases',
+                  `Restored ${result.library_restored} library title(s).${
+                    result.ai_assistant_active ? ' AI Assistant is active.' : ''
+                  }${detail}`,
+                );
+              } catch (e) {
+                Alert.alert(
+                  'Restore purchases',
+                  e instanceof Error ? e.message : 'Could not restore purchases.',
+                );
+              } finally {
+                setRestoring(false);
+              }
+            })();
+          }}
+          disabled={restoring}
+          style={s.restoreRow}
+        >
+          <Text style={s.restoreText}>{restoring ? 'Restoring…' : 'Restore App Store purchases'}</Text>
+        </Pressable>
+      ) : null}
       <View style={s.searchWrap}>
         <View style={s.searchInputWrap}>
           <Ionicons name="search-outline" size={18} color={colors.text.muted} />
@@ -297,6 +345,16 @@ const s = StyleSheet.create({
     marginTop: spacing.sm,
     fontSize: typography.fontSize.xs,
     color: colors.text.secondary,
+  },
+  restoreRow: {
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.xs,
+  },
+  restoreText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
   },
   modalBackdrop: {
     flex: 1,

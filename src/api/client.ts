@@ -1,4 +1,5 @@
 import axios, { AxiosError, isAxiosError, type InternalAxiosRequestConfig } from 'axios';
+import { Platform } from 'react-native';
 import { API_DETAILED_LOGS, BASE_URL } from '../config/api';
 import { logTerminalError } from '../utils/terminalErrorLog';
 import type { ApiError } from './types';
@@ -120,6 +121,13 @@ apiClient.interceptors.request.use(async (config) => {
   if (activePortal === 'user' || activePortal === 'provider') {
     config.headers = config.headers ?? {};
     config.headers['X-Active-Portal'] = activePortal;
+  }
+  if (Platform.OS === 'ios') {
+    config.headers = config.headers ?? {};
+    config.headers['X-IKH-Client'] = 'ios';
+  } else if (Platform.OS === 'android') {
+    config.headers = config.headers ?? {};
+    config.headers['X-IKH-Client'] = 'android';
   }
   if (__DEV__) {
     const c = config as ConfigWithTimer;

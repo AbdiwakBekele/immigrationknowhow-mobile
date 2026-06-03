@@ -20,6 +20,8 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as aiApi from '../../api/aiAssistantApi';
+import { purchaseAiAssistantSubscription } from '../../services/appleIapService';
+import { shouldUseAppleIap } from '../../utils/platformPayments';
 import type { ChatMessage } from '../../api/aiAssistantApi';
 import { setAiAssistantFabSuppressed } from '../../navigation/aiAssistantFabVisibility';
 import type { StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
@@ -42,6 +44,7 @@ export function AiAssistantScreen() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [subscribing, setSubscribing] = useState(false);
   const listRef = useRef<FlatList<LocalMessage>>(null);
 
   const load = async () => {
@@ -65,26 +68,42 @@ export function AiAssistantScreen() {
 
   const subscribe = async () => {
     setErr(null);
-    const res = await aiApi.checkoutAiAssistant();
-    if (!res.success) {
-      setErr(res.message);
-      return;
-    }
-    if (res.data.already_subscribed) {
-      const nextState = res.data.state ?? (await aiApi.getAiAssistant()).data?.state;
-      if (nextState) {
-        setState(nextState);
-        setMessages(nextState.chat_messages ?? []);
+    setSubscribing(true);
+    try {
+      if (shouldUseAppleIap()) {
+        const productId =
+          (typeof state?.apple_product_id === 'string' && state.apple_product_id) ||
+          'com.immigrantknowhow.ikhapp.ai_assistant.monthly';
+        await purchaseAiAssistantSubscription(productId);
+        await load();
+        return;
       }
-      return;
-    }
-    const url = res.data.checkout_url;
-    if (url) {
-      navigation.navigate('StripeCheckout', {
-        checkoutUrl: url,
-        variant: 'aiAssistant',
-        checkoutSessionId: res.data.checkout_session_id || undefined,
-      });
+
+      const res = await aiApi.checkoutAiAssistant();
+      if (!res.success) {
+        setErr(res.message);
+        return;
+      }
+      if (res.data.already_subscribed) {
+        const nextState = res.data.state ?? (await aiApi.getAiAssistant()).data?.state;
+        if (nextState) {
+          setState(nextState);
+          setMessages(nextState.chat_messages ?? []);
+        }
+        return;
+      }
+      const url = res.data.checkout_url;
+      if (url) {
+        navigation.navigate('StripeCheckout', {
+          checkoutUrl: url,
+          variant: 'aiAssistant',
+          checkoutSessionId: res.data.checkout_session_id || undefined,
+        });
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Subscription could not be completed.');
+    } finally {
+      setSubscribing(false);
     }
   };
 
@@ -152,8 +171,10 @@ export function AiAssistantScreen() {
           <Text style={styles.gatePrice}>
             {state?.currency ?? 'USD'} {state?.monthly_price ?? '4.99'} / month
           </Text>
-          <Pressable onPress={() => void subscribe()} style={styles.gateCta}>
-            <Text style={styles.gateCtaText}>Subscribe now</Text>
+          <Pressable onPress={() => void subscribe()} style={styles.gateCta} disabled={subscribing}>
+            <Text style={styles.gateCtaText}>
+              {subscribing ? 'Processing…' : shouldUseAppleIap() ? 'Subscribe with Apple' : 'Subscribe now'}
+            </Text>
           </Pressable>
           {!!err && <Text style={styles.error}>{err}</Text>}
         </View>
