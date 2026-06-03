@@ -13,6 +13,9 @@ export type AiAssistantState = {
   is_addon_active: boolean;
   monthly_price: string;
   currency: string;
+  apple_product_id?: string;
+  apple_iap_configured?: boolean;
+  ios_requires_apple_iap?: boolean;
   chat_messages: ChatMessage[];
 };
 
@@ -40,6 +43,10 @@ function parseStatePayload(data: unknown): AiAssistantState {
     is_addon_active: parseIsAddonActive(row),
     monthly_price: String(row.monthly_price ?? '4.99'),
     currency: String(row.currency ?? 'USD'),
+    apple_product_id:
+      typeof row.apple_product_id === 'string' ? row.apple_product_id : undefined,
+    apple_iap_configured: row.apple_iap_configured === true,
+    ios_requires_apple_iap: row.ios_requires_apple_iap === true,
     chat_messages: Array.isArray(row.chat_messages) ? (row.chat_messages as ChatMessage[]) : [],
   };
 }
