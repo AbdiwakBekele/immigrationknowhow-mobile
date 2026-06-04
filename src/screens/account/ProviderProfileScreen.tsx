@@ -18,7 +18,9 @@ import { typography } from '../../theme/typography';
 import { backgroundCheckBody, backgroundCheckHeadline } from '../../utils/providerUi';
 import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
+import { DeleteAccountSection } from '../../components/account/DeleteAccountSection';
 import { RoleAccountSection } from '../../components/account/RoleAccountSection';
+import * as rolesApi from '../../api/rolesApi';
 
 export function ProviderProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList, 'ProfileHome'>>();
@@ -41,6 +43,7 @@ export function ProviderProfileScreen() {
   const [hourlyRate, setHourlyRate] = useState('');
   const [specializations, setSpecializations] = useState('');
   const [serviceAreas, setServiceAreas] = useState('');
+  const [roleMeta, setRoleMeta] = useState<rolesApi.RoleMeta | null>(null);
 
   const hydrateForm = useCallback((provider: profileApi.ProviderProfile | null | undefined) => {
     setBusinessName(String(provider?.business_name ?? '').trim());
@@ -74,10 +77,18 @@ export function ProviderProfileScreen() {
     hydrateForm(profileRes.data.provider);
   }, [hydrateForm]);
 
+  const loadRoleMeta = useCallback(async () => {
+    const res = await rolesApi.getRoleMeta();
+    if (res.success) {
+      setRoleMeta(res.data);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       void load(false);
-    }, [load])
+      void loadRoleMeta();
+    }, [load, loadRoleMeta])
   );
 
   const prov = dash?.provider;
@@ -302,11 +313,16 @@ export function ProviderProfileScreen() {
           <InputField label="Service areas" value={serviceAreas} onChangeText={setServiceAreas} placeholder="Dallas, Houston" />
         </View>
 
-        <View style={{ marginTop: spacing['3xl'], marginBottom: spacing['3xl'] }}>
+        <View style={{ marginTop: spacing['3xl'] }}>
           <AppButton title="Save changes" onPress={() => void onSave()} loading={saving} disabled={!hasDirtyFields} />
           <View style={{ height: spacing.md }} />
           <AppButton title="Log out" onPress={() => void signOut()} variant="ghost" />
         </View>
+
+        <DeleteAccountSection
+          hasMultipleRoles={Boolean(roleMeta?.can_switch || (roleMeta?.has_seeker && roleMeta?.has_provider))}
+          onDeleted={() => signOut()}
+        />
       </ScrollView>
     </AppScreen>
   );
