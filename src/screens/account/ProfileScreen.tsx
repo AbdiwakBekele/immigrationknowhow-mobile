@@ -16,7 +16,9 @@ import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import { shadows } from '../../theme/shadows';
 import { ProfileAvatarPicker } from '../../components/account/ProfileAvatarPicker';
+import { DeleteAccountSection } from '../../components/account/DeleteAccountSection';
 import { RoleAccountSection } from '../../components/account/RoleAccountSection';
+import * as rolesApi from '../../api/rolesApi';
 
 export function ProfileScreen() {
   const { user, role, signOut, refreshMe } = useAuth();
@@ -38,6 +40,7 @@ export function ProfileScreen() {
   const [country, setCountry] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [preferredLanguage, setPreferredLanguage] = useState('en');
+  const [roleMeta, setRoleMeta] = useState<rolesApi.RoleMeta | null>(null);
 
   if (role === 'provider') {
     return <ProviderProfileScreen />;
@@ -53,6 +56,13 @@ export function ProfileScreen() {
     setCountry((nextUser?.country ?? '').trim());
     setPostalCode((nextUser?.postal_code ?? '').trim());
     setPreferredLanguage((String(nextUser?.preferred_language ?? '').trim() || 'en').toLowerCase());
+  }, []);
+
+  const loadRoleMeta = useCallback(async () => {
+    const res = await rolesApi.getRoleMeta();
+    if (res.success) {
+      setRoleMeta(res.data);
+    }
   }, []);
 
   const load = useCallback(async (isRefresh = false) => {
@@ -73,7 +83,8 @@ export function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       void load(false);
-    }, [load])
+      void loadRoleMeta();
+    }, [load, loadRoleMeta])
   );
 
   const displayUser = profileUser ?? user;
@@ -243,6 +254,13 @@ export function ProfileScreen() {
           <View style={styles.actionsSpacer} />
           <AppButton title="Log out" onPress={() => void signOut()} variant="ghost" />
         </View>
+
+        {!isAdvertiserPortal ? (
+          <DeleteAccountSection
+            hasMultipleRoles={Boolean(roleMeta?.can_switch || (roleMeta?.has_seeker && roleMeta?.has_provider))}
+            onDeleted={() => signOut()}
+          />
+        ) : null}
       </ScrollView>
   );
 
