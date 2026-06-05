@@ -8,9 +8,9 @@ The iOS app uses **Apple In-App Purchase** for paid library titles and the AI As
 2. Create products:
    - **Auto-renewable subscription** for AI Assistant  
      Default product ID: `com.immigrantknowhow.ikhapp.ai_assistant.monthly`
-   - **Non-consumable** (one per paid ebook)  
-     Default pattern: `com.immigrantknowhow.ikhapp.library.{library_item_uuid}`  
-     Or set `apple_product_id` on each `library_items` row in the admin database.
+   - **Non-consumable** for the main ebook  
+     Product ID: `EBOOK_TO2026` (set via `APPLE_LIBRARY_EBOOK_PRODUCT_ID` in `.env`)  
+     For additional paid titles later: set `apple_product_id` on each `library_items` row, or use `APPLE_LIBRARY_EBOOK_SLUG` to target one slug.
 3. Add a **sandbox tester** account for review and QA.
 
 ## 2. App Store Server API (Laravel)
@@ -23,11 +23,13 @@ Add to `web.immigrationknowhow` `.env`:
 APPLE_BUNDLE_ID=com.immigrantknowhow.ikhapp
 APPLE_ISSUER_ID=your-issuer-uuid
 APPLE_KEY_ID=your-key-id
-APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-# Or: APPLE_PRIVATE_KEY_PATH=/path/to/AuthKey_XXXX.p8
+# Prefer file path (production):
+APPLE_PRIVATE_KEY_PATH=/var/www/ikh/storage/app/apple/SubscriptionKey_K4A5TCGDYM.p8
+# Or inline key instead: APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 APPLE_IAP_SANDBOX=true
 APPLE_AI_ASSISTANT_PRODUCT_ID=com.immigrantknowhow.ikhapp.ai_assistant.monthly
 APPLE_LIBRARY_PRODUCT_PREFIX=com.immigrantknowhow.ikhapp.library
+APPLE_LIBRARY_EBOOK_PRODUCT_ID=EBOOK_TO2026
 ```
 
 Run migrations:
