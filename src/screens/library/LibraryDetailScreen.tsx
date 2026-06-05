@@ -257,10 +257,8 @@ export function LibraryDetailScreen() {
   const useAppleIap = shouldUseAppleIap();
   const appleProductId =
     typeof data?.apple_product_id === 'string' && data.apple_product_id.trim() !== ''
-      ? data.apple_product_id
-      : typeof data?.item?.uuid === 'string'
-        ? `com.immigrantknowhow.ikhapp.library.${data.item.uuid}`
-        : null;
+      ? data.apple_product_id.trim()
+      : null;
 
   const pay = async () => {
     setCheckoutLoading(true);
