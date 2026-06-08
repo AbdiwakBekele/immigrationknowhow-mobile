@@ -10,12 +10,15 @@ export type SubscriptionPlanRow = {
   billing_cycle: string | null;
   status: string;
   stripe_price_id: string | null;
+  apple_product_id?: string | null;
 };
 
 export type ProviderSubscriptionRow = {
   uuid: string;
   status: string;
   cancel_at_period_end?: boolean;
+  apple_original_transaction_id?: string | null;
+  stripe_subscription_id?: string | null;
   plan?: SubscriptionPlanRow | null;
 };
 
@@ -24,6 +27,13 @@ export type SubscriptionsPayload = {
   current_subscription: ProviderSubscriptionRow | null;
   subscription_history: ProviderSubscriptionRow[];
   stripe_billing_configured: boolean;
+  apple_iap_configured?: boolean;
+  subscription_billing_configured?: boolean;
+  ios_requires_apple_iap?: boolean;
+  provider_subscription_promo?: {
+    trial_months: number;
+    trial_eligible: boolean;
+  };
 };
 
 export async function getProviderSubscriptions(): Promise<ApiResponse<{ subscriptions: SubscriptionsPayload }>> {

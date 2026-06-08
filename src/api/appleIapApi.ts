@@ -7,6 +7,11 @@ export type IapConfig = {
   sandbox: boolean;
   ai_assistant_product_id: string;
   library_product_prefix: string;
+  provider_product_prefix: string;
+  provider_monthly_product_id?: string;
+  provider_yearly_product_id?: string;
+  video_product_prefix: string;
+  ad_publish_product_id: string;
   ios_requires_apple_iap: boolean;
 };
 
@@ -52,13 +57,67 @@ export type RestoreLibraryEntry = {
   product_id: string;
 };
 
+export async function confirmProviderApplePurchase(
+  planUuid: string,
+  transactionId: string,
+): Promise<ApiResponse<{ subscription: unknown; apple_product_id?: string }>> {
+  try {
+    const res = await apiClient.post(
+      `/api/mobile/provider/subscriptions/apple-purchase/${encodeURIComponent(planUuid)}`,
+      { transaction_id: transactionId },
+    );
+    return res.data?.success === false ? normalizeApiError({ response: { data: res.data } }) : res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function confirmAdApplePurchase(
+  adUuid: string,
+  transactionId: string,
+): Promise<ApiResponse<{ fulfilled: boolean; apple_product_id?: string; ad?: unknown }>> {
+  try {
+    const res = await apiClient.post(
+      `/api/mobile/ads/${encodeURIComponent(adUuid)}/apple-purchase`,
+      { transaction_id: transactionId },
+    );
+    return res.data?.success === false ? normalizeApiError({ response: { data: res.data } }) : res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function confirmVideoApplePurchase(
+  slug: string,
+  transactionId: string,
+): Promise<ApiResponse<{ fulfilled: boolean; apple_product_id?: string }>> {
+  try {
+    const res = await apiClient.post(
+      `/api/mobile/videos/${encodeURIComponent(slug)}/apple-purchase`,
+      { transaction_id: transactionId },
+    );
+    return res.data?.success === false ? normalizeApiError({ response: { data: res.data } }) : res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export type RestoreProductEntry = {
+  transaction_id: string;
+  product_id: string;
+};
+
 export async function restoreApplePurchases(payload: {
   library?: RestoreLibraryEntry[];
   ai_assistant?: { transaction_id: string };
+  provider_subscriptions?: RestoreProductEntry[];
+  videos?: RestoreProductEntry[];
 }): Promise<
   ApiResponse<{
     library_restored: number;
     ai_assistant_active: boolean;
+    provider_subscription_active: boolean;
+    videos_restored: number;
     errors: string[];
   }>
 > {

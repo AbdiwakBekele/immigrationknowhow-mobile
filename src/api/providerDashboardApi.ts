@@ -54,6 +54,9 @@ export type ProviderDashboardData = {
   recent_reviews: ProviderRecentReview[];
   leads_chart_data: Array<{ date: string; count: number }>;
   subscription_checkout_configured: boolean;
+  stripe_billing_configured?: boolean;
+  apple_iap_configured?: boolean;
+  ios_requires_apple_iap?: boolean;
   provider: ProviderDashboardProvider;
 };
 

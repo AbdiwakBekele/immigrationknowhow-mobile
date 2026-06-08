@@ -26,6 +26,8 @@ import { typography } from '../../theme/typography';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { adStatusLabel, adStatusStyle, formatAdPrice } from '../../utils/adUi';
 import * as adsApi from '../../api/adsApi';
+import { purchaseAdPublish } from '../../services/appleIapService';
+import { shouldUseAppleIap } from '../../utils/platformPayments';
 import type { AdsStackParamList } from './AdsStack';
 
 type AdItem = {
@@ -36,6 +38,7 @@ type AdItem = {
   status: string;
   price_cents?: number;
   currency?: string;
+  apple_product_id?: string | null;
   analytics?: { views?: number; clicks?: number; ctr?: number };
 };
 
@@ -56,7 +59,16 @@ export function AdsListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [payingUuid, setPayingUuid] = useState<string | null>(null);
   const [ads, setAds] = useState<AdItem[]>([]);
-  const [postingPrice, setPostingPrice] = useState<{ amount_cents?: number; currency?: string } | null>(null);
+  const [postingPrice, setPostingPrice] = useState<{
+    amount_cents?: number;
+    currency?: string;
+    free_limit?: number;
+    free_remaining?: number;
+    next_ad_price_cents?: number;
+    apple_product_id?: string | null;
+  } | null>(null);
+
+  const useAppleIap = shouldUseAppleIap();
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -96,29 +108,61 @@ export function AdsListScreen() {
     ]);
   };
 
-  const startCheckout = async (uuid: string) => {
-    setPayingUuid(uuid);
-    const res = await adsApi.checkoutAd(uuid);
-    setPayingUuid(null);
-    if (!res.success) {
-      Alert.alert('Ads', res.message);
-      return;
-    }
-    const checkoutUrl = res.data?.checkout_url;
-    if (checkoutUrl) {
-      navigation.navigate('StripeCheckout', { checkoutUrl, variant: 'default', adUuid: uuid });
+  const startCheckout = async (item: AdItem) => {
+    setPayingUuid(item.uuid);
+    try {
+      if (useAppleIap) {
+        const appleProductId =
+          (typeof item.apple_product_id === 'string' && item.apple_product_id.trim() !== ''
+            ? item.apple_product_id.trim()
+            : null) ??
+          (typeof postingPrice?.apple_product_id === 'string' && postingPrice.apple_product_id.trim() !== ''
+            ? postingPrice.apple_product_id.trim()
+            : null);
+        if (!appleProductId) {
+          Alert.alert(
+            'Ads',
+            'This ad uses a publish price that is not set up for In-App Purchase on iOS. Use the standard publish fee or contact support.',
+          );
+          return;
+        }
+        await purchaseAdPublish(item.uuid, appleProductId);
+        await load(true);
+        Alert.alert('Ads', 'Payment received. Your ad will be reviewed before publishing.');
+        return;
+      }
+
+      const res = await adsApi.checkoutAd(item.uuid);
+      if (!res.success) {
+        Alert.alert('Ads', res.message);
+        return;
+      }
+      const checkoutUrl = res.data?.checkout_url;
+      if (checkoutUrl) {
+        navigation.navigate('StripeCheckout', { checkoutUrl, variant: 'default', adUuid: item.uuid });
+      }
+    } catch (e) {
+      Alert.alert('Ads', e instanceof Error ? e.message : 'Payment could not be completed.');
+    } finally {
+      setPayingUuid(null);
     }
   };
 
   const publishFee = formatAdPrice(postingPrice?.amount_cents, postingPrice?.currency);
+  const freeRemaining = postingPrice?.free_remaining ?? 0;
+  const freeLimit = postingPrice?.free_limit ?? 0;
 
   const listHeader = (
     <View style={styles.header}>
       <Text style={styles.pageTitle}>My ads</Text>
       <Text style={styles.subtitle}>
-        {publishFee
-          ? `One-time publish fee: ${publishFee} per ad. Create, edit, and pay to publish sponsored ads.`
-          : 'Create, edit, and manage your sponsored ads.'}
+        {freeRemaining > 0
+          ? `${freeRemaining} of ${freeLimit} complimentary publish ${freeRemaining === 1 ? 'slot' : 'slots'} remaining.${
+              publishFee ? ` After that, ${publishFee} per ad.` : ''
+            }`
+          : publishFee
+            ? `One-time publish fee: ${publishFee} per ad. Create, edit, and pay to publish sponsored ads.`
+            : 'Create, edit, and manage your sponsored ads.'}
       </Text>
     </View>
   );
@@ -170,7 +214,7 @@ export function AdsListScreen() {
               multiColumn={listColumns > 1}
               stackActions={stackActions}
               paying={payingUuid === item.uuid}
-              onPay={() => void startCheckout(item.uuid)}
+              onPay={() => void startCheckout(item)}
               onEdit={() => navigation.navigate('AdsEdit', { uuid: item.uuid })}
               onDelete={() => confirmDelete(item)}
             />
@@ -287,7 +331,9 @@ function AdCard({
             ) : (
               <>
                 <Ionicons name="card-outline" size={18} color={colors.text.inverse} />
-                <Text style={styles.payButtonText}>Pay & Publish</Text>
+                <Text style={styles.payButtonText}>
+                  {shouldUseAppleIap() ? 'Pay with Apple & Publish' : 'Pay & Publish'}
+                </Text>
               </>
             )}
           </Pressable>
