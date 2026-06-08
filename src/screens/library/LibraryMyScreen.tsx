@@ -157,6 +157,8 @@ export function LibraryMyScreen() {
                   'Restore purchases',
                   `Restored ${result.library_restored} library title(s).${
                     result.ai_assistant_active ? ' AI Assistant is active.' : ''
+                  }${result.provider_subscription_active ? ' Provider subscription is active.' : ''}${
+                    result.videos_restored > 0 ? ` ${result.videos_restored} video(s) restored.` : ''
                   }${detail}`,
                 );
               } catch (e) {

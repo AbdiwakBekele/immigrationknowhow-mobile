@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
@@ -42,6 +43,23 @@ export function AdsCreateScreen() {
   const [description, setDescription] = useState('');
   const [cta, setCta] = useState('https://');
   const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [postingPrice, setPostingPrice] = useState<{
+    amount_cents?: number;
+    currency?: string;
+    free_limit?: number;
+    free_remaining?: number;
+  } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => {
+        const res = await adsApi.listAds();
+        if (res.success) {
+          setPostingPrice(res.data?.ad_posting_price ?? null);
+        }
+      })();
+    }, []),
+  );
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -100,7 +118,13 @@ export function AdsCreateScreen() {
           contentContainerStyle={[styles.scrollContent, isAdvertiserPortal && advertiserUi.scrollContent]}
           automaticallyAdjustKeyboardInsets
         >
-          <Text style={styles.subtitle}>Your ad will be reviewed (and may require payment) before publishing.</Text>
+          <Text style={styles.subtitle}>
+            {(postingPrice?.free_remaining ?? 0) > 0
+              ? `This ad is free — ${postingPrice?.free_remaining} of ${postingPrice?.free_limit ?? 0} complimentary slots remaining. It will be reviewed before publishing.`
+              : postingPrice?.amount_cents
+                ? `Publish fee: ${postingPrice.currency ?? 'USD'} ${((postingPrice.amount_cents ?? 0) / 100).toFixed(2)}. Your ad will be reviewed before publishing.`
+                : 'Your ad will be reviewed (and may require payment) before publishing.'}
+          </Text>
 
         <Text style={label()}>Title</Text>
         <TextInput placeholder="Ad title" value={title} onChangeText={setTitle} style={inp()} />

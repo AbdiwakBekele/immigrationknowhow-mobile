@@ -45,6 +45,8 @@ import {
   userSelectedPetSitterService,
 } from './onboardingConstants';
 import { SeekerOnboardingContent } from './SeekerOnboardingContent';
+import { purchaseProviderSubscription } from '../../services/appleIapService';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 
 const MAX_USER_SERVICES = 8;
 
@@ -104,6 +106,7 @@ export function OnboardingHomeScreen({
 
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
+  const useAppleIap = shouldUseAppleIap();
   const [step, setStep] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -892,15 +895,40 @@ export function OnboardingHomeScreen({
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    const payload = res.data as { checkout_url?: string; user?: AuthUser } | undefined;
+    const payload = res.data as {
+      checkout_url?: string;
+      requires_apple_iap?: boolean;
+      plan_uuid?: string;
+      apple_product_id?: string;
+      user?: AuthUser;
+    } | undefined;
+
+    if (payload?.user) {
+      applyUser({
+        ...payload.user,
+        onboarding_completed: payload.user.onboarding_completed ?? true,
+      });
+    }
+
+    if (payload?.requires_apple_iap && shouldUseAppleIap()) {
+      const planUuid = payload.plan_uuid;
+      const appleProductId = payload.apple_product_id?.trim();
+      if (!planUuid || !appleProductId) {
+        setError('This plan is not available for In-App Purchase yet.');
+        return;
+      }
+      try {
+        await purchaseProviderSubscription(planUuid, appleProductId);
+        await completeOnboardingSession(payload.user ?? null);
+        onFlowComplete?.();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Subscription purchase could not be completed.');
+      }
+      return;
+    }
+
     const checkout = payload?.checkout_url;
     if (checkout && typeof checkout === 'string') {
-      if (payload?.user) {
-        applyUser({
-          ...payload.user,
-          onboarding_completed: payload.user.onboarding_completed ?? true,
-        });
-      }
       if (onCheckoutRequired) {
         onCheckoutRequired(checkout);
         return;
@@ -919,9 +947,17 @@ export function OnboardingHomeScreen({
   const selectablePlans = useMemo(() => {
     const plans = meta?.subscriptionPlans ?? [];
     const stripeReady = !!meta?.stripeBillingReady;
+    const appleIapConfigured = meta?.appleIapConfigured === true;
     const selectedType = providerPrimaryService.trim();
     return plans.filter((p) => {
-      if ((p.price_cents ?? 0) > 0 && !stripeReady) {
+      if (
+        !isPaidBillingAvailable({
+          priceCents: p.price_cents ?? 0,
+          stripeReady,
+          appleProductId: p.apple_product_id,
+          appleIapConfigured,
+        })
+      ) {
         return false;
       }
       const raw = p as onboardingApi.SubscriptionPlanOption & {
@@ -941,7 +977,7 @@ export function OnboardingHomeScreen({
       }
       return String(optVal) === selectedType;
     });
-  }, [meta, providerPrimaryService]);
+  }, [meta, providerPrimaryService, useAppleIap]);
 
   useEffect(() => {
     if (step !== 7 || selectablePlans.length !== 1 || planUuid) {
@@ -1312,10 +1348,21 @@ export function OnboardingHomeScreen({
         <>
           <SectionLabel flushTop>Subscription</SectionLabel>
           <Text style={styles.mutedBlock}>
-            Choose a plan to publish your profile. Free plans activate instantly; paid plans open Stripe checkout in your browser.
+            Choose a plan to publish your profile. Free plans activate instantly; paid plans use In-App Purchase on iPhone or secure checkout on Android.
           </Text>
+          {meta?.providerSubscriptionPromo?.trial_eligible &&
+          (meta.providerSubscriptionPromo.trial_months ?? 0) > 0 ? (
+            <Text style={styles.promoBox}>
+              New providers get {meta.providerSubscriptionPromo.trial_months} months free, then $9.99/month or $99/year
+              depending on your plan.
+            </Text>
+          ) : null}
           {selectablePlans.length === 0 ? (
-            <Text style={styles.warnBox}>No plans are available right now. Please contact support.</Text>
+            <Text style={styles.warnBox}>
+              {useAppleIap
+                ? 'No subscription plans are available for In-App Purchase yet. Free plans may still work once billing is configured on the server.'
+                : 'No plans are available right now. Please contact support.'}
+            </Text>
           ) : (
             selectablePlans.map((plan) => {
               const selected = planUuid === plan.uuid;
@@ -1331,7 +1378,7 @@ export function OnboardingHomeScreen({
                     <Text style={styles.planPrice}>
                       {(plan.price_cents ?? 0) <= 0
                         ? 'Free'
-                        : `$${((plan.price_cents ?? 0) / 100).toFixed(0)} / ${plan.billing_cycle ?? 'period'}`}
+                        : `$${((plan.price_cents ?? 0) / 100).toFixed(2)} / ${plan.billing_cycle ?? 'period'}`}
                     </Text>
                   </View>
                   <Ionicons
@@ -1627,6 +1674,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     color: colors.text.secondary,
+  },
+  promoBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: '#ecfdf5',
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    color: '#065f46',
+    fontSize: typography.fontSize.sm,
   },
   planCard: {
     flexDirection: 'row',

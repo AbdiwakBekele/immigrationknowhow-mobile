@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -133,6 +133,17 @@ export function StripeCheckoutScreen() {
   const route = useRoute<ScreenRoute>();
   const navigation = useNavigation<ScreenNav>();
   const insets = useSafeAreaInsets();
+  const isIos = Platform.OS === 'ios';
+
+  useEffect(() => {
+    if (isIos) {
+      Alert.alert(
+        'Checkout unavailable',
+        'Paid digital content on iPhone must be purchased with the App Store.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
+    }
+  }, [isIos, navigation]);
   const webViewRef = useRef<WebView>(null);
   const handledRef = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -215,6 +226,14 @@ export function StripeCheckoutScreen() {
     }
 
     return true;
+  }
+
+  if (isIos) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={styles.loaderText}>Use In-App Purchase on iPhone.</Text>
+      </View>
+    );
   }
 
   return (

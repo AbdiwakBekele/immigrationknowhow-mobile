@@ -6,9 +6,11 @@ import { WebView } from 'react-native-webview';
 import { AppScreen } from '../../components/AppScreen';
 import { BASE_URL } from '../../config/api';
 import { getToken } from '../../services/tokenStorage';
+import { purchaseVideo } from '../../services/appleIapService';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
+import { shouldUseAppleIap } from '../../utils/platformPayments';
 import * as videosApi from '../../api/videosApi';
 import type { VideosStackParamList } from './VideosStack';
 
@@ -16,9 +18,12 @@ export function VideoDetailScreen() {
   const route = useRoute<RouteProp<VideosStackParamList, 'VideoDetail'>>();
   const { slug } = route.params;
   const [loading, setLoading] = useState(true);
+  const [purchasing, setPurchasing] = useState(false);
   const [payload, setPayload] = useState<any>(null);
   const [streamUri, setStreamUri] = useState<string | null>(null);
   const [streamHeaders, setStreamHeaders] = useState<Record<string, string>>({});
+
+  const useAppleIap = shouldUseAppleIap();
 
   const load = async () => {
     setLoading(true);
@@ -30,17 +35,39 @@ export function VideoDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       void load();
-    }, [slug])
+    }, [slug]),
   );
 
   const buy = async () => {
-    const res = await videosApi.videoCheckout(slug);
-    if (!res.success) {
-      Alert.alert('Video', res.message);
-      return;
+    setPurchasing(true);
+    try {
+      if (useAppleIap) {
+        const appleProductId =
+          typeof payload?.apple_product_id === 'string' && payload.apple_product_id.trim() !== ''
+            ? payload.apple_product_id.trim()
+            : null;
+        if (!appleProductId) {
+          Alert.alert('Video', 'This video is not available for In-App Purchase yet.');
+          return;
+        }
+        await purchaseVideo(slug, appleProductId);
+        await load();
+        Alert.alert('Video', 'Thank you! You can now play this video.');
+        return;
+      }
+
+      const res = await videosApi.videoCheckout(slug);
+      if (!res.success) {
+        Alert.alert('Video', res.message);
+        return;
+      }
+      const url = res.data?.checkout_url;
+      if (url) await Linking.openURL(url);
+    } catch (e) {
+      Alert.alert('Video', e instanceof Error ? e.message : 'Purchase could not be completed.');
+    } finally {
+      setPurchasing(false);
     }
-    const url = res.data?.checkout_url;
-    if (url) await Linking.openURL(url);
   };
 
   const free = async () => {
@@ -88,10 +115,18 @@ export function VideoDetailScreen() {
       <Text style={{ fontSize: typography.fontSize.xl, fontWeight: typography.fontWeight.bold, color: colors.text.primary }}>{video?.title}</Text>
       <Text style={{ marginTop: spacing.md, color: colors.text.secondary }}>{video?.description}</Text>
       {!hasAccess && (
-        <Pressable onPress={() => void (payload?.requires_paid_access ? buy() : free())} style={{ marginTop: spacing.xl, backgroundColor: colors.primary[600], padding: spacing.md, borderRadius: 12 }}>
-          <Text style={{ color: colors.text.inverse, textAlign: 'center', fontWeight: typography.fontWeight.semibold }}>
-            {payload?.requires_paid_access ? 'Purchase' : 'Unlock free'}
-          </Text>
+        <Pressable
+          onPress={() => void (payload?.requires_paid_access ? buy() : free())}
+          disabled={purchasing}
+          style={{ marginTop: spacing.xl, backgroundColor: colors.primary[600], padding: spacing.md, borderRadius: 12, opacity: purchasing ? 0.7 : 1 }}
+        >
+          {purchasing ? (
+            <ActivityIndicator color={colors.text.inverse} />
+          ) : (
+            <Text style={{ color: colors.text.inverse, textAlign: 'center', fontWeight: typography.fontWeight.semibold }}>
+              {payload?.requires_paid_access ? (useAppleIap ? 'Buy with Apple' : 'Purchase') : 'Unlock free'}
+            </Text>
+          )}
         </Pressable>
       )}
       {hasAccess && streamPath && (
