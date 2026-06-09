@@ -73,7 +73,7 @@ export function AiAssistantScreen() {
       if (shouldUseAppleIap()) {
         const productId =
           (typeof state?.apple_product_id === 'string' && state.apple_product_id) ||
-          'com.immigrantknowhow.ikhapp.ai_assistant.monthly';
+          'com.immigrantknowhow.ikhapp.monthly.ai_assistant';
         await purchaseAiAssistantSubscription(productId);
         await load();
         return;

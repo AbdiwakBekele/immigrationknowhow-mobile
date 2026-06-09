@@ -7,7 +7,7 @@ The iOS app uses **Apple In-App Purchase** for paid library titles and the AI As
 1. Complete **Paid Apps** agreements, tax, and banking.
 2. Create products:
    - **Auto-renewable subscription** for AI Assistant  
-     Default product ID: `com.immigrantknowhow.ikhapp.ai_assistant.monthly`
+     Default product ID: `com.immigrantknowhow.ikhapp.monthly.ai_assistant`
    - **Non-consumable** for the main ebook  
      Product ID: `EBOOK_TO2026` (set via `APPLE_LIBRARY_EBOOK_PRODUCT_ID` in `.env`)  
      For additional paid titles later: set `apple_product_id` on each `library_items` row, or use `APPLE_LIBRARY_EBOOK_SLUG` to target one slug.
@@ -27,7 +27,7 @@ APPLE_KEY_ID=your-key-id
 APPLE_PRIVATE_KEY_PATH=/var/www/ikh/storage/app/apple/SubscriptionKey_K4A5TCGDYM.p8
 # Or inline key instead: APPLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 APPLE_IAP_SANDBOX=true
-APPLE_AI_ASSISTANT_PRODUCT_ID=com.immigrantknowhow.ikhapp.ai_assistant.monthly
+APPLE_AI_ASSISTANT_MONTHLY=com.immigrantknowhow.ikhapp.monthly.ai_assistant
 APPLE_LIBRARY_PRODUCT_PREFIX=com.immigrantknowhow.ikhapp.library
 APPLE_LIBRARY_EBOOK_PRODUCT_ID=EBOOK_TO2026
 ```
