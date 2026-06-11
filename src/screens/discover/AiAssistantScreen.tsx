@@ -20,8 +20,9 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as aiApi from '../../api/aiAssistantApi';
-import { purchaseAiAssistantSubscription } from '../../services/appleIapService';
-import { shouldUseAppleIap } from '../../utils/platformPayments';
+import { purchaseAiAssistantSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import type { ChatMessage } from '../../api/aiAssistantApi';
 import { setAiAssistantFabSuppressed } from '../../navigation/aiAssistantFabVisibility';
 import type { StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
@@ -45,6 +46,7 @@ export function AiAssistantScreen() {
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const listRef = useRef<FlatList<LocalMessage>>(null);
 
   const load = async () => {
@@ -66,14 +68,25 @@ export function AiAssistantScreen() {
     }, []),
   );
 
+  const monthlyPriceCents = Math.round(parseFloat(state?.monthly_price ?? '4.99') * 100);
+  const appleBillingReady = isPaidBillingAvailable({
+    priceCents: monthlyPriceCents,
+    appleProductId: state?.apple_product_id,
+    appleIapConfigured: state?.apple_iap_configured,
+  });
+
   const subscribe = async () => {
+    if (subscribing || restoring) return;
+
     setErr(null);
     setSubscribing(true);
     try {
       if (shouldUseAppleIap()) {
-        const productId =
-          (typeof state?.apple_product_id === 'string' && state.apple_product_id) ||
-          'com.immigrantknowhow.ikhapp.monthly.ai_assistant';
+        if (!appleBillingReady) {
+          setErr('Subscription is not available for purchase right now.');
+          return;
+        }
+        const productId = String(state?.apple_product_id ?? '').trim();
         await purchaseAiAssistantSubscription(productId);
         await load();
         return;
@@ -101,9 +114,40 @@ export function AiAssistantScreen() {
         });
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Subscription could not be completed.');
+      if (e instanceof Error && e.message === 'Purchase cancelled.') {
+        return;
+      }
+      const message = mapAppleIapUserMessage(e, 'ai-assistant-subscribe');
+      if (message) setErr(message);
     } finally {
       setSubscribing(false);
+    }
+  };
+
+  const restore = async () => {
+    if (subscribing || restoring) return;
+
+    setErr(null);
+    setRestoring(true);
+    try {
+      const result = await restoreApplePurchasesOnDevice();
+      const refreshed = await aiApi.getAiAssistant();
+      if (refreshed.success) {
+        setState(refreshed.data.state);
+        setMessages(refreshed.data.state.chat_messages ?? []);
+      }
+      const isActive = result.ai_assistant_active || refreshed.data?.state.is_addon_active;
+      if (!isActive) {
+        setErr('No active subscription was found to restore.');
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message === 'Purchase cancelled.') {
+        return;
+      }
+      const message = mapAppleIapUserMessage(e, 'ai-assistant-restore');
+      if (message) setErr(message);
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -171,11 +215,30 @@ export function AiAssistantScreen() {
           <Text style={styles.gatePrice}>
             {state?.currency ?? 'USD'} {state?.monthly_price ?? '4.99'} / month
           </Text>
-          <Pressable onPress={() => void subscribe()} style={styles.gateCta} disabled={subscribing}>
+          <Pressable
+            onPress={() => void subscribe()}
+            style={[styles.gateCta, (!appleBillingReady || subscribing || restoring) && styles.gateCtaDisabled]}
+            disabled={!appleBillingReady || subscribing || restoring}
+          >
             <Text style={styles.gateCtaText}>
-              {subscribing ? 'Processing…' : shouldUseAppleIap() ? 'Subscribe with Apple' : 'Subscribe now'}
+              {subscribing
+                ? 'Processing…'
+                : shouldUseAppleIap()
+                  ? 'Subscribe with Apple'
+                  : 'Subscribe now'}
             </Text>
           </Pressable>
+          {shouldUseAppleIap() ? (
+            <Pressable
+              onPress={() => void restore()}
+              style={styles.restoreLink}
+              disabled={subscribing || restoring}
+            >
+              <Text style={styles.restoreLinkText}>
+                {restoring ? 'Restoring…' : 'Restore Purchases'}
+              </Text>
+            </Pressable>
+          ) : null}
           {!!err && <Text style={styles.error}>{err}</Text>}
         </View>
       </AppScreen>
@@ -427,6 +490,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing['2xl'],
     borderRadius: 14,
+  },
+  gateCtaDisabled: {
+    opacity: 0.5,
+  },
+  restoreLink: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  restoreLinkText: {
+    color: colors.primary[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    textAlign: 'center',
   },
   gateCtaText: {
     color: '#fff',

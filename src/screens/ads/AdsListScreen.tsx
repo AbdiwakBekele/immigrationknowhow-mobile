@@ -27,7 +27,8 @@ import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { adStatusLabel, adStatusStyle, formatAdPrice } from '../../utils/adUi';
 import * as adsApi from '../../api/adsApi';
 import { purchaseAdPublish } from '../../services/appleIapService';
-import { shouldUseAppleIap } from '../../utils/platformPayments';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import type { AdsStackParamList } from './AdsStack';
 
 type AdItem = {
@@ -108,25 +109,42 @@ export function AdsListScreen() {
     ]);
   };
 
+  const resolveAdAppleProductId = (item: AdItem): string | null => {
+    const fromItem =
+      typeof item.apple_product_id === 'string' && item.apple_product_id.trim() !== ''
+        ? item.apple_product_id.trim()
+        : null;
+    if (fromItem) return fromItem;
+    const fromPosting =
+      typeof postingPrice?.apple_product_id === 'string' && postingPrice.apple_product_id.trim() !== ''
+        ? postingPrice.apple_product_id.trim()
+        : null;
+    return fromPosting;
+  };
+
+  const canPayAdWithApple = (item: AdItem): boolean => {
+    const priceCents = item.price_cents ?? postingPrice?.next_ad_price_cents ?? postingPrice?.amount_cents ?? 0;
+    return isPaidBillingAvailable({
+      priceCents,
+      appleProductId: resolveAdAppleProductId(item),
+    });
+  };
+
   const startCheckout = async (item: AdItem) => {
     setPayingUuid(item.uuid);
     try {
       if (useAppleIap) {
-        const appleProductId =
-          (typeof item.apple_product_id === 'string' && item.apple_product_id.trim() !== ''
-            ? item.apple_product_id.trim()
-            : null) ??
-          (typeof postingPrice?.apple_product_id === 'string' && postingPrice.apple_product_id.trim() !== ''
-            ? postingPrice.apple_product_id.trim()
-            : null);
-        if (!appleProductId) {
+        const appleProductId = resolveAdAppleProductId(item);
+        if (!canPayAdWithApple(item)) {
           Alert.alert(
             'Ads',
-            'This ad uses a publish price that is not set up for In-App Purchase on iOS. Use the standard publish fee or contact support.',
+            __DEV__
+              ? 'Ad publish Apple product ID is missing (check APPLE_AD_PUBLISH_PRODUCT_ID).'
+              : 'This ad is not available for In-App Purchase right now. Please try again later.',
           );
           return;
         }
-        await purchaseAdPublish(item.uuid, appleProductId);
+        await purchaseAdPublish(item.uuid, appleProductId!);
         await load(true);
         Alert.alert('Ads', 'Payment received. Your ad will be reviewed before publishing.');
         return;
@@ -142,7 +160,13 @@ export function AdsListScreen() {
         navigation.navigate('StripeCheckout', { checkoutUrl, variant: 'default', adUuid: item.uuid });
       }
     } catch (e) {
-      Alert.alert('Ads', e instanceof Error ? e.message : 'Payment could not be completed.');
+      if (e instanceof Error && e.message === 'Purchase cancelled.') {
+        return;
+      }
+      const message = mapAppleIapUserMessage(e, 'ad-publish');
+      if (message) {
+        Alert.alert('Ads', message);
+      }
     } finally {
       setPayingUuid(null);
     }
@@ -214,6 +238,8 @@ export function AdsListScreen() {
               multiColumn={listColumns > 1}
               stackActions={stackActions}
               paying={payingUuid === item.uuid}
+              appleBillingReady={canPayAdWithApple(item)}
+              useAppleIap={useAppleIap}
               onPay={() => void startCheckout(item)}
               onEdit={() => navigation.navigate('AdsEdit', { uuid: item.uuid })}
               onDelete={() => confirmDelete(item)}
@@ -230,6 +256,8 @@ function AdCard({
   multiColumn,
   stackActions,
   paying,
+  appleBillingReady,
+  useAppleIap,
   onPay,
   onEdit,
   onDelete,
@@ -238,6 +266,8 @@ function AdCard({
   multiColumn: boolean;
   stackActions: boolean;
   paying: boolean;
+  appleBillingReady: boolean;
+  useAppleIap: boolean;
   onPay: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -323,8 +353,11 @@ function AdCard({
         {item.status === 'pending_payment' ? (
           <Pressable
             onPress={onPay}
-            disabled={paying}
-            style={[styles.payButton, paying && styles.payButtonDisabled]}
+            disabled={paying || (useAppleIap && !appleBillingReady)}
+            style={[
+              styles.payButton,
+              (paying || (useAppleIap && !appleBillingReady)) && styles.payButtonDisabled,
+            ]}
           >
             {paying ? (
               <ActivityIndicator color={colors.text.inverse} />
@@ -332,7 +365,11 @@ function AdCard({
               <>
                 <Ionicons name="card-outline" size={18} color={colors.text.inverse} />
                 <Text style={styles.payButtonText}>
-                  {shouldUseAppleIap() ? 'Pay with Apple & Publish' : 'Pay & Publish'}
+                  {useAppleIap && !appleBillingReady
+                    ? 'Unavailable'
+                    : useAppleIap
+                      ? 'Pay with Apple & Publish'
+                      : 'Pay & Publish'}
                 </Text>
               </>
             )}
