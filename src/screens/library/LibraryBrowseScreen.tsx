@@ -4,6 +4,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
 import { LibraryCover } from '../../components/library/LibraryCover';
+import { formatLibraryPrice } from '../../components/library/LibraryBookCard';
+import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -14,12 +16,6 @@ import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const CARD_GAP = spacing.md;
 const NUM_COLUMNS = 2;
-
-function formatPrice(item: any): string {
-  const amount = Number(item?.price || 0);
-  if (!amount) return 'Free';
-  return `${item.currency ?? 'USD'} ${amount.toFixed(2)}`;
-}
 
 export function LibraryBrowseScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
@@ -86,7 +82,8 @@ export function LibraryBrowseScreen() {
                   </Text>
                 </View>
                 <View style={s.cardFooter}>
-                  <Text style={[s.price, !isPaid && s.priceFree]}>{formatPrice(item)}</Text>
+                  <Text style={[s.price, !isPaid && s.priceFree]}>{formatLibraryPrice(item)}</Text>
+                  {isPaid ? <OneTimePurchaseNote compact style={s.oneTimeNote} /> : null}
                 </View>
               </Pressable>
             );
@@ -141,5 +138,8 @@ const s = StyleSheet.create({
   },
   priceFree: {
     color: '#059669',
+  },
+  oneTimeNote: {
+    marginTop: 4,
   },
 });

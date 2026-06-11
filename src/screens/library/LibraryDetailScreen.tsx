@@ -32,6 +32,7 @@ import { purchaseLibraryTitle } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
 import type { LibraryStackParamList } from './LibraryStack';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -160,13 +161,19 @@ function DetailActionBlock({
       <>
         {!compact ? (
           <View style={s.priceRow}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={s.priceLabel}>Price</Text>
               <Text style={s.priceValue}>{price}</Text>
+              <OneTimePurchaseNote />
             </View>
             <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
           </View>
-        ) : null}
+        ) : (
+          <View style={s.compactPriceBlock}>
+            <Text style={s.compactPriceValue}>{price}</Text>
+            <OneTimePurchaseNote compact center />
+          </View>
+        )}
         <Pressable
           onPress={onPay}
           style={[s.primaryBtn, compact && s.primaryBtnCompact, !appleBillingReady && s.primaryBtnDisabled]}
@@ -774,7 +781,10 @@ render();
               </Text>
             ) : null}
             {isProvider && isPaid && !hasAccess ? (
-              <Text style={s.heroPrice}>{formatLibraryPrice(item)}</Text>
+              <>
+                <Text style={s.heroPrice}>{formatLibraryPrice(item)}</Text>
+                <OneTimePurchaseNote compact center style={s.heroOneTimeNote} />
+              </>
             ) : null}
             {isProvider && hasAccess ? (
               <View style={s.accessBadgeInline}>
@@ -1047,6 +1057,20 @@ const s = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     marginTop: 2,
+  },
+  compactPriceBlock: {
+    marginBottom: spacing.sm,
+    alignItems: 'center',
+  },
+  compactPriceValue: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
+    textAlign: 'center',
+  },
+  heroOneTimeNote: {
+    marginTop: spacing.xs,
+    maxWidth: 280,
   },
   freeLabel: {
     fontSize: typography.fontSize.sm,

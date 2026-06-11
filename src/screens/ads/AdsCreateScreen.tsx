@@ -24,6 +24,8 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as adsApi from '../../api/adsApi';
+import { formatAdPricePerUnit } from '../../utils/adUi';
+import { ONE_TIME_PURCHASE_LABEL } from '../../utils/money';
 
 const HEADER_BAR_HEIGHT = 56;
 
@@ -121,8 +123,8 @@ export function AdsCreateScreen() {
           <Text style={styles.subtitle}>
             {(postingPrice?.free_remaining ?? 0) > 0
               ? `This ad is free — ${postingPrice?.free_remaining} of ${postingPrice?.free_limit ?? 0} complimentary slots remaining. It will be reviewed before publishing.`
-              : postingPrice?.amount_cents
-                ? `Publish fee: ${postingPrice.currency ?? 'USD'} ${((postingPrice.amount_cents ?? 0) / 100).toFixed(2)}. Your ad will be reviewed before publishing.`
+              : postingPrice?.amount_cents != null
+                ? `${ONE_TIME_PURCHASE_LABEL} ${formatAdPricePerUnit(postingPrice.amount_cents, postingPrice.currency)}. Your ad will be reviewed before publishing.`
                 : 'Your ad will be reviewed (and may require payment) before publishing.'}
           </Text>
 

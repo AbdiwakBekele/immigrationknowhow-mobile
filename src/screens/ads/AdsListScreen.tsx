@@ -24,7 +24,9 @@ import { shadows } from '../../theme/shadows';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
-import { adStatusLabel, adStatusStyle, formatAdPrice } from '../../utils/adUi';
+import { adStatusLabel, adStatusStyle, formatAdPricePerUnit } from '../../utils/adUi';
+import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
+import { ONE_TIME_PURCHASE_LABEL } from '../../utils/money';
 import * as adsApi from '../../api/adsApi';
 import { purchaseAdPublish } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
@@ -172,7 +174,7 @@ export function AdsListScreen() {
     }
   };
 
-  const publishFee = formatAdPrice(postingPrice?.amount_cents, postingPrice?.currency);
+  const publishFee = formatAdPricePerUnit(postingPrice?.amount_cents, postingPrice?.currency);
   const freeRemaining = postingPrice?.free_remaining ?? 0;
   const freeLimit = postingPrice?.free_limit ?? 0;
 
@@ -182,10 +184,10 @@ export function AdsListScreen() {
       <Text style={styles.subtitle}>
         {freeRemaining > 0
           ? `${freeRemaining} of ${freeLimit} complimentary publish ${freeRemaining === 1 ? 'slot' : 'slots'} remaining.${
-              publishFee ? ` After that, ${publishFee} per ad.` : ''
+              publishFee ? ` After that, ${publishFee}. ${ONE_TIME_PURCHASE_LABEL}.` : ''
             }`
           : publishFee
-            ? `One-time publish fee: ${publishFee} per ad. Create, edit, and pay to publish sponsored ads.`
+            ? `${ONE_TIME_PURCHASE_LABEL} ${publishFee}. Create, edit, and pay to publish sponsored ads.`
             : 'Create, edit, and manage your sponsored ads.'}
       </Text>
     </View>
@@ -273,7 +275,7 @@ function AdCard({
   onDelete: () => void;
 }) {
   const st = adStatusStyle(item.status);
-  const price = formatAdPrice(item.price_cents, item.currency);
+  const price = formatAdPricePerUnit(item.price_cents, item.currency);
   const views = item.analytics?.views ?? 0;
   const clicks = item.analytics?.clicks ?? 0;
   const ctr = item.analytics?.ctr ?? 0;
@@ -312,7 +314,12 @@ function AdCard({
             {item.description}
           </Text>
         )}
-        {price ? <Text style={styles.adPrice}>{price} publish fee</Text> : null}
+        {price ? (
+          <>
+            <Text style={styles.adPrice}>{price}</Text>
+            <OneTimePurchaseNote compact />
+          </>
+        ) : null}
 
         {item.status === 'suspended' ? (
           <View style={styles.suspendedNotice}>
@@ -566,11 +573,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   adPrice: {
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
   suspendedNotice: {
     marginTop: spacing.sm,

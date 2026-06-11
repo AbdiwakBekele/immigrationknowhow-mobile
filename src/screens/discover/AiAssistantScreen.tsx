@@ -23,6 +23,7 @@ import * as aiApi from '../../api/aiAssistantApi';
 import { purchaseAiAssistantSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { formatPerUnit } from '../../utils/money';
 import type { ChatMessage } from '../../api/aiAssistantApi';
 import { setAiAssistantFabSuppressed } from '../../navigation/aiAssistantFabVisibility';
 import type { StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
@@ -213,7 +214,7 @@ export function AiAssistantScreen() {
             service seeker and provider accounts.
           </Text>
           <Text style={styles.gatePrice}>
-            {state?.currency ?? 'USD'} {state?.monthly_price ?? '4.99'} / month
+            {formatPerUnit(Number(state?.monthly_price ?? 0), state?.currency ?? 'USD', 'month')}
           </Text>
           <Pressable
             onPress={() => void subscribe()}

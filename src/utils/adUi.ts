@@ -1,4 +1,5 @@
 import { colors } from '../theme/colors';
+import { formatMoneyFromCents, formatPerUnitFromCents } from './money';
 
 export function adStatusLabel(status: string): string {
   const labels: Record<string, string> = {
@@ -32,6 +33,10 @@ export function adStatusStyle(status: string): { bg: string; text: string; borde
 
 export function formatAdPrice(cents?: number, currency?: string): string | null {
   if (cents == null) return null;
-  const code = (currency ?? 'USD').toUpperCase();
-  return `${code} ${(cents / 100).toFixed(2)}`;
+  return formatMoneyFromCents(cents, currency ?? 'USD');
+}
+
+export function formatAdPricePerUnit(cents?: number, currency?: string): string | null {
+  if (cents == null) return null;
+  return formatPerUnitFromCents(cents, currency ?? 'USD', 'Ad');
 }

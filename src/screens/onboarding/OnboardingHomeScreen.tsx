@@ -47,6 +47,7 @@ import {
 import { SeekerOnboardingContent } from './SeekerOnboardingContent';
 import { purchaseProviderSubscription } from '../../services/appleIapService';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { formatSubscriptionPrice } from '../../utils/money';
 
 const MAX_USER_SERVICES = 8;
 
@@ -1353,8 +1354,9 @@ export function OnboardingHomeScreen({
           {meta?.providerSubscriptionPromo?.trial_eligible &&
           (meta.providerSubscriptionPromo.trial_months ?? 0) > 0 ? (
             <Text style={styles.promoBox}>
-              New providers get {meta.providerSubscriptionPromo.trial_months} months free, then $9.99/month or $99/year
-              depending on your plan.
+              New providers get {meta.providerSubscriptionPromo.trial_months} months free, then{' '}
+              {formatSubscriptionPrice(999, 'USD', 'month')} or {formatSubscriptionPrice(9900, 'USD', 'year')} depending
+              on your plan.
             </Text>
           ) : null}
           {selectablePlans.length === 0 ? (
@@ -1378,7 +1380,7 @@ export function OnboardingHomeScreen({
                     <Text style={styles.planPrice}>
                       {(plan.price_cents ?? 0) <= 0
                         ? 'Free'
-                        : `$${((plan.price_cents ?? 0) / 100).toFixed(2)} / ${plan.billing_cycle ?? 'period'}`}
+                        : formatSubscriptionPrice(plan.price_cents ?? 0, plan.currency ?? 'USD', plan.billing_cycle)}
                     </Text>
                   </View>
                   <Ionicons
