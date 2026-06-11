@@ -29,8 +29,9 @@ import { radii } from '../../theme/layout';
 import { shadows } from '../../theme/shadows';
 import * as libraryApi from '../../api/libraryApi';
 import { purchaseLibraryTitle } from '../../services/appleIapService';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
-import { shouldUseAppleIap } from '../../utils/platformPayments';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import type { LibraryStackParamList } from './LibraryStack';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -114,6 +115,7 @@ function DetailActionBlock({
   checkoutLoading,
   buyingFree,
   useAppleIap,
+  appleBillingReady,
   onRead,
   onPay,
   onFree,
@@ -126,6 +128,7 @@ function DetailActionBlock({
   checkoutLoading: boolean;
   buyingFree: boolean;
   useAppleIap: boolean;
+  appleBillingReady: boolean;
   onRead: () => void;
   onPay: () => void;
   onFree: () => void;
@@ -164,7 +167,11 @@ function DetailActionBlock({
             <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
           </View>
         ) : null}
-        <Pressable onPress={onPay} style={[s.primaryBtn, compact && s.primaryBtnCompact]} disabled={checkoutLoading}>
+        <Pressable
+          onPress={onPay}
+          style={[s.primaryBtn, compact && s.primaryBtnCompact, !appleBillingReady && s.primaryBtnDisabled]}
+          disabled={checkoutLoading || !appleBillingReady}
+        >
           {checkoutLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
@@ -175,11 +182,13 @@ function DetailActionBlock({
               ? useAppleIap
                 ? 'Processing…'
                 : 'Starting checkout…'
-              : compact
-                ? `Buy · ${price}`
-                : useAppleIap
-                  ? `Buy with Apple · ${price}`
-                  : `Continue to Payment · ${price}`}
+              : !appleBillingReady && useAppleIap
+                ? 'Unavailable'
+                : compact
+                  ? `Buy · ${price}`
+                  : useAppleIap
+                    ? `Buy with Apple · ${price}`
+                    : `Continue to Payment · ${price}`}
           </Text>
         </Pressable>
         {!compact ? (
@@ -259,16 +268,30 @@ export function LibraryDetailScreen() {
     typeof data?.apple_product_id === 'string' && data.apple_product_id.trim() !== ''
       ? data.apple_product_id.trim()
       : null;
+  const itemPriceCents = Math.round(Number(data?.item?.price ?? 0) * 100);
+  const appleBillingReady = isPaidBillingAvailable({
+    priceCents: itemPriceCents,
+    appleProductId,
+    appleIapConfigured: data?.apple_iap_configured === true,
+    stripeReady: data?.stripe_configured === true,
+  });
 
   const pay = async () => {
+    if (checkoutLoading) return;
+
     setCheckoutLoading(true);
     try {
       if (useAppleIap) {
-        if (!appleProductId) {
-          Alert.alert('Purchase', 'This title is not available for In-App Purchase yet.');
+        if (!appleBillingReady) {
+          Alert.alert(
+            'Purchase',
+            __DEV__ && !appleProductId
+              ? 'This ebook is missing apple_product_id (check library_items or APPLE_LIBRARY_EBOOK_PRODUCT_ID).'
+              : 'This title is not available for purchase right now. Please try again later.',
+          );
           return;
         }
-        await purchaseLibraryTitle(slug, appleProductId);
+        await purchaseLibraryTitle(slug, appleProductId!);
         await load();
         Alert.alert('Purchase', 'Thank you! This title is now in your library.');
         return;
@@ -285,8 +308,13 @@ export function LibraryDetailScreen() {
         setCheckoutUrl(url);
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Purchase could not be completed.';
-      Alert.alert('Purchase', message);
+      if (e instanceof Error && e.message === 'Purchase cancelled.') {
+        return;
+      }
+      const message = mapAppleIapUserMessage(e, 'library-purchase');
+      if (message) {
+        Alert.alert('Purchase', message);
+      }
     } finally {
       setCheckoutLoading(false);
     }
@@ -700,6 +728,7 @@ render();
       checkoutLoading={checkoutLoading}
       buyingFree={buyingFree}
       useAppleIap={useAppleIap}
+      appleBillingReady={appleBillingReady}
       onRead={() => void openReader()}
       onPay={() => void pay()}
       onFree={() => void free()}
@@ -1036,6 +1065,9 @@ const s = StyleSheet.create({
   },
   primaryBtnCompact: {
     paddingVertical: 12,
+  },
+  primaryBtnDisabled: {
+    opacity: 0.5,
   },
   primaryBtnText: {
     color: '#fff',
