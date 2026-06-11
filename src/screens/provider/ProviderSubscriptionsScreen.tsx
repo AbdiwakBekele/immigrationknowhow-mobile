@@ -17,11 +17,7 @@ import { typography } from '../../theme/typography';
 import * as subApi from '../../api/providerSubscriptionsApi';
 import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
 import { isPaidBillingAvailable, openAppleSubscriptionManagement, shouldUseAppleIap } from '../../utils/platformPayments';
-
-function formatMoney(cents: number, currency: string): string {
-  const v = cents / 100;
-  return `${currency.toUpperCase()} ${v.toFixed(2)}`;
-}
+import { formatSubscriptionPrice } from '../../utils/money';
 
 function isAppleBilledSubscription(sub: subApi.ProviderSubscriptionRow | null | undefined): boolean {
   if (!sub) return false;
@@ -228,7 +224,8 @@ export function ProviderSubscriptionsScreen() {
           }}
         >
           Your first subscription includes {payload.provider_subscription_promo.trial_months} months free. After the
-          trial, billing continues at $9.99/month or $99/year.
+          trial, billing continues at {formatSubscriptionPrice(999, 'USD', 'month')} or{' '}
+          {formatSubscriptionPrice(9900, 'USD', 'year')}.
           {useAppleIap ? ' On iPhone, configure the 6-month free offer in App Store Connect.' : ''}
         </Text>
       ) : null}
@@ -316,8 +313,9 @@ export function ProviderSubscriptionsScreen() {
               >
                 <Text style={{ fontWeight: typography.fontWeight.semibold, color: colors.text.primary }}>{plan.name}</Text>
                 <Text style={{ marginTop: spacing.xs, color: colors.text.secondary }}>
-                  {plan.price_cents <= 0 ? 'Free' : formatMoney(plan.price_cents, plan.currency)}
-                  {plan.billing_cycle ? ` / ${plan.billing_cycle}` : ''}
+                  {plan.price_cents <= 0
+                    ? 'Free'
+                    : formatSubscriptionPrice(plan.price_cents, plan.currency, plan.billing_cycle)}
                 </Text>
                 {isCurrentPlan ? (
                   <Text style={{ marginTop: spacing.md, color: colors.primary[700], fontWeight: typography.fontWeight.semibold }}>

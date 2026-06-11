@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +27,8 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import * as adsApi from '../../api/adsApi';
+import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
+import { formatAdPricePerUnit } from '../../utils/adUi';
 import type { AdsStackParamList } from './AdsStack';
 
 const HEADER_BAR_HEIGHT = 56;
@@ -65,6 +68,20 @@ export function AdsEditScreen() {
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [clearImage, setClearImage] = useState(false);
+  const [priceCents, setPriceCents] = useState<number | null>(null);
+  const [priceCurrency, setPriceCurrency] = useState<string>('USD');
+
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => {
+        const res = await adsApi.listAds();
+        if (res.success) {
+          setPriceCents(res.data?.ad_posting_price?.amount_cents ?? null);
+          setPriceCurrency(res.data?.ad_posting_price?.currency ?? 'USD');
+        }
+      })();
+    }, []),
+  );
 
   useEffect(() => {
     void (async () => {
@@ -81,14 +98,24 @@ export function AdsEditScreen() {
         cta_url?: string;
         image_url?: string | null;
         status?: string;
+        price_cents?: number;
+        currency?: string;
       };
       setTitle(ad?.title ?? '');
       setDescription(ad?.description ?? '');
       setCta(ad?.cta_url ?? 'https://');
       setExistingImageUrl(ad?.image_url ?? null);
       setStatus(ad?.status ?? '');
+      if (typeof ad?.price_cents === 'number') {
+        setPriceCents(ad.price_cents);
+      }
+      if (ad?.currency) {
+        setPriceCurrency(ad.currency);
+      }
     })();
   }, [navigation, route.params.uuid]);
+
+  const adPrice = formatAdPricePerUnit(priceCents ?? undefined, priceCurrency);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -169,6 +196,16 @@ export function AdsEditScreen() {
           automaticallyAdjustKeyboardInsets
         >
           <Text style={styles.subtitle}>Status: {adStatusLabel(status)}</Text>
+
+          {adPrice && (status === 'pending_payment' || Number(priceCents) > 0) ? (
+            <View style={styles.pricingNote}>
+              <Text style={styles.pricingAmount}>{adPrice}</Text>
+              <OneTimePurchaseNote compact />
+              {status === 'pending_payment' ? (
+                <Text style={styles.pricingHint}>Payment is required before this ad can be published.</Text>
+              ) : null}
+            </View>
+          ) : null}
 
           {status === 'suspended' ? (
             <View style={styles.noticeSuspended}>
@@ -271,6 +308,25 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: typography.fontSize.sm,
     lineHeight: 20,
+  },
+  pricingNote: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  pricingAmount: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  pricingHint: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    lineHeight: 18,
   },
   noticeSuspended: {
     marginBottom: spacing.md,
