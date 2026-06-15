@@ -33,6 +33,7 @@ import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
+import { formatPerUnitFromCents } from '../../utils/money';
 import type { LibraryStackParamList } from './LibraryStack';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -115,11 +116,16 @@ function DetailActionBlock({
   hasAudioCompanion,
   checkoutLoading,
   buyingFree,
+  redeemingCoupon,
   useAppleIap,
   appleBillingReady,
+  usesEbookCreditIap,
+  ebookCreditPriceLabel,
+  couponAvailable,
   onRead,
   onPay,
   onFree,
+  onRedeemCoupon,
   compact,
 }: {
   hasAccess: boolean;
@@ -128,11 +134,16 @@ function DetailActionBlock({
   hasAudioCompanion: boolean;
   checkoutLoading: boolean;
   buyingFree: boolean;
+  redeemingCoupon: boolean;
   useAppleIap: boolean;
   appleBillingReady: boolean;
+  usesEbookCreditIap: boolean;
+  ebookCreditPriceLabel: string | null;
+  couponAvailable: boolean;
   onRead: () => void;
   onPay: () => void;
   onFree: () => void;
+  onRedeemCoupon: () => void;
   compact?: boolean;
 }) {
   const price = formatLibraryPrice(item);
@@ -157,6 +168,17 @@ function DetailActionBlock({
   }
 
   if (isPaid) {
+    const applePayLabel =
+      usesEbookCreditIap && ebookCreditPriceLabel
+        ? compact
+          ? `Buy credit · ${ebookCreditPriceLabel}`
+          : `Buy ebook credit · ${ebookCreditPriceLabel}`
+        : compact
+          ? `Buy · ${price}`
+          : useAppleIap
+            ? `Buy with Apple · ${price}`
+            : `Continue to Payment · ${price}`;
+
     return (
       <>
         {!compact ? (
@@ -164,6 +186,11 @@ function DetailActionBlock({
             <View style={{ flex: 1 }}>
               <Text style={s.priceLabel}>Price</Text>
               <Text style={s.priceValue}>{price}</Text>
+              {usesEbookCreditIap && ebookCreditPriceLabel ? (
+                <Text style={s.creditHint}>
+                  One ebook credit ({ebookCreditPriceLabel}) unlocks this title.
+                </Text>
+              ) : null}
               <OneTimePurchaseNote />
             </View>
             <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
@@ -174,6 +201,27 @@ function DetailActionBlock({
             <OneTimePurchaseNote compact center />
           </View>
         )}
+        {couponAvailable ? (
+          <>
+            <Pressable
+              onPress={onRedeemCoupon}
+              style={[s.couponBtn, compact && s.couponBtnCompact]}
+              disabled={redeemingCoupon}
+            >
+              {redeemingCoupon ? (
+                <ActivityIndicator size="small" color={colors.primary[700]} />
+              ) : (
+                <Ionicons name="gift-outline" size={18} color={colors.primary[700]} />
+              )}
+              <Text style={s.couponBtnText}>
+                {redeemingCoupon ? 'Redeeming…' : 'Unlock with free signup coupon'}
+              </Text>
+            </Pressable>
+            {!compact ? (
+              <Text style={s.couponHint}>Use the one-time code from your welcome email.</Text>
+            ) : null}
+          </>
+        ) : null}
         <Pressable
           onPress={onPay}
           style={[s.primaryBtn, compact && s.primaryBtnCompact, !appleBillingReady && s.primaryBtnDisabled]}
@@ -191,11 +239,9 @@ function DetailActionBlock({
                 : 'Starting checkout…'
               : !appleBillingReady && useAppleIap
                 ? 'Unavailable'
-                : compact
-                  ? `Buy · ${price}`
-                  : useAppleIap
-                    ? `Buy with Apple · ${price}`
-                    : `Continue to Payment · ${price}`}
+                : useAppleIap
+                  ? applePayLabel
+                  : applePayLabel}
           </Text>
         </Pressable>
         {!compact ? (
@@ -239,6 +285,7 @@ export function LibraryDetailScreen() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [webViewLoading, setWebViewLoading] = useState(true);
   const [buyingFree, setBuyingFree] = useState(false);
+  const [redeemingCoupon, setRedeemingCoupon] = useState(false);
   const webViewRef = useRef<WebView>(null);
 
   const load = async () => {
@@ -275,6 +322,16 @@ export function LibraryDetailScreen() {
     typeof data?.apple_product_id === 'string' && data.apple_product_id.trim() !== ''
       ? data.apple_product_id.trim()
       : null;
+  const usesEbookCreditIap = data?.uses_ebook_credit_iap === true;
+  const ebookCreditPriceLabel =
+    usesEbookCreditIap && typeof data?.ebook_standard_price_cents === 'number'
+      ? formatPerUnitFromCents(
+          data.ebook_standard_price_cents,
+          typeof data?.ebook_standard_currency === 'string' ? data.ebook_standard_currency : 'USD',
+          'book',
+        )
+      : null;
+  const couponAvailable = data?.ebook_coupon_available === true;
   const itemPriceCents = Math.round(Number(data?.item?.price ?? 0) * 100);
   const appleBillingReady = isPaidBillingAvailable({
     priceCents: itemPriceCents,
@@ -293,7 +350,7 @@ export function LibraryDetailScreen() {
           Alert.alert(
             'Purchase',
             __DEV__ && !appleProductId
-              ? 'This ebook is missing apple_product_id (check library_items or APPLE_LIBRARY_EBOOK_PRODUCT_ID).'
+              ? 'Ebook credit IAP is not configured (check APPLE_LIBRARY_EBOOK_PRODUCT_ID).'
               : 'This title is not available for purchase right now. Please try again later.',
           );
           return;
@@ -333,6 +390,22 @@ export function LibraryDetailScreen() {
     setBuyingFree(false);
     if (!res.success) Alert.alert('Library', res.message);
     else void load();
+  };
+
+  const redeemCoupon = async () => {
+    if (redeemingCoupon) return;
+    setRedeemingCoupon(true);
+    try {
+      const res = await libraryApi.redeemEbookCoupon(slug);
+      if (!res.success) {
+        Alert.alert('Coupon', res.message);
+        return;
+      }
+      await load();
+      Alert.alert('Coupon', 'Your free ebook is now in your library.');
+    } finally {
+      setRedeemingCoupon(false);
+    }
   };
 
   const openReader = async () => {
@@ -734,11 +807,16 @@ render();
       hasAudioCompanion={hasAudioCompanion}
       checkoutLoading={checkoutLoading}
       buyingFree={buyingFree}
+      redeemingCoupon={redeemingCoupon}
       useAppleIap={useAppleIap}
       appleBillingReady={appleBillingReady}
+      usesEbookCreditIap={usesEbookCreditIap}
+      ebookCreditPriceLabel={ebookCreditPriceLabel}
+      couponAvailable={couponAvailable}
       onRead={() => void openReader()}
       onPay={() => void pay()}
       onFree={() => void free()}
+      onRedeemCoupon={() => void redeemCoupon()}
       compact={isProvider}
     />
   );
@@ -1057,6 +1135,38 @@ const s = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     marginTop: 2,
+  },
+  creditHint: {
+    marginTop: 4,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    lineHeight: 16,
+  },
+  couponBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingVertical: 12,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[200] ?? '#BFDBFE',
+    backgroundColor: colors.primary[50] ?? '#EFF6FF',
+  },
+  couponBtnCompact: {
+    paddingVertical: 10,
+  },
+  couponBtnText: {
+    color: colors.primary[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  couponHint: {
+    marginBottom: spacing.sm,
+    fontSize: 11,
+    color: colors.text.muted,
+    textAlign: 'center',
   },
   compactPriceBlock: {
     marginBottom: spacing.sm,

@@ -64,6 +64,20 @@ export async function libraryGrantFree(slug: string): Promise<ApiResponse<any>> 
   }
 }
 
+export async function redeemEbookCoupon(
+  slug: string,
+  code?: string,
+): Promise<ApiResponse<{ has_access: boolean }>> {
+  try {
+    const res = await apiClient.post(`/api/mobile/library/items/${encodeURIComponent(slug)}/redeem-coupon`, {
+      ...(code?.trim() ? { code: code.trim() } : {}),
+    });
+    return res.data?.success === false ? normalizeApiError({ response: { data: res.data } }) : res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
 export async function getLibraryStreamUrls(
   slug: string
 ): Promise<ApiResponse<{ stream_urls: Record<string, string>; expires_in_seconds?: number }>> {

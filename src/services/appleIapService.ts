@@ -34,7 +34,7 @@ type ApplePurchasePayload = {
 };
 
 function isConsumableKind(kind: PurchaseKind): boolean {
-  return kind === 'ad';
+  return kind === 'ad' || kind === 'library';
 }
 
 function isSubscriptionKind(kind: PurchaseKind): boolean {
@@ -453,10 +453,11 @@ export async function restoreApplePurchasesOnDevice(): Promise<{
       continue;
     }
 
-    if (
-      productId.startsWith(`${libraryPrefix}.`) ||
-      (libraryEbookProductId !== '' && productId === libraryEbookProductId)
-    ) {
+    if (libraryEbookProductId !== '' && productId === libraryEbookProductId) {
+      continue;
+    }
+
+    if (productId.startsWith(`${libraryPrefix}.`)) {
       library.push({ transaction_id: transactionId, product_id: productId });
     }
   }
