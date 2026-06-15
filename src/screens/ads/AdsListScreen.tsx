@@ -242,6 +242,12 @@ export function AdsListScreen() {
               paying={payingUuid === item.uuid}
               appleBillingReady={canPayAdWithApple(item)}
               useAppleIap={useAppleIap}
+              publishFeeLabel={
+                formatAdPricePerUnit(
+                  item.price_cents ?? postingPrice?.amount_cents,
+                  item.currency ?? postingPrice?.currency,
+                ) ?? publishFee
+              }
               onPay={() => void startCheckout(item)}
               onEdit={() => navigation.navigate('AdsEdit', { uuid: item.uuid })}
               onDelete={() => confirmDelete(item)}
@@ -260,6 +266,7 @@ function AdCard({
   paying,
   appleBillingReady,
   useAppleIap,
+  publishFeeLabel,
   onPay,
   onEdit,
   onDelete,
@@ -270,12 +277,13 @@ function AdCard({
   paying: boolean;
   appleBillingReady: boolean;
   useAppleIap: boolean;
+  publishFeeLabel?: string | null;
   onPay: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const st = adStatusStyle(item.status);
-  const price = formatAdPricePerUnit(item.price_cents, item.currency);
+  const price = formatAdPricePerUnit(item.price_cents, item.currency) ?? publishFeeLabel;
   const views = item.analytics?.views ?? 0;
   const clicks = item.analytics?.clicks ?? 0;
   const ctr = item.analytics?.ctr ?? 0;
@@ -358,29 +366,42 @@ function AdCard({
         </View>
 
         {item.status === 'pending_payment' ? (
-          <Pressable
-            onPress={onPay}
-            disabled={paying || (useAppleIap && !appleBillingReady)}
-            style={[
-              styles.payButton,
-              (paying || (useAppleIap && !appleBillingReady)) && styles.payButtonDisabled,
-            ]}
-          >
-            {paying ? (
-              <ActivityIndicator color={colors.text.inverse} />
-            ) : (
+          <View style={styles.payBlock}>
+            {price ? (
               <>
-                <Ionicons name="card-outline" size={18} color={colors.text.inverse} />
-                <Text style={styles.payButtonText}>
-                  {useAppleIap && !appleBillingReady
-                    ? 'Unavailable'
-                    : useAppleIap
-                      ? 'Pay with Apple & Publish'
-                      : 'Pay & Publish'}
-                </Text>
+                <Text style={styles.payPrice}>{price}</Text>
+                <OneTimePurchaseNote compact center style={styles.payOneTimeNote} />
               </>
-            )}
-          </Pressable>
+            ) : null}
+            <Pressable
+              onPress={onPay}
+              disabled={paying || (useAppleIap && !appleBillingReady)}
+              style={[
+                styles.payButton,
+                styles.payButtonInBlock,
+                (paying || (useAppleIap && !appleBillingReady)) && styles.payButtonDisabled,
+              ]}
+            >
+              {paying ? (
+                <ActivityIndicator color={colors.text.inverse} />
+              ) : (
+                <>
+                  <Ionicons name="card-outline" size={18} color={colors.text.inverse} />
+                  <Text style={styles.payButtonText}>
+                    {useAppleIap && !appleBillingReady
+                      ? 'Unavailable'
+                      : useAppleIap
+                        ? price
+                          ? `Pay with Apple · ${price}`
+                          : 'Pay with Apple & Publish'
+                        : price
+                          ? `Pay & Publish · ${price}`
+                          : 'Pay & Publish'}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
         ) : null}
       </View>
     </View>
@@ -667,8 +688,21 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.sm,
   },
-  payButton: {
+  payBlock: {
     marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  payPrice: {
+    textAlign: 'center',
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  payOneTimeNote: {
+    marginTop: 0,
+    marginBottom: spacing.xs,
+  },
+  payButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -677,6 +711,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: radii.lg,
     ...shadows.soft,
+  },
+  payButtonInBlock: {
+    marginTop: 0,
   },
   payButtonDisabled: {
     opacity: 0.7,
