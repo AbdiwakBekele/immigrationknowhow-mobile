@@ -26,6 +26,7 @@ import { typography } from '../../theme/typography';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { adStatusLabel, adStatusStyle, formatAdPricePerUnit } from '../../utils/adUi';
 import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
+import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
 import { ONE_TIME_PURCHASE_LABEL } from '../../utils/money';
 import * as adsApi from '../../api/adsApi';
 import { purchaseAdPublish } from '../../services/appleIapService';
@@ -373,34 +374,13 @@ function AdCard({
                 <OneTimePurchaseNote compact center style={styles.payOneTimeNote} />
               </>
             ) : null}
-            <Pressable
+            <PaymentCtaButton
+              label={useAppleIap && !appleBillingReady ? 'Unavailable' : `Pay ${price ?? ''}`.trim()}
               onPress={onPay}
               disabled={paying || (useAppleIap && !appleBillingReady)}
-              style={[
-                styles.payButton,
-                styles.payButtonInBlock,
-                (paying || (useAppleIap && !appleBillingReady)) && styles.payButtonDisabled,
-              ]}
-            >
-              {paying ? (
-                <ActivityIndicator color={colors.text.inverse} />
-              ) : (
-                <>
-                  <Ionicons name="card-outline" size={18} color={colors.text.inverse} />
-                  <Text style={styles.payButtonText}>
-                    {useAppleIap && !appleBillingReady
-                      ? 'Unavailable'
-                      : useAppleIap
-                        ? price
-                          ? `Pay with Apple · ${price}`
-                          : 'Pay with Apple & Publish'
-                        : price
-                          ? `Pay & Publish · ${price}`
-                          : 'Pay & Publish'}
-                  </Text>
-                </>
-              )}
-            </Pressable>
+              loading={paying}
+              style={[styles.payButtonInBlock, shadows.soft]}
+            />
           </View>
         ) : null}
       </View>
@@ -702,25 +682,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
     marginBottom: spacing.xs,
   },
-  payButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.md,
-    borderRadius: radii.lg,
-    ...shadows.soft,
-  },
   payButtonInBlock: {
     marginTop: 0,
-  },
-  payButtonDisabled: {
-    opacity: 0.7,
-  },
-  payButtonText: {
-    color: colors.text.inverse,
-    fontWeight: typography.fontWeight.semibold,
-    fontSize: typography.fontSize.sm,
   },
 });

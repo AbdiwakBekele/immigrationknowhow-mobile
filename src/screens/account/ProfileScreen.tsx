@@ -21,7 +21,7 @@ import { RoleAccountSection } from '../../components/account/RoleAccountSection'
 import * as rolesApi from '../../api/rolesApi';
 
 export function ProfileScreen() {
-  const { user, role, signOut, refreshMe } = useAuth();
+  const { user, role, signOut, confirmSignOut, refreshMe } = useAuth();
   const isAdvertiserPortal = role === 'advertiser';
   const advertiserUi = useAdvertiserStyles();
   const [profileUser, setProfileUser] = useState<profileApi.MobileProfileData['user'] | null>(null);
@@ -252,7 +252,7 @@ export function ProfileScreen() {
         <View style={styles.actionsWrap}>
           <AppButton title="Save changes" onPress={() => void onSave()} loading={saving} disabled={!hasDirtyFields} />
           <View style={styles.actionsSpacer} />
-          <AppButton title="Log out" onPress={() => void signOut()} variant="ghost" />
+          <AppButton title="Log out" onPress={confirmSignOut} variant="ghost" />
         </View>
 
         {!isAdvertiserPortal ? (

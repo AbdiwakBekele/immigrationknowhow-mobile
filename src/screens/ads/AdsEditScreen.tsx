@@ -12,7 +12,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,6 +28,7 @@ import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import * as adsApi from '../../api/adsApi';
 import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
 import { formatAdPricePerUnit } from '../../utils/adUi';
+import { pickAdImageFromLibrary, type AdImageFile } from '../../utils/adImagePicker';
 import type { AdsStackParamList } from './AdsStack';
 
 const HEADER_BAR_HEIGHT = 56;
@@ -66,7 +66,7 @@ export function AdsEditScreen() {
   const [description, setDescription] = useState('');
   const [cta, setCta] = useState('');
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [imageFile, setImageFile] = useState<AdImageFile | null>(null);
   const [clearImage, setClearImage] = useState(false);
   const [priceCents, setPriceCents] = useState<number | null>(null);
   const [priceCurrency, setPriceCurrency] = useState<string>('USD');
@@ -118,20 +118,16 @@ export function AdsEditScreen() {
   const adPrice = formatAdPricePerUnit(priceCents ?? undefined, priceCurrency);
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.length) {
-      return;
+    try {
+      const picked = await pickAdImageFromLibrary();
+      if (picked) {
+        setImageFile(picked);
+        setClearImage(false);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not use that image.';
+      Alert.alert('Upload image', message);
     }
-    const asset = result.assets[0];
-    setImageFile({
-      uri: asset.uri,
-      name: asset.fileName?.trim() || `ad-${Date.now()}.jpg`,
-      type: asset.mimeType?.trim() || 'image/jpeg',
-    });
-    setClearImage(false);
   };
 
   const displayImageUri = imageFile?.uri ?? (clearImage ? null : existingImageUrl ? resolveMediaUrl(existingImageUrl) : null);

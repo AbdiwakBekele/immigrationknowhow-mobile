@@ -25,6 +25,9 @@ export type ProviderSubscriptionRow = {
 export type SubscriptionsPayload = {
   plans: SubscriptionPlanRow[];
   current_subscription: ProviderSubscriptionRow | null;
+  pending_subscription?: ProviderSubscriptionRow | null;
+  has_active_subscription?: boolean;
+  requires_subscription?: boolean;
   subscription_history: ProviderSubscriptionRow[];
   stripe_billing_configured: boolean;
   apple_iap_configured?: boolean;

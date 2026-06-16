@@ -12,7 +12,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +24,7 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as adsApi from '../../api/adsApi';
 import { formatAdPricePerUnit } from '../../utils/adUi';
+import { pickAdImageFromLibrary, type AdImageFile } from '../../utils/adImagePicker';
 import { ONE_TIME_PURCHASE_LABEL } from '../../utils/money';
 
 const HEADER_BAR_HEIGHT = 56;
@@ -44,7 +44,7 @@ export function AdsCreateScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [cta, setCta] = useState('https://');
-  const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [imageFile, setImageFile] = useState<AdImageFile | null>(null);
   const [postingPrice, setPostingPrice] = useState<{
     amount_cents?: number;
     currency?: string;
@@ -64,21 +64,15 @@ export function AdsCreateScreen() {
   );
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.length) {
-      return;
+    try {
+      const picked = await pickAdImageFromLibrary();
+      if (picked) {
+        setImageFile(picked);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not use that image.';
+      Alert.alert('Upload image', message);
     }
-    const asset = result.assets[0];
-    const filename = asset.fileName?.trim() || `ad-${Date.now()}.jpg`;
-    const mime = asset.mimeType?.trim() || 'image/jpeg';
-    setImageFile({
-      uri: asset.uri,
-      name: filename,
-      type: mime,
-    });
   };
 
   const submit = async () => {

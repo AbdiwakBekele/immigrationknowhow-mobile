@@ -20,13 +20,14 @@ export function humanizeValidationMessage(text: string): string {
     return 'Please choose an image to upload.';
   }
 
-  const mimeMatch = line.match(/^the avatar field must be a file of type:?\s*(.+)\.?$/i);
+  const mimeMatch = line.match(/^the (?:avatar|image) field must be a file of type:?\s*(.+)\.?$/i);
   if (mimeMatch) {
     return `Uploaded image must be a ${mimeMatch[1].trim()} file.`;
   }
 
-  line = line.replace(/\bavatar field\b/gi, 'uploaded image');
-  line = line.replace(/^the avatar\b/gi, 'The uploaded image');
+  line = line.replace(/\b(?:avatar|image) field\b/gi, 'uploaded image');
+  line = line.replace(/^the (?:avatar|image)\b/gi, 'The uploaded image');
+  line = line.replace(/^the uploaded image must be an image\.?$/i, 'Please choose a JPEG, PNG, GIF, WebP, or HEIC image.');
   return line;
 }
 

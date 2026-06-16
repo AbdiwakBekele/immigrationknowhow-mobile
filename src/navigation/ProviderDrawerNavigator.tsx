@@ -7,6 +7,7 @@ import { CommonActions } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProviderBottomTabs, type ProviderBottomTabParamList } from './ProviderBottomTabs';
+import { ProviderSubscriptionGate } from './ProviderSubscriptionGate';
 import { drawerGradient } from '../theme/gradients';
 import { spacing } from '../theme/spacing';
 import {
@@ -179,17 +180,19 @@ export function ProviderDrawerNavigator() {
   const { drawerWidth } = useResponsiveLayout();
 
   return (
-    <Drawer.Navigator
-      id="ProviderRootDrawer"
-      drawerContent={(p) => <ProviderDrawerContent {...p} />}
-      screenOptions={{
-        headerShown: false,
-        drawerType: 'slide',
-        drawerStyle: { width: drawerWidth, backgroundColor: 'transparent' },
-        overlayColor: 'rgba(15,23,42,0.45)',
-      }}
-    >
-      <Drawer.Screen name="Main" component={ProviderBottomTabs} options={{ title: 'Home' }} />
-    </Drawer.Navigator>
+    <ProviderSubscriptionGate>
+      <Drawer.Navigator
+        id="ProviderRootDrawer"
+        drawerContent={(p) => <ProviderDrawerContent {...p} />}
+        screenOptions={{
+          headerShown: false,
+          drawerType: 'slide',
+          drawerStyle: { width: drawerWidth, backgroundColor: 'transparent' },
+          overlayColor: 'rgba(15,23,42,0.45)',
+        }}
+      >
+        <Drawer.Screen name="Main" component={ProviderBottomTabs} options={{ title: 'Home' }} />
+      </Drawer.Navigator>
+    </ProviderSubscriptionGate>
   );
 }
