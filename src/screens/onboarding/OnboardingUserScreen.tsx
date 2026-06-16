@@ -50,7 +50,7 @@ function mapUser(meta: OnboardingMeta): Record<string, string | undefined> {
 }
 
 export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
-  const { refreshMe, signOut, role } = useAuth();
+  const { refreshMe, confirmSignOut, role } = useAuth();
   const u = mapUser(meta);
   const ed = meta.existingData ?? {};
   const profile = (ed.profile ?? {}) as Record<string, unknown>;
@@ -345,7 +345,7 @@ export function OnboardingUserScreen({ meta, refreshMeta }: Props) {
       setCurrentStep(Math.max(2, currentStep - 1));
       return;
     }
-    await signOut();
+    confirmSignOut();
   }
 
   return (

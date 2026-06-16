@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import type { AuthUser, UserRole } from '../types/user';
 import * as authApi from '../api/authApi';
 import { friendlyApiErrorMessage } from '../api/userFriendlyMessage';
@@ -19,6 +20,7 @@ type AuthContextValue = AuthState & {
   signIn: (email: string, password: string) => Promise<{ ok: true } | { ok: false; message: string }>;
   signUp: (payload: authApi.RegisterPayload) => Promise<{ ok: true } | { ok: false; message: string }>;
   signOut: () => Promise<void>;
+  confirmSignOut: () => void;
   refreshMe: () => Promise<void>;
   applyUser: (user: AuthUser) => void;
   setActiveRole: (role: UserRole) => Promise<void>;
@@ -138,6 +140,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const confirmSignOut = useCallback(() => {
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  }, [signOut]);
+
   const setActiveRole = useCallback(
     async (nextRole: UserRole) => {
       if (!hasRole(nextRole)) return;
@@ -167,12 +176,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
+      confirmSignOut,
       refreshMe,
       applyUser,
       setActiveRole,
       hasRole,
     }),
-    [isBootstrapping, isAuthenticated, token, user, role, activeRole, signIn, signUp, signOut, refreshMe, applyUser, setActiveRole, hasRole]
+    [isBootstrapping, isAuthenticated, token, user, role, activeRole, signIn, signUp, signOut, confirmSignOut, refreshMe, applyUser, setActiveRole, hasRole]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

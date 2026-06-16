@@ -25,7 +25,7 @@ import * as rolesApi from '../../api/rolesApi';
 export function ProviderProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList, 'ProfileHome'>>();
   const tabNavigation = navigation.getParent<BottomTabNavigationProp<ProviderBottomTabParamList>>();
-  const { user, signOut, refreshMe } = useAuth();
+  const { user, signOut, confirmSignOut, refreshMe } = useAuth();
   const [dash, setDash] = useState<providerDashboardApi.ProviderDashboardData | null>(null);
   const [profileUser, setProfileUser] = useState<profileApi.MobileProfileData['user'] | null>(null);
   const [providerProfile, setProviderProfile] = useState<profileApi.ProviderProfile | null>(null);
@@ -316,7 +316,7 @@ export function ProviderProfileScreen() {
         <View style={{ marginTop: spacing['3xl'] }}>
           <AppButton title="Save changes" onPress={() => void onSave()} loading={saving} disabled={!hasDirtyFields} />
           <View style={{ height: spacing.md }} />
-          <AppButton title="Log out" onPress={() => void signOut()} variant="ghost" />
+          <AppButton title="Log out" onPress={confirmSignOut} variant="ghost" />
         </View>
 
         <DeleteAccountSection

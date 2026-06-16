@@ -23,7 +23,8 @@ import * as aiApi from '../../api/aiAssistantApi';
 import { purchaseAiAssistantSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
-import { formatPerUnit } from '../../utils/money';
+import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
+import { formatMoney, formatPerUnit } from '../../utils/money';
 import type { ChatMessage } from '../../api/aiAssistantApi';
 import { setAiAssistantFabSuppressed } from '../../navigation/aiAssistantFabVisibility';
 import type { StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
@@ -210,25 +211,18 @@ export function AiAssistantScreen() {
           <Ionicons name="sparkles" size={40} color={colors.primary[600]} />
           <Text style={styles.gateTitle}>AI Assistant</Text>
           <Text style={styles.gateBody}>
-            Get instant answers about immigration programs, USCIS processes, and more. One subscription covers both
-            service seeker and provider accounts.
+            Monthly subscription.
           </Text>
           <Text style={styles.gatePrice}>
             {formatPerUnit(Number(state?.monthly_price ?? 0), state?.currency ?? 'USD', 'month')}
           </Text>
-          <Pressable
+          <PaymentCtaButton
+            label={`Pay ${formatMoney(Number(state?.monthly_price ?? 0), state?.currency ?? 'USD')}`}
             onPress={() => void subscribe()}
-            style={[styles.gateCta, (!appleBillingReady || subscribing || restoring) && styles.gateCtaDisabled]}
-            disabled={!appleBillingReady || subscribing || restoring}
-          >
-            <Text style={styles.gateCtaText}>
-              {subscribing
-                ? 'Processing…'
-                : shouldUseAppleIap()
-                  ? 'Subscribe with Apple'
-                  : 'Subscribe now'}
-            </Text>
-          </Pressable>
+            disabled={!appleBillingReady || restoring}
+            loading={subscribing}
+            style={styles.gateCta}
+          />
           {shouldUseAppleIap() ? (
             <Pressable
               onPress={() => void restore()}
@@ -487,13 +481,8 @@ const styles = StyleSheet.create({
   },
   gateCta: {
     marginTop: spacing.lg,
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing['2xl'],
     borderRadius: 14,
-  },
-  gateCtaDisabled: {
-    opacity: 0.5,
+    paddingHorizontal: spacing['2xl'],
   },
   restoreLink: {
     marginTop: spacing.md,
@@ -504,11 +493,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     textAlign: 'center',
-  },
-  gateCtaText: {
-    color: '#fff',
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
   },
   error: {
     marginTop: spacing.md,
