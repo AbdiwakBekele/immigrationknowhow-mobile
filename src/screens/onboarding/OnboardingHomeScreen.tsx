@@ -46,10 +46,12 @@ import {
   userSelectedPetSitterService,
 } from './onboardingConstants';
 import { SeekerOnboardingContent } from './SeekerOnboardingContent';
-import { purchaseProviderSubscription } from '../../services/appleIapService';
+import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { formatSubscriptionPrice } from '../../utils/money';
+import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
+import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
 import { isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
 
 const MAX_USER_SERVICES = 8;
@@ -919,10 +921,11 @@ export function OnboardingHomeScreen({
         setError('This plan is not available for In-App Purchase yet.');
         return;
       }
-      setProcessingMessage('Processing subscription with the App Store…');
+      setProcessingMessage('Processing…');
       try {
-        await purchaseProviderSubscription(iapPlanUuid, appleProductId);
-        setProcessingMessage('Activating your plan…');
+        const selectedPlan = selectablePlans.find((plan) => plan.uuid === iapPlanUuid);
+        await purchaseProviderSubscription(iapPlanUuid, appleProductId, selectedPlan?.price_cents);
+        setProcessingMessage('Processing…');
         await completeOnboardingSession(payload.user ?? null);
         onFlowComplete?.();
       } catch (e) {
@@ -1370,9 +1373,12 @@ export function OnboardingHomeScreen({
       return (
         <>
           <SectionLabel flushTop>Subscription</SectionLabel>
-          <Text style={styles.mutedBlock}>
-            Choose a plan to publish your profile. Free plans activate instantly; paid plans use In-App Purchase on iPhone or secure checkout on Android.
+          <PaidFeatureBadge label="Requires subscription" />
+          <Text style={[styles.mutedBlock, { marginTop: spacing.sm }]}>
+            Service Provider Subscription — unlock provider profile access and provider tools. Free plans activate
+            instantly; paid plans require a subscription purchase.
           </Text>
+          <Text style={styles.mutedBlock}>Monthly: $9.99/month · Yearly: $99.00/year</Text>
           {meta?.providerSubscriptionPromo?.trial_eligible &&
           (meta.providerSubscriptionPromo.trial_months ?? 0) > 0 ? (
             <Text style={styles.promoBox}>
@@ -1382,9 +1388,8 @@ export function OnboardingHomeScreen({
           ) : null}
           {selectablePlans.length === 0 ? (
             <Text style={styles.warnBox}>
-              {useAppleIap
-                ? 'No subscription plans are available for In-App Purchase yet. Free plans may still work once billing is configured on the server.'
-                : 'No plans are available right now. Please contact support.'}
+              No subscription plans are available for purchase right now. Free plans may still work once billing is
+              configured on the server.
             </Text>
           ) : (
             selectablePlans.map((plan) => {
@@ -1403,6 +1408,12 @@ export function OnboardingHomeScreen({
                         ? 'Free'
                         : formatSubscriptionPrice(plan.price_cents ?? 0, plan.currency ?? 'USD', plan.billing_cycle)}
                     </Text>
+                    {(plan.price_cents ?? 0) > 0 ? (
+                      <Text style={styles.planDesc}>
+                        Duration:{' '}
+                        {isAnnualBillingCycle(plan.billing_cycle) ? '1 year' : '1 month'}
+                      </Text>
+                    ) : null}
                   </View>
                   <Ionicons
                     name={selected ? 'radio-button-on' : 'radio-button-off'}
@@ -1413,6 +1424,20 @@ export function OnboardingHomeScreen({
               );
             })
           )}
+          <SubscriptionLegalFooter
+            onRestore={() => {
+              void (async () => {
+                try {
+                  if (shouldUseAppleIap()) {
+                    await restoreApplePurchasesOnDevice();
+                  }
+                } catch {
+                  // Restore may be a no-op on Android; subscription state syncs from the server after sign-in.
+                }
+              })();
+            }}
+            showRestore
+          />
         </>
       );
     }

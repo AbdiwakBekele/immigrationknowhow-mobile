@@ -32,6 +32,7 @@ import { purchaseLibraryTitle } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { EbookPurchaseNote } from '../../components/pricing/EbookPurchaseNote';
 import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
 import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
 import type { LibraryStackParamList } from './LibraryStack';
@@ -171,23 +172,47 @@ function DetailActionBlock({
   }
 
   if (isPaid) {
-    const payLabel = `Pay ${price}`;
+    const isEbook = item?.type === 'ebook';
+    const payLabel = isEbook ? 'Buy Ebook' : `Pay ${price}`;
 
     return (
       <>
         {!compact ? (
-          <View style={s.priceRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.priceLabel}>Price</Text>
-              <Text style={s.priceValue}>{price}</Text>
-              <OneTimePurchaseNote />
+          isEbook ? (
+            <View style={s.priceRow}>
+              <View style={{ flex: 1 }}>
+                <EbookPurchaseNote
+                  price={Number(item?.price ?? 0)}
+                  currency={item?.currency ?? 'USD'}
+                />
+              </View>
+              <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
             </View>
-            <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
-          </View>
+          ) : (
+            <View style={s.priceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.priceLabel}>Price</Text>
+                <Text style={s.priceValue}>{price}</Text>
+                <OneTimePurchaseNote />
+              </View>
+              <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
+            </View>
+          )
         ) : (
           <View style={s.compactPriceBlock}>
-            <Text style={s.compactPriceValue}>{price}</Text>
-            <OneTimePurchaseNote compact center />
+            {isEbook ? (
+              <EbookPurchaseNote
+                price={Number(item?.price ?? 0)}
+                currency={item?.currency ?? 'USD'}
+                compact
+                center
+              />
+            ) : (
+              <>
+                <Text style={s.compactPriceValue}>{price}</Text>
+                <OneTimePurchaseNote compact center />
+              </>
+            )}
           </View>
         )}
         {couponAvailable ? (
@@ -212,11 +237,11 @@ function DetailActionBlock({
           </>
         ) : null}
         <PaymentCtaButton
-          label={!appleBillingReady && useAppleIap ? 'Unavailable' : payLabel}
+          label={!appleBillingReady ? 'Unavailable' : isEbook ? 'Buy Ebook' : payLabel}
           onPress={onPay}
           disabled={checkoutLoading || !appleBillingReady}
           loading={checkoutLoading}
-          loadingLabel={useAppleIap ? 'Processing…' : 'Starting checkout…'}
+          loadingLabel="Processing…"
           style={[compact && s.primaryBtnCompact]}
         />
       </>
@@ -308,14 +333,24 @@ export function LibraryDetailScreen() {
           Alert.alert(
             'Purchase',
             __DEV__ && !appleProductId
-              ? 'Ebook credit IAP is not configured (check APPLE_LIBRARY_EBOOK_PRODUCT_ID).'
+              ? 'Ebook purchase IAP is not configured (check APPLE_LIBRARY_EBOOK_PRODUCT_ID).'
               : 'This title is not available for purchase right now. Please try again later.',
           );
           return;
         }
-        await purchaseLibraryTitle(slug, appleProductId!);
-        await load();
-        Alert.alert('Purchase', libraryAddedSuccessMessage(data?.item?.type));
+        await purchaseLibraryTitle(slug, appleProductId!, itemPriceCents);
+        const refreshed = await libraryApi.getLibraryItem(slug);
+        if (refreshed.success) {
+          setData(refreshed.data);
+        }
+        if (refreshed.success && refreshed.data.has_access) {
+          Alert.alert('Purchase', libraryAddedSuccessMessage(data?.item?.type));
+        } else {
+          Alert.alert(
+            'Purchase',
+            'Purchase completed, but we could not refresh your access. Please tap Restore Purchases or try again.',
+          );
+        }
         return;
       }
 
@@ -816,10 +851,20 @@ render();
               </Text>
             ) : null}
             {isProvider && isPaid && !hasAccess ? (
-              <>
-                <Text style={s.heroPrice}>{formatLibraryPrice(item)}</Text>
-                <OneTimePurchaseNote compact center style={s.heroOneTimeNote} />
-              </>
+              item?.type === 'ebook' ? (
+                <EbookPurchaseNote
+                  price={Number(item?.price ?? 0)}
+                  currency={item?.currency ?? 'USD'}
+                  compact
+                  center
+                  style={s.heroOneTimeNote}
+                />
+              ) : (
+                <>
+                  <Text style={s.heroPrice}>{formatLibraryPrice(item)}</Text>
+                  <OneTimePurchaseNote compact center style={s.heroOneTimeNote} />
+                </>
+              )
             ) : null}
             {isProvider && hasAccess ? (
               <View style={s.accessBadgeInline}>
