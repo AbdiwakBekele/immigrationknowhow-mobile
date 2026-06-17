@@ -5,6 +5,7 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { openExternalUrl } from '../../utils/openExternalUrl';
+import { shouldUseAppleIap } from '../../utils/platformPayments';
 
 type Props = {
   onRestore?: () => void;
@@ -13,7 +14,7 @@ type Props = {
 };
 
 export function SubscriptionLegalFooter({ onRestore, restoring = false, showRestore = true }: Props) {
-  const showRestoreButton = showRestore && onRestore;
+  const showRestoreButton = showRestore && onRestore && shouldUseAppleIap();
 
   return (
     <View style={styles.wrap}>

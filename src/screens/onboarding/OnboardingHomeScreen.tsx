@@ -52,7 +52,7 @@ import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformP
 import { formatSubscriptionPrice } from '../../utils/money';
 import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
 import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
-import { isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
+import { buildProviderSubscriptionPricingHint, isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
 
 const MAX_USER_SERVICES = 8;
 
@@ -1005,6 +1005,11 @@ export function OnboardingHomeScreen({
     return formatSubscriptionPrice(only.price_cents ?? 0, only.currency ?? 'USD', only.billing_cycle);
   }, [selectablePlans]);
 
+  const providerPricingHint = useMemo(
+    () => buildProviderSubscriptionPricingHint(selectablePlans),
+    [selectablePlans],
+  );
+
   useEffect(() => {
     if (step !== 7 || selectablePlans.length !== 1 || planUuid) {
       return;
@@ -1378,7 +1383,7 @@ export function OnboardingHomeScreen({
             Service Provider Subscription — unlock provider profile access and provider tools. Free plans activate
             instantly; paid plans require a subscription purchase.
           </Text>
-          <Text style={styles.mutedBlock}>Monthly: $9.99/month · Yearly: $99.00/year</Text>
+          <Text style={styles.mutedBlock}>{providerPricingHint}</Text>
           {meta?.providerSubscriptionPromo?.trial_eligible &&
           (meta.providerSubscriptionPromo.trial_months ?? 0) > 0 ? (
             <Text style={styles.promoBox}>
@@ -1426,17 +1431,8 @@ export function OnboardingHomeScreen({
           )}
           <SubscriptionLegalFooter
             onRestore={() => {
-              void (async () => {
-                try {
-                  if (shouldUseAppleIap()) {
-                    await restoreApplePurchasesOnDevice();
-                  }
-                } catch {
-                  // Restore may be a no-op on Android; subscription state syncs from the server after sign-in.
-                }
-              })();
+              void restoreApplePurchasesOnDevice().catch(() => undefined);
             }}
-            showRestore
           />
         </>
       );
