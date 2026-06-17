@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,7 +26,7 @@ import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { formatSubscriptionPrice } from '../../utils/money';
-import { isActiveProviderSubscription, providerRequiresSubscription } from '../../utils/providerSubscription';
+import { isActiveProviderSubscription, buildProviderSubscriptionPricingHint, providerRequiresSubscription } from '../../utils/providerSubscription';
 
 function subscriptionDurationLabel(billingCycle?: string | null): string {
   const cycle = (billingCycle ?? 'month').toLowerCase();
@@ -182,6 +182,7 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
   const current = payload?.current_subscription ?? null;
   const pending = payload?.pending_subscription ?? null;
   const plans = payload?.plans ?? [];
+  const pricingHint = useMemo(() => buildProviderSubscriptionPricingHint(plans), [plans]);
 
   const restorePurchases = async () => {
     if (restoring || Boolean(processingMessage)) return;
@@ -266,7 +267,7 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
           <Text style={styles.paywallBody}>
             Unlock service provider features, provider profile access, and provider tools. Auto-renewable subscription.
           </Text>
-          <Text style={styles.paywallHint}>Monthly: $9.99/month · Yearly: $99.00/year</Text>
+          <Text style={styles.paywallHint}>{pricingHint}</Text>
         </View>
 
         {pending && !isActiveProviderSubscription(current) ? (
