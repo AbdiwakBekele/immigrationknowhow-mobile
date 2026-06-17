@@ -12,6 +12,7 @@ import {
   type Purchase,
 } from 'expo-iap';
 import * as appleIapApi from '../api/appleIapApi';
+import { logIapPurchaseIntent, type IapFeatureKind } from '../config/iapCatalog';
 import { logAppleIapError, mapAppleIapUserMessage } from '../utils/appleIapErrors';
 
 type PurchaseKind = 'library' | 'ai_assistant' | 'provider_subscription' | 'video' | 'ad';
@@ -262,6 +263,12 @@ async function handlePurchaseUpdated(purchase: Purchase): Promise<void> {
     return;
   }
 
+  const incomingProductId = String(purchase.productId ?? '').trim();
+  if (incomingProductId && incomingProductId !== current.productId) {
+    // Ignore unrelated App Store events (e.g. subscription renewals) during an active purchase.
+    return;
+  }
+
   const payload = buildApplePayload(purchase);
   if (!payload.transactionId) {
     pending = null;
@@ -324,11 +331,18 @@ function handlePurchaseError(error: { message?: string }): void {
   current.reject(toUserFacingError(error, 'purchase-error'));
 }
 
-function runPurchase(params: Omit<PendingPurchase, 'resolve' | 'reject' | 'retryCount'>): Promise<void> {
+function runPurchase(
+  params: Omit<PendingPurchase, 'resolve' | 'reject' | 'retryCount'>,
+  options?: { feature?: IapFeatureKind; priceCents?: number | null },
+): Promise<void> {
   return new Promise(async (resolve, reject) => {
     if (pending) {
       reject(toUserFacingError(new Error('Another purchase is already in progress.'), 'concurrent'));
       return;
+    }
+
+    if (options?.feature) {
+      logIapPurchaseIntent(options.feature, params.productId, options.priceCents);
     }
 
     const current: PendingPurchase = { ...params, retryCount: 0, resolve, reject };
@@ -357,43 +371,77 @@ function runPurchase(params: Omit<PendingPurchase, 'resolve' | 'reject' | 'retry
   });
 }
 
-export async function purchaseLibraryTitle(slug: string, appleProductId: string): Promise<void> {
-  return runPurchase({
-    productId: appleProductId,
-    kind: 'library',
-    slug,
-  });
+export async function purchaseLibraryTitle(
+  slug: string,
+  appleProductId: string,
+  priceCents?: number | null,
+): Promise<void> {
+  return runPurchase(
+    {
+      productId: appleProductId,
+      kind: 'library',
+      slug,
+    },
+    { feature: 'library', priceCents },
+  );
 }
 
-export async function purchaseAiAssistantSubscription(appleProductId: string): Promise<void> {
-  return runPurchase({
-    productId: appleProductId,
-    kind: 'ai_assistant',
-  });
+export async function purchaseAiAssistantSubscription(
+  appleProductId: string,
+  priceCents?: number | null,
+): Promise<void> {
+  return runPurchase(
+    {
+      productId: appleProductId,
+      kind: 'ai_assistant',
+    },
+    { feature: 'ai_assistant', priceCents },
+  );
 }
 
-export async function purchaseProviderSubscription(planUuid: string, appleProductId: string): Promise<void> {
-  return runPurchase({
-    productId: appleProductId,
-    kind: 'provider_subscription',
-    planUuid,
-  });
+export async function purchaseProviderSubscription(
+  planUuid: string,
+  appleProductId: string,
+  priceCents?: number | null,
+): Promise<void> {
+  return runPurchase(
+    {
+      productId: appleProductId,
+      kind: 'provider_subscription',
+      planUuid,
+    },
+    { feature: 'provider_subscription', priceCents },
+  );
 }
 
-export async function purchaseVideo(slug: string, appleProductId: string): Promise<void> {
-  return runPurchase({
-    productId: appleProductId,
-    kind: 'video',
-    slug,
-  });
+export async function purchaseVideo(
+  slug: string,
+  appleProductId: string,
+  priceCents?: number | null,
+): Promise<void> {
+  return runPurchase(
+    {
+      productId: appleProductId,
+      kind: 'video',
+      slug,
+    },
+    { feature: 'video', priceCents },
+  );
 }
 
-export async function purchaseAdPublish(adUuid: string, appleProductId: string): Promise<void> {
-  return runPurchase({
-    productId: appleProductId,
-    kind: 'ad',
-    adUuid,
-  });
+export async function purchaseAdPublish(
+  adUuid: string,
+  appleProductId: string,
+  priceCents?: number | null,
+): Promise<void> {
+  return runPurchase(
+    {
+      productId: appleProductId,
+      kind: 'ad',
+      adUuid,
+    },
+    { feature: 'ad', priceCents },
+  );
 }
 
 export async function restoreApplePurchasesOnDevice(): Promise<{

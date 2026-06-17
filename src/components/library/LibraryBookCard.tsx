@@ -7,8 +7,9 @@ import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
+import { EbookPurchaseNote } from '../pricing/EbookPurchaseNote';
 import { OneTimePurchaseNote } from '../pricing/OneTimePurchaseNote';
-import { formatPerUnit } from '../../utils/money';
+import { formatMoney, formatPerUnit } from '../../utils/money';
 
 export type LibraryBookItem = {
   slug?: string;
@@ -35,6 +36,9 @@ type Props = {
 export function formatLibraryPrice(item: LibraryBookItem): string {
   const amount = Number(item?.price || 0);
   if (!amount) return 'Free';
+  if (item?.type === 'ebook') {
+    return formatMoney(amount, item.currency ?? 'USD');
+  }
   const unit = item?.type === 'audiobook' ? 'audiobook' : 'book';
   return formatPerUnit(amount, item.currency ?? 'USD', unit);
 }
@@ -107,7 +111,13 @@ export function LibraryBookCard({ item, coverUri, onPress, variant = 'grid', wid
         </View>
         <View style={styles.compactTrailing}>
           <Text style={[styles.compactPrice, (owned || !isPaid) && styles.priceFree]}>{priceLabel}</Text>
-          {isPaid && !owned ? <OneTimePurchaseNote compact style={styles.compactOneTimeNote} /> : null}
+          {isPaid && !owned ? (
+            item?.type === 'ebook' ? (
+              <EbookPurchaseNote compact style={styles.compactOneTimeNote} showTitle={false} />
+            ) : (
+              <OneTimePurchaseNote compact style={styles.compactOneTimeNote} />
+            )
+          ) : null}
           <Ionicons name="chevron-forward" size={18} color={colors.text.muted} />
         </View>
       </Pressable>
@@ -141,7 +151,13 @@ export function LibraryBookCard({ item, coverUri, onPress, variant = 'grid', wid
         <Text style={styles.gridAuthor} numberOfLines={1}>
           {item.author ?? 'Unknown'}
         </Text>
-        {isPaid && !owned ? <OneTimePurchaseNote compact style={styles.gridOneTimeNote} /> : null}
+        {isPaid && !owned ? (
+          item?.type === 'ebook' ? (
+            <EbookPurchaseNote compact style={styles.gridOneTimeNote} showTitle={false} />
+          ) : (
+            <OneTimePurchaseNote compact style={styles.gridOneTimeNote} />
+          )
+        ) : null}
       </View>
     </Pressable>
   );

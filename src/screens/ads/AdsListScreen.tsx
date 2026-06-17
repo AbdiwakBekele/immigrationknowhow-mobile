@@ -25,9 +25,10 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { adStatusLabel, adStatusStyle, formatAdPricePerUnit } from '../../utils/adUi';
-import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
+import { OneTimePaywallNote } from '../../components/pricing/OneTimePaywallNote';
+import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
 import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
-import { ONE_TIME_PURCHASE_LABEL } from '../../utils/money';
+import { IAP_DISPLAY_PRICES_CENTS } from '../../config/iapCatalog';
 import * as adsApi from '../../api/adsApi';
 import { purchaseAdPublish } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
@@ -147,7 +148,8 @@ export function AdsListScreen() {
           );
           return;
         }
-        await purchaseAdPublish(item.uuid, appleProductId!);
+        const priceCents = item.price_cents ?? postingPrice?.next_ad_price_cents ?? postingPrice?.amount_cents ?? IAP_DISPLAY_PRICES_CENTS.AD_PUBLISH;
+        await purchaseAdPublish(item.uuid, appleProductId!, priceCents);
         await load(true);
         Alert.alert('Ads', 'Payment received. Your ad will be reviewed before publishing.');
         return;
@@ -182,13 +184,14 @@ export function AdsListScreen() {
   const listHeader = (
     <View style={styles.header}>
       <Text style={styles.pageTitle}>My ads</Text>
-      <Text style={styles.subtitle}>
+      <PaidFeatureBadge label="Paid ads require purchase" />
+      <Text style={[styles.subtitle, { marginTop: spacing.sm }]}>
         {freeRemaining > 0
           ? `${freeRemaining} of ${freeLimit} complimentary publish ${freeRemaining === 1 ? 'slot' : 'slots'} remaining.${
-              publishFee ? ` After that, ${publishFee}. ${ONE_TIME_PURCHASE_LABEL}.` : ''
+              publishFee ? ` After that, paid ads are $9.99 each (one-time purchase).` : ''
             }`
           : publishFee
-            ? `${ONE_TIME_PURCHASE_LABEL} ${publishFee}. Create, edit, and pay to publish sponsored ads.`
+            ? `Publish Ad — $9.99 one-time purchase after free slots are used. Create, edit, and pay to publish sponsored ads.`
             : 'Create, edit, and manage your sponsored ads.'}
       </Text>
     </View>
@@ -326,7 +329,7 @@ function AdCard({
         {price ? (
           <>
             <Text style={styles.adPrice}>{price}</Text>
-            <OneTimePurchaseNote compact />
+            <Text style={styles.adPaidHint}>One-time purchase (not a subscription)</Text>
           </>
         ) : null}
 
@@ -368,17 +371,18 @@ function AdCard({
 
         {item.status === 'pending_payment' ? (
           <View style={styles.payBlock}>
-            {price ? (
-              <>
-                <Text style={styles.payPrice}>{price}</Text>
-                <OneTimePurchaseNote compact center style={styles.payOneTimeNote} />
-              </>
-            ) : null}
+            <OneTimePaywallNote
+              title="Publish Ad"
+              description="One-time purchase to publish a paid ad after the free ad limit is used."
+              priceCents={item.price_cents ?? IAP_DISPLAY_PRICES_CENTS.AD_PUBLISH}
+              currency={item.currency ?? 'USD'}
+            />
             <PaymentCtaButton
-              label={useAppleIap && !appleBillingReady ? 'Unavailable' : `Pay ${price ?? ''}`.trim()}
+              label={!appleBillingReady ? 'Unavailable' : 'Publish Ad'}
               onPress={onPay}
-              disabled={paying || (useAppleIap && !appleBillingReady)}
+              disabled={paying || !appleBillingReady}
               loading={paying}
+              loadingLabel="Processing…"
               style={[styles.payButtonInBlock, shadows.soft]}
             />
           </View>
@@ -577,6 +581,11 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
+  },
+  adPaidHint: {
+    marginTop: 2,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
   },
   suspendedNotice: {
     marginTop: spacing.sm,

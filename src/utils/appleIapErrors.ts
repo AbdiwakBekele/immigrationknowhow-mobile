@@ -38,8 +38,12 @@ export function mapAppleIapUserMessage(error: unknown, context = 'purchase'): st
     return 'This item is not available for purchase right now.';
   }
 
-  if (/could not verify|validation failed|not active yet/i.test(raw)) {
-    return 'We could not confirm your purchase. Try Restore Purchases or contact support.';
+  if (/could not verify|validation failed|not active yet|fulfillment_failed|refresh your access/i.test(raw)) {
+    return 'Purchase completed, but we could not refresh your access. Please tap Restore Purchases or try again.';
+  }
+
+  if (/could not confirm/i.test(raw)) {
+    return 'Purchase completed, but we could not refresh your access. Please tap Restore Purchases or try again.';
   }
 
   if (/network|timeout|connection/i.test(raw)) {

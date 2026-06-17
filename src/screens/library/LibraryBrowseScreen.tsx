@@ -5,6 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppScreen } from '../../components/AppScreen';
 import { LibraryCover } from '../../components/library/LibraryCover';
 import { formatLibraryPrice } from '../../components/library/LibraryBookCard';
+import { EbookPurchaseNote } from '../../components/pricing/EbookPurchaseNote';
 import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
@@ -83,7 +84,13 @@ export function LibraryBrowseScreen() {
                 </View>
                 <View style={s.cardFooter}>
                   <Text style={[s.price, !isPaid && s.priceFree]}>{formatLibraryPrice(item)}</Text>
-                  {isPaid ? <OneTimePurchaseNote compact style={s.oneTimeNote} /> : null}
+                  {isPaid ? (
+                    item.type === 'ebook' ? (
+                      <EbookPurchaseNote compact style={s.oneTimeNote} showTitle={false} />
+                    ) : (
+                      <OneTimePurchaseNote compact style={s.oneTimeNote} />
+                    )
+                  ) : null}
                 </View>
               </Pressable>
             );

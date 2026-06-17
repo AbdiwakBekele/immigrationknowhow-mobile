@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppScreen } from '../../components/AppScreen';
 import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
+import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
+import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
 import { colors } from '../../theme/colors';
 import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
@@ -22,19 +24,19 @@ import { typography } from '../../theme/typography';
 import * as subApi from '../../api/providerSubscriptionsApi';
 import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
-import { isPaidBillingAvailable, openAppleSubscriptionManagement, shouldUseAppleIap } from '../../utils/platformPayments';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { formatSubscriptionPrice } from '../../utils/money';
-import {
-  isActiveProviderSubscription,
-  isAnnualBillingCycle,
-  isMonthlyBillingCycle,
-  providerRequiresSubscription,
-} from '../../utils/providerSubscription';
+import { isActiveProviderSubscription, providerRequiresSubscription } from '../../utils/providerSubscription';
 
-function isAppleBilledSubscription(sub: subApi.ProviderSubscriptionRow | null | undefined): boolean {
-  if (!sub) return false;
-  return Boolean(sub.apple_original_transaction_id?.trim()) && !sub.stripe_subscription_id?.trim();
+function subscriptionDurationLabel(billingCycle?: string | null): string {
+  const cycle = (billingCycle ?? 'month').toLowerCase();
+  if (cycle === 'year' || cycle === 'yearly' || cycle === 'annual') {
+    return '1 year';
+  }
+  return '1 month';
 }
+
+const UNAVAILABLE_PLAN_MESSAGE = 'This plan is not available for purchase right now.';
 
 type Props = {
   requiredMode?: boolean;
@@ -47,8 +49,8 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
   const [subscribingUuid, setSubscribingUuid] = useState<string | null>(null);
   const [activatingUuid, setActivatingUuid] = useState<string | null>(null);
   const [changingPlanUuid, setChangingPlanUuid] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState(false);
   const [processingMessage, setProcessingMessage] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<subApi.SubscriptionsPayload | null>(null);
 
@@ -78,22 +80,10 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
     }, []),
   );
 
-  const promoPriceLine = useMemo(() => {
-    const plans = payload?.plans ?? [];
-    const monthly = plans.find((plan) => plan.price_cents > 0 && isMonthlyBillingCycle(plan.billing_cycle));
-    const yearly = plans.find((plan) => plan.price_cents > 0 && isAnnualBillingCycle(plan.billing_cycle));
-    if (!monthly && !yearly) return null;
-    if (monthly && yearly) {
-      return `${formatSubscriptionPrice(monthly.price_cents, monthly.currency, monthly.billing_cycle)} or ${formatSubscriptionPrice(yearly.price_cents, yearly.currency, yearly.billing_cycle)}`;
-    }
-    const only = monthly ?? yearly!;
-    return formatSubscriptionPrice(only.price_cents, only.currency, only.billing_cycle);
-  }, [payload?.plans]);
-
   const subscribeToPlan = async (plan: subApi.SubscriptionPlanRow, options?: { switching?: boolean }) => {
     if (plan.price_cents <= 0) {
       setActivatingUuid(plan.uuid);
-      setProcessingMessage('Activating free plan…');
+      setProcessingMessage('Processing…');
       try {
         const res = await subApi.startSubscriptionCheckout(plan.uuid);
         if (!res.success) {
@@ -109,27 +99,52 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
       return;
     }
 
+    if (!useAppleIap && options?.switching && current) {
+      setChangingPlanUuid(plan.uuid);
+      setProcessingMessage('Processing…');
+      try {
+        const res = await subApi.changeSubscriptionPlan(current.uuid, plan.uuid);
+        Alert.alert('Plan change', res.message);
+        await load(false);
+      } finally {
+        setChangingPlanUuid(null);
+        setProcessingMessage(null);
+      }
+      return;
+    }
+
     if (useAppleIap) {
       const appleProductId = plan.apple_product_id?.trim();
       if (!appleProductId) {
-        Alert.alert('Subscription', 'This plan is not available for In-App Purchase yet.');
+        Alert.alert('Subscription', UNAVAILABLE_PLAN_MESSAGE);
         return;
       }
 
       setSubscribingUuid(plan.uuid);
-      setProcessingMessage(
-        options?.switching
-          ? 'Switching plan with the App Store…'
-          : 'Processing subscription with the App Store…',
-      );
+      setProcessingMessage('Processing…');
       try {
-        await purchaseProviderSubscription(plan.uuid, appleProductId);
-        setProcessingMessage('Verifying subscription…');
-        await load(false);
+        await purchaseProviderSubscription(plan.uuid, appleProductId, plan.price_cents);
+        setProcessingMessage('Processing…');
+        const refreshed = await subApi.getProviderSubscriptions();
+        if (refreshed.success) {
+          const next = refreshed.data.subscriptions;
+          setPayload(next);
+          if (!providerRequiresSubscription(next)) {
+            onSubscriptionActive?.();
+          }
+        }
+        const active = refreshed.success && isActiveProviderSubscription(refreshed.data.subscriptions.current_subscription);
+        if (!active) {
+          Alert.alert(
+            'Subscription',
+            'Purchase completed, but we could not refresh your access. Please tap Restore Purchases or try again.',
+          );
+          return;
+        }
         Alert.alert(
           'Subscription',
           options?.switching
-            ? 'Your plan change was submitted to the App Store. It may take a moment to update.'
+            ? 'Your plan change was submitted. It may take a moment to update.'
             : 'Your provider plan is now active.',
         );
       } catch (e) {
@@ -145,7 +160,7 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
     }
 
     setSubscribingUuid(plan.uuid);
-    setProcessingMessage('Opening checkout…');
+    setProcessingMessage('Processing…');
     try {
       const res = await subApi.startSubscriptionCheckout(plan.uuid);
       if (!res.success) {
@@ -164,94 +179,40 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
     }
   };
 
-  const restorePurchases = async () => {
-    setRestoring(true);
-    setProcessingMessage('Restoring App Store purchases…');
-    try {
-      const result = await restoreApplePurchasesOnDevice();
-      setProcessingMessage('Updating subscription status…');
-      await load(false);
-      const detail =
-        result.errors.length > 0
-          ? `\n\nSome items could not be restored:\n${result.errors.slice(0, 3).join('\n')}`
-          : '';
-      Alert.alert(
-        'Restore purchases',
-        `${result.provider_subscription_active ? 'Provider subscription is active.' : 'No provider subscription was restored.'}${
-          result.ai_assistant_active ? ' AI Assistant is active.' : ''
-        }${result.library_restored > 0 ? ` ${result.library_restored} library title(s) restored.` : ''}${detail}`,
-      );
-    } catch (e) {
-      const message = mapAppleIapUserMessage(e, 'provider-restore');
-      Alert.alert('Restore purchases', message ?? 'Could not restore purchases.');
-    } finally {
-      setRestoring(false);
-      setProcessingMessage(null);
-    }
-  };
-
   const current = payload?.current_subscription ?? null;
   const pending = payload?.pending_subscription ?? null;
   const plans = payload?.plans ?? [];
-  const billingConfigured =
-    payload?.subscription_billing_configured ??
-    (payload?.stripe_billing_configured || (useAppleIap && payload?.apple_iap_configured));
 
-  const cancelSub = (sub: subApi.ProviderSubscriptionRow) => {
-    if (isAppleBilledSubscription(sub)) {
-      Alert.alert(
-        'Manage subscription',
-        'This subscription is billed through the App Store. Cancel or change renewal in iPhone Settings → Apple ID → Subscriptions.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open Subscriptions', onPress: () => void openAppleSubscriptionManagement() },
-        ],
-      );
-      return;
-    }
+  const restorePurchases = async () => {
+    if (restoring || Boolean(processingMessage)) return;
 
-    Alert.alert('Cancel subscription', 'Cancel at period end?', [
-      { text: 'No', style: 'cancel' },
-      {
-        text: 'Yes',
-        style: 'destructive',
-        onPress: async () => {
-          const res = await subApi.cancelSubscription(sub.uuid);
-          Alert.alert('Subscription', res.message);
-          void load(false);
-        },
-      },
-    ]);
-  };
-
-  const resumeSub = async (sub: subApi.ProviderSubscriptionRow) => {
-    if (isAppleBilledSubscription(sub)) {
-      Alert.alert(
-        'Manage subscription',
-        'Resume or change this subscription in iPhone Settings → Apple ID → Subscriptions.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          { text: 'Open Subscriptions', onPress: () => void openAppleSubscriptionManagement() },
-        ],
-      );
-      return;
-    }
-
-    const res = await subApi.resumeSubscription(sub.uuid);
-    Alert.alert('Subscription', res.message);
-    void load(false);
-  };
-
-  const changeStripePlan = async (plan: subApi.SubscriptionPlanRow) => {
-    if (!current) return;
-    setChangingPlanUuid(plan.uuid);
-    setProcessingMessage('Updating plan…');
+    setRestoring(true);
+    setProcessingMessage('Processing…');
     try {
-      const res = await subApi.changeSubscriptionPlan(current.uuid, plan.uuid);
-      Alert.alert('Plan change', res.message);
-      await load(false);
+      if (useAppleIap) {
+        await restoreApplePurchasesOnDevice();
+      }
+      const refreshed = await subApi.getProviderSubscriptions();
+      if (refreshed.success) {
+        setPayload(refreshed.data.subscriptions);
+        if (!providerRequiresSubscription(refreshed.data.subscriptions)) {
+          onSubscriptionActive?.();
+        }
+      }
+      const activeAfterRestore =
+        refreshed.success && isActiveProviderSubscription(refreshed.data.subscriptions.current_subscription);
+      if (!activeAfterRestore) {
+        Alert.alert('Restore Purchases', 'No active provider subscription was found to restore.');
+      } else {
+        Alert.alert('Restore Purchases', 'Your provider subscription has been restored.');
+      }
+    } catch (e) {
+      const message = mapAppleIapUserMessage(e, 'provider-restore');
+      if (message) {
+        Alert.alert('Restore Purchases', message);
+      }
     } finally {
-      setChangingPlanUuid(null);
+      setRestoring(false);
       setProcessingMessage(null);
     }
   };
@@ -290,7 +251,8 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
             <View style={styles.requiredCopy}>
               <Text style={styles.requiredTitle}>Subscription required</Text>
               <Text style={styles.requiredBody}>
-                Choose a monthly or annual plan to access your provider dashboard.
+                Choose a monthly or annual plan to access your provider dashboard. Service provider features require a
+                separate subscription.
               </Text>
             </View>
           </View>
@@ -298,47 +260,21 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
           <Text style={styles.pageTitle}>Plan & subscription</Text>
         )}
 
-        {!billingConfigured ? (
-          <View style={styles.infoCard}>
-            <Text style={styles.infoText}>
-              {useAppleIap
-                ? 'In-App Purchase billing is not fully configured on the server yet.'
-                : 'Online billing is not configured on the server.'}
-            </Text>
-          </View>
-        ) : null}
+        <View style={styles.paywallIntro}>
+          <PaidFeatureBadge label="Requires subscription" />
+          <Text style={styles.paywallTitle}>Service Provider Subscription</Text>
+          <Text style={styles.paywallBody}>
+            Unlock service provider features, provider profile access, and provider tools. Auto-renewable subscription.
+          </Text>
+          <Text style={styles.paywallHint}>Monthly: $9.99/month · Yearly: $99.00/year</Text>
+        </View>
 
         {pending && !isActiveProviderSubscription(current) ? (
           <View style={styles.pendingCard}>
             <Ionicons name="time-outline" size={20} color="#92400e" />
             <Text style={styles.pendingText}>
-              {pending.plan?.name ?? 'Your plan'} is waiting for payment. Complete purchase below or restore purchases.
+              {pending.plan?.name ?? 'Your plan'} is waiting for payment. Complete your purchase below.
             </Text>
-          </View>
-        ) : null}
-
-        {payload?.provider_subscription_promo?.trial_eligible &&
-        (payload.provider_subscription_promo.trial_months ?? 0) > 0 ? (
-          <View style={styles.promoCard}>
-            <Text style={styles.promoText}>
-              Your first subscription includes {payload.provider_subscription_promo.trial_months} months free.
-              {promoPriceLine ? ` After the trial, billing continues at ${promoPriceLine}.` : ''}
-              {useAppleIap ? ' Configure the introductory offer in App Store Connect.' : ''}
-            </Text>
-          </View>
-        ) : null}
-
-        {useAppleIap ? (
-          <View style={styles.appleNote}>
-            <Text style={styles.mutedText}>
-              Paid plans use the App Store. Put all provider plans in the same subscription group so monthly and annual
-              upgrades work when you switch plans.
-            </Text>
-            <Pressable onPress={() => void restorePurchases()} disabled={restoring || Boolean(processingMessage)}>
-              <Text style={[styles.linkText, (restoring || processingMessage) && styles.linkDisabled]}>
-                {restoring ? 'Restoring purchases…' : 'Restore App Store purchases'}
-              </Text>
-            </Pressable>
           </View>
         ) : null}
 
@@ -347,19 +283,6 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
             <Text style={styles.sectionLabel}>Current plan</Text>
             <Text style={styles.planTitle}>{current.plan?.name ?? 'Plan'}</Text>
             <Text style={styles.mutedText}>Status: {current.status}</Text>
-            {isAppleBilledSubscription(current) ? (
-              <Pressable onPress={() => void openAppleSubscriptionManagement()} style={styles.inlineAction}>
-                <Text style={styles.linkText}>Manage in App Store</Text>
-              </Pressable>
-            ) : current.cancel_at_period_end ? (
-              <Pressable onPress={() => void resumeSub(current)} style={styles.inlineAction}>
-                <Text style={styles.linkText}>Resume subscription</Text>
-              </Pressable>
-            ) : (
-              <Pressable onPress={() => cancelSub(current)} style={styles.inlineAction}>
-                <Text style={styles.dangerText}>Cancel at period end</Text>
-              </Pressable>
-            )}
           </View>
         ) : null}
 
@@ -389,6 +312,11 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
                   <View style={styles.planCopy}>
                     <Text style={styles.planTitle}>{plan.name}</Text>
                     <Text style={styles.planPrice}>{priceLabel}</Text>
+                    {plan.price_cents > 0 ? (
+                      <Text style={styles.planDuration}>
+                        Duration: {subscriptionDurationLabel(plan.billing_cycle)}
+                      </Text>
+                    ) : null}
                   </View>
                   {isCurrentPlan ? (
                     <View style={styles.currentBadge}>
@@ -397,22 +325,13 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
                   ) : null}
                 </View>
 
-                {isCurrentPlan ? null : canPurchase && isPlanSwitch && useAppleIap ? (
+                {isCurrentPlan ? null : canPurchase && isPlanSwitch ? (
                   <PaymentCtaButton
                     label="Switch plan"
                     onPress={() => void subscribeToPlan(plan, { switching: true })}
                     disabled={busy || Boolean(processingMessage)}
                     loading={busy}
-                    loadingLabel="Switching plan…"
-                    style={styles.planCta}
-                  />
-                ) : canPurchase && isPlanSwitch && !useAppleIap ? (
-                  <PaymentCtaButton
-                    label="Switch plan"
-                    onPress={() => void changeStripePlan(plan)}
-                    disabled={busy || Boolean(processingMessage)}
-                    loading={busy}
-                    loadingLabel="Switching plan…"
+                    loadingLabel="Processing…"
                     style={styles.planCta}
                   />
                 ) : canPurchase ? (
@@ -421,20 +340,18 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
                     onPress={() => void subscribeToPlan(plan)}
                     disabled={busy || Boolean(processingMessage)}
                     loading={busy}
-                    loadingLabel={plan.price_cents <= 0 ? 'Activating…' : 'Processing…'}
+                    loadingLabel="Processing…"
                     style={styles.planCta}
                   />
                 ) : (
-                  <Text style={styles.unavailableText}>
-                    {useAppleIap
-                      ? 'This plan is not available for In-App Purchase yet.'
-                      : 'This plan is not available for checkout yet.'}
-                  </Text>
+                  <Text style={styles.unavailableText}>{UNAVAILABLE_PLAN_MESSAGE}</Text>
                 )}
               </View>
             );
           })
         )}
+
+        <SubscriptionLegalFooter onRestore={() => void restorePurchases()} restoring={restoring} />
       </ScrollView>
 
       <Modal visible={Boolean(processingMessage)} transparent animationType="fade">
@@ -479,6 +396,34 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.lg,
   },
+  paywallIntro: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    gap: spacing.sm,
+  },
+  paywallTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    textAlign: 'center',
+  },
+  paywallBody: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  paywallHint: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+    textAlign: 'center',
+  },
   requiredBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -504,18 +449,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     lineHeight: 20,
   },
-  infoCard: {
-    backgroundColor: '#fff7ed',
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: '#fed7aa',
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  infoText: {
-    color: '#9a3412',
-    fontSize: typography.fontSize.sm,
-  },
   pendingCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -532,23 +465,6 @@ const styles = StyleSheet.create({
     color: '#92400e',
     fontSize: typography.fontSize.sm,
     lineHeight: 20,
-  },
-  promoCard: {
-    backgroundColor: '#ecfdf5',
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  promoText: {
-    color: '#065f46',
-    fontSize: typography.fontSize.sm,
-    lineHeight: 20,
-  },
-  appleNote: {
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
   },
   currentCard: {
     backgroundColor: colors.surface,
@@ -594,6 +510,11 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontSize: typography.fontSize.sm,
   },
+  planDuration: {
+    marginTop: 2,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
+  },
   currentBadge: {
     backgroundColor: colors.primary[50],
     borderRadius: radii.full,
@@ -622,9 +543,6 @@ const styles = StyleSheet.create({
     color: colors.primary[600],
     fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.sm,
-  },
-  linkDisabled: {
-    opacity: 0.6,
   },
   dangerText: {
     color: colors.danger,
