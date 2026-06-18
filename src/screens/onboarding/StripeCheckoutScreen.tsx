@@ -15,9 +15,12 @@ import { WebView } from 'react-native-webview';
 import type { WebViewNavigation } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import { useAuth } from '../../context/AuthContext';
 import * as adsApi from '../../api/adsApi';
 import * as aiApi from '../../api/aiAssistantApi';
+import * as subApi from '../../api/providerSubscriptionsApi';
+import * as videosApi from '../../api/videosApi';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -29,6 +32,8 @@ export type StripeCheckoutParams = {
   variant?: 'onboarding' | 'default' | 'aiAssistant';
   /** Required for ad checkout — confirms payment via API when WebView intercepts the return URL. */
   adUuid?: string;
+  /** Required for video checkout — confirms payment via API when WebView intercepts the return URL. */
+  videoSlug?: string;
   /** Fallback Stripe session id when the return URL does not include session_id (AI Assistant). */
   checkoutSessionId?: string;
 };
@@ -59,6 +64,12 @@ function isCheckoutSuccess(url: string): boolean {
   if (url.includes('/mobile/ai-assistant/checkout-return') && url.includes('session_id=')) {
     return true;
   }
+  if (url.includes('/mobile/provider-subscription/checkout-return') && url.includes('session_id=')) {
+    return true;
+  }
+  if (url.includes('/mobile/video/checkout-return') && url.includes('session_id=')) {
+    return true;
+  }
   return url.includes('purchase/return') && url.includes('session_id=');
 }
 
@@ -67,6 +78,12 @@ function isCheckoutCancelled(url: string): boolean {
     return true;
   }
   if (url.includes('/mobile/ai-assistant/checkout-return') && url.includes('checkout=cancelled')) {
+    return true;
+  }
+  if (url.includes('/mobile/provider-subscription/checkout-return') && url.includes('checkout=cancelled')) {
+    return true;
+  }
+  if (url.includes('/mobile/video/checkout-return') && url.includes('checkout=cancelled')) {
     return true;
   }
   return url.includes('purchase/cancel');
@@ -138,8 +155,8 @@ export function StripeCheckoutScreen() {
   useEffect(() => {
     if (isIos) {
       Alert.alert(
-        'Checkout unavailable',
-        'Paid digital content on iPhone must be purchased with the App Store.',
+        PRICING_LABELS.checkoutUnavailableTitle,
+        PRICING_LABELS.checkoutUnavailableBody,
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
     }
@@ -151,6 +168,7 @@ export function StripeCheckoutScreen() {
   const [title, setTitle] = useState('Checkout');
   const variant = route.params.variant ?? 'onboarding';
   const adUuid = route.params.adUuid;
+  const videoSlug = route.params.videoSlug;
   const checkoutSessionId = route.params.checkoutSessionId;
 
   async function completeCheckoutSuccess(url: string) {
@@ -177,7 +195,29 @@ export function StripeCheckoutScreen() {
         if (res.message) {
           Alert.alert('Payment', res.message);
         }
+      } else if (videoSlug) {
+        const sessionId = extractSessionId(url);
+        if (!sessionId) {
+          Alert.alert('Video', 'Missing payment session. Please contact support if you were charged.');
+          handledRef.current = false;
+          return;
+        }
+        const res = await videosApi.confirmVideoCheckout(videoSlug, sessionId);
+        if (!res.success) {
+          Alert.alert('Video', res.message);
+          handledRef.current = false;
+          return;
+        }
       } else if (variant === 'onboarding') {
+        const sessionId = extractSessionId(url);
+        if (sessionId) {
+          const res = await subApi.confirmSubscriptionCheckout(sessionId);
+          if (!res.success) {
+            Alert.alert('Subscription', res.message);
+            handledRef.current = false;
+            return;
+          }
+        }
         await refreshMe();
         await setActiveRole('provider');
       } else if (variant === 'aiAssistant') {
@@ -231,7 +271,7 @@ export function StripeCheckoutScreen() {
   if (isIos) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={styles.loaderText}>Use In-App Purchase on iPhone.</Text>
+        <Text style={styles.loaderText}>{PRICING_LABELS.checkoutUnavailableBody}</Text>
       </View>
     );
   }

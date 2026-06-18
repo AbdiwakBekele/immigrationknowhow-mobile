@@ -1,8 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Modal,
   Pressable,
   RefreshControl,
@@ -13,6 +12,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
+import type { WebViewNavigation } from 'react-native-webview';
 import { AppScreen } from '../../components/AppScreen';
 import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
 import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
@@ -26,7 +28,8 @@ import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { formatSubscriptionPrice } from '../../utils/money';
-import { isActiveProviderSubscription, buildProviderSubscriptionPricingHint, providerRequiresSubscription } from '../../utils/providerSubscription';
+import { isActiveProviderSubscription, providerRequiresSubscription } from '../../utils/providerSubscription';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 
 function subscriptionDurationLabel(billingCycle?: string | null): string {
   const cycle = (billingCycle ?? 'month').toLowerCase();
@@ -36,7 +39,25 @@ function subscriptionDurationLabel(billingCycle?: string | null): string {
   return '1 month';
 }
 
-const UNAVAILABLE_PLAN_MESSAGE = 'This plan is not available for purchase right now.';
+function extractCheckoutSessionId(url: string): string | null {
+  const match = url.match(/[?&]session_id=([^&]+)/);
+  if (!match?.[1]) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+function isProviderCheckoutSuccess(url: string): boolean {
+  return url.includes('mobile/provider-subscription/checkout-return') && url.includes('session_id=');
+}
+
+function isProviderCheckoutCancelled(url: string): boolean {
+  return url.includes('checkout=cancelled');
+}
 
 type Props = {
   requiredMode?: boolean;
@@ -44,6 +65,8 @@ type Props = {
 };
 
 export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscriptionActive }: Props) {
+  const insets = useSafeAreaInsets();
+  const checkoutHandledRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [subscribingUuid, setSubscribingUuid] = useState<string | null>(null);
@@ -53,6 +76,9 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
   const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<subApi.SubscriptionsPayload | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [checkoutWebLoading, setCheckoutWebLoading] = useState(true);
+  const [confirmingCheckout, setConfirmingCheckout] = useState(false);
 
   const useAppleIap = shouldUseAppleIap();
 
@@ -83,7 +109,7 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
   const subscribeToPlan = async (plan: subApi.SubscriptionPlanRow, options?: { switching?: boolean }) => {
     if (plan.price_cents <= 0) {
       setActivatingUuid(plan.uuid);
-      setProcessingMessage('Processing…');
+      setProcessingMessage(PRICING_LABELS.processing);
       try {
         const res = await subApi.startSubscriptionCheckout(plan.uuid);
         if (!res.success) {
@@ -101,7 +127,7 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
 
     if (!useAppleIap && options?.switching && current) {
       setChangingPlanUuid(plan.uuid);
-      setProcessingMessage('Processing…');
+      setProcessingMessage(PRICING_LABELS.processing);
       try {
         const res = await subApi.changeSubscriptionPlan(current.uuid, plan.uuid);
         Alert.alert('Plan change', res.message);
@@ -116,15 +142,15 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
     if (useAppleIap) {
       const appleProductId = plan.apple_product_id?.trim();
       if (!appleProductId) {
-        Alert.alert('Subscription', UNAVAILABLE_PLAN_MESSAGE);
+        Alert.alert('Subscription', PRICING_LABELS.planUnavailable);
         return;
       }
 
       setSubscribingUuid(plan.uuid);
-      setProcessingMessage('Processing…');
+      setProcessingMessage(PRICING_LABELS.processing);
       try {
         await purchaseProviderSubscription(plan.uuid, appleProductId, plan.price_cents);
-        setProcessingMessage('Processing…');
+        setProcessingMessage(PRICING_LABELS.processing);
         const refreshed = await subApi.getProviderSubscriptions();
         if (refreshed.success) {
           const next = refreshed.data.subscriptions;
@@ -160,7 +186,7 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
     }
 
     setSubscribingUuid(plan.uuid);
-    setProcessingMessage('Processing…');
+    setProcessingMessage(PRICING_LABELS.processing);
     try {
       const res = await subApi.startSubscriptionCheckout(plan.uuid);
       if (!res.success) {
@@ -169,9 +195,9 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
       }
       const url = res.data.checkout_url;
       if (url) {
-        const ok = await Linking.canOpenURL(url);
-        if (ok) await Linking.openURL(url);
-        else Alert.alert('Checkout', 'Cannot open checkout URL.');
+        checkoutHandledRef.current = false;
+        setCheckoutWebLoading(true);
+        setCheckoutUrl(url);
       }
     } finally {
       setSubscribingUuid(null);
@@ -179,16 +205,63 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
     }
   };
 
+  const completeProviderCheckout = async (url: string) => {
+    if (checkoutHandledRef.current) {
+      return;
+    }
+    checkoutHandledRef.current = true;
+    const sessionId = extractCheckoutSessionId(url);
+    if (!sessionId) {
+      checkoutHandledRef.current = false;
+      Alert.alert('Subscription', 'Missing payment session. Please contact support if you were charged.');
+      return;
+    }
+
+    setConfirmingCheckout(true);
+    try {
+      const res = await subApi.confirmSubscriptionCheckout(sessionId);
+      if (!res.success) {
+        checkoutHandledRef.current = false;
+        Alert.alert('Subscription', res.message);
+        return;
+      }
+      setCheckoutUrl(null);
+      await load(false);
+      const refreshed = await subApi.getProviderSubscriptions();
+      if (refreshed.success) {
+        setPayload(refreshed.data.subscriptions);
+        if (!providerRequiresSubscription(refreshed.data.subscriptions)) {
+          onSubscriptionActive?.();
+        }
+      }
+      Alert.alert('Subscription', 'Your provider plan is now active.');
+    } finally {
+      setConfirmingCheckout(false);
+    }
+  };
+
+  const handleCheckoutNavigation = (event: WebViewNavigation) => {
+    const { url } = event;
+    if (isProviderCheckoutSuccess(url)) {
+      void completeProviderCheckout(url);
+      return false;
+    }
+    if (isProviderCheckoutCancelled(url)) {
+      setCheckoutUrl(null);
+      return false;
+    }
+    return true;
+  };
+
   const current = payload?.current_subscription ?? null;
   const pending = payload?.pending_subscription ?? null;
   const plans = payload?.plans ?? [];
-  const pricingHint = useMemo(() => buildProviderSubscriptionPricingHint(plans), [plans]);
 
   const restorePurchases = async () => {
     if (restoring || Boolean(processingMessage)) return;
 
     setRestoring(true);
-    setProcessingMessage('Processing…');
+    setProcessingMessage(PRICING_LABELS.processing);
     try {
       if (useAppleIap) {
         await restoreApplePurchasesOnDevice();
@@ -251,10 +324,6 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
             <Ionicons name="lock-closed-outline" size={22} color={colors.primary[700]} />
             <View style={styles.requiredCopy}>
               <Text style={styles.requiredTitle}>Subscription required</Text>
-              <Text style={styles.requiredBody}>
-                Choose a monthly or annual plan to access your provider dashboard. Service provider features require a
-                separate subscription.
-              </Text>
             </View>
           </View>
         ) : (
@@ -263,11 +332,6 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
 
         <View style={styles.paywallIntro}>
           <PaidFeatureBadge label="Requires subscription" />
-          <Text style={styles.paywallTitle}>Service Provider Subscription</Text>
-          <Text style={styles.paywallBody}>
-            Unlock service provider features, provider profile access, and provider tools. Auto-renewable subscription.
-          </Text>
-          <Text style={styles.paywallHint}>{pricingHint}</Text>
         </View>
 
         {pending && !isActiveProviderSubscription(current) ? (
@@ -328,24 +392,24 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
 
                 {isCurrentPlan ? null : canPurchase && isPlanSwitch ? (
                   <PaymentCtaButton
-                    label="Switch plan"
+                    label={PRICING_LABELS.switchPlan}
                     onPress={() => void subscribeToPlan(plan, { switching: true })}
                     disabled={busy || Boolean(processingMessage)}
                     loading={busy}
-                    loadingLabel="Processing…"
+                    loadingLabel={PRICING_LABELS.processing}
                     style={styles.planCta}
                   />
                 ) : canPurchase ? (
                   <PaymentCtaButton
-                    label={plan.price_cents <= 0 ? 'Activate free plan' : 'Subscribe'}
+                    label={plan.price_cents <= 0 ? PRICING_LABELS.activateFreePlan : PRICING_LABELS.subscribe}
                     onPress={() => void subscribeToPlan(plan)}
                     disabled={busy || Boolean(processingMessage)}
                     loading={busy}
-                    loadingLabel="Processing…"
+                    loadingLabel={PRICING_LABELS.processing}
                     style={styles.planCta}
                   />
                 ) : (
-                  <Text style={styles.unavailableText}>{UNAVAILABLE_PLAN_MESSAGE}</Text>
+                  <Text style={styles.unavailableText}>{PRICING_LABELS.planUnavailable}</Text>
                 )}
               </View>
             );
@@ -362,6 +426,38 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
             <Text style={styles.overlayText}>{processingMessage}</Text>
             <Text style={styles.overlayHint}>Please wait. Do not close the app.</Text>
           </View>
+        </View>
+      </Modal>
+
+      <Modal visible={Boolean(checkoutUrl)} animationType="slide" onRequestClose={() => setCheckoutUrl(null)}>
+        <View style={[styles.checkoutContainer, { paddingTop: insets.top }]}>
+          <View style={styles.checkoutHeader}>
+            <Pressable onPress={() => setCheckoutUrl(null)} style={styles.checkoutClose} hitSlop={12}>
+              <Ionicons name="close" size={24} color={colors.text.primary} />
+            </Pressable>
+            <Text style={styles.checkoutTitle} numberOfLines={1}>
+              Subscription checkout
+            </Text>
+            <View style={styles.checkoutClose} />
+          </View>
+          {(checkoutWebLoading || confirmingCheckout) && (
+            <View style={styles.checkoutLoader}>
+              <ActivityIndicator size="large" color={colors.primary[600]} />
+              <Text style={styles.checkoutLoaderText}>
+                {confirmingCheckout ? PRICING_LABELS.confirmingPayment : PRICING_LABELS.loadingCheckout}
+              </Text>
+            </View>
+          )}
+          {checkoutUrl ? (
+            <WebView
+              source={{ uri: checkoutUrl }}
+              onLoadStart={() => setCheckoutWebLoading(true)}
+              onLoadEnd={() => setCheckoutWebLoading(false)}
+              onShouldStartLoadWithRequest={handleCheckoutNavigation}
+              onNavigationStateChange={handleCheckoutNavigation}
+              style={styles.checkoutWebView}
+            />
+          ) : null}
         </View>
       </Modal>
     </AppScreen>
@@ -399,31 +495,7 @@ const styles = StyleSheet.create({
   },
   paywallIntro: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    gap: spacing.sm,
-  },
-  paywallTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    textAlign: 'center',
-  },
-  paywallBody: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  paywallHint: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
-    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
   requiredBanner: {
     flexDirection: 'row',
@@ -443,12 +515,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
     fontSize: typography.fontSize.md,
-  },
-  requiredBody: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.sm,
-    lineHeight: 20,
   },
   pendingCard: {
     flexDirection: 'row',
@@ -589,6 +655,47 @@ const styles = StyleSheet.create({
   },
   overlayHint: {
     textAlign: 'center',
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+  },
+  checkoutContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  checkoutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  checkoutClose: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkoutTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  checkoutWebView: {
+    flex: 1,
+  },
+  checkoutLoader: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    zIndex: 2,
+    gap: spacing.md,
+  },
+  checkoutLoaderText: {
     color: colors.text.secondary,
     fontSize: typography.fontSize.sm,
   },

@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Pressable, Text, View } from 'react-native';
-import { useRoute, useFocusEffect } from '@react-navigation/native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
+import { useRoute, useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { WebView } from 'react-native-webview';
 import { AppScreen } from '../../components/AppScreen';
 import { BASE_URL } from '../../config/api';
@@ -10,12 +11,14 @@ import { purchaseVideo } from '../../services/appleIapService';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
-import { shouldUseAppleIap } from '../../utils/platformPayments';
+import { PRICING_LABELS } from '../../config/pricingLabels';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import * as videosApi from '../../api/videosApi';
 import type { VideosStackParamList } from './VideosStack';
 
 export function VideoDetailScreen() {
   const route = useRoute<RouteProp<VideosStackParamList, 'VideoDetail'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<VideosStackParamList>>();
   const { slug } = route.params;
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
@@ -24,6 +27,16 @@ export function VideoDetailScreen() {
   const [streamHeaders, setStreamHeaders] = useState<Record<string, string>>({});
 
   const useAppleIap = shouldUseAppleIap();
+  const appleProductId =
+    typeof payload?.apple_product_id === 'string' && payload.apple_product_id.trim() !== ''
+      ? payload.apple_product_id.trim()
+      : null;
+  const priceCents = Math.round(Number(payload?.video?.price ?? 0) * 100);
+  const billingReady = isPaidBillingAvailable({
+    priceCents: payload?.requires_paid_access ? priceCents : 0,
+    appleProductId,
+    stripeReady: payload?.stripe_configured,
+  });
 
   const load = async () => {
     setLoading(true);
@@ -39,18 +52,19 @@ export function VideoDetailScreen() {
   );
 
   const buy = async () => {
+    if (!billingReady && payload?.requires_paid_access) {
+      Alert.alert('Video', PRICING_LABELS.itemUnavailable);
+      return;
+    }
+
     setPurchasing(true);
     try {
       if (useAppleIap) {
-        const appleProductId =
-          typeof payload?.apple_product_id === 'string' && payload.apple_product_id.trim() !== ''
-            ? payload.apple_product_id.trim()
-            : null;
         if (!appleProductId) {
-          Alert.alert('Video', 'This video is not available for In-App Purchase yet.');
+          Alert.alert('Video', PRICING_LABELS.itemUnavailable);
           return;
         }
-        await purchaseVideo(slug, appleProductId);
+        await purchaseVideo(slug, appleProductId, priceCents);
         await load();
         Alert.alert('Video', 'Thank you! You can now play this video.');
         return;
@@ -62,7 +76,9 @@ export function VideoDetailScreen() {
         return;
       }
       const url = res.data?.checkout_url;
-      if (url) await Linking.openURL(url);
+      if (url) {
+        navigation.navigate('StripeCheckout', { checkoutUrl: url, variant: 'default', videoSlug: slug });
+      }
     } catch (e) {
       Alert.alert('Video', e instanceof Error ? e.message : 'Purchase could not be completed.');
     } finally {
@@ -117,14 +133,20 @@ export function VideoDetailScreen() {
       {!hasAccess && (
         <Pressable
           onPress={() => void (payload?.requires_paid_access ? buy() : free())}
-          disabled={purchasing}
-          style={{ marginTop: spacing.xl, backgroundColor: colors.primary[600], padding: spacing.md, borderRadius: 12, opacity: purchasing ? 0.7 : 1 }}
+          disabled={purchasing || (payload?.requires_paid_access && !billingReady)}
+          style={{
+            marginTop: spacing.xl,
+            backgroundColor: colors.primary[600],
+            padding: spacing.md,
+            borderRadius: 12,
+            opacity: purchasing || (payload?.requires_paid_access && !billingReady) ? 0.7 : 1,
+          }}
         >
           {purchasing ? (
             <ActivityIndicator color={colors.text.inverse} />
           ) : (
             <Text style={{ color: colors.text.inverse, textAlign: 'center', fontWeight: typography.fontWeight.semibold }}>
-              {payload?.requires_paid_access ? (useAppleIap ? 'Buy with Apple' : 'Purchase') : 'Unlock free'}
+              {payload?.requires_paid_access ? PRICING_LABELS.purchase : PRICING_LABELS.unlockFree}
             </Text>
           )}
         </Pressable>

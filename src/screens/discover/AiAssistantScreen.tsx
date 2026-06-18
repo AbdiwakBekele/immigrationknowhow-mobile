@@ -25,6 +25,7 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as aiApi from '../../api/aiAssistantApi';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import { purchaseAiAssistantSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
@@ -80,8 +81,9 @@ export function AiAssistantScreen() {
   const monthlyPrice = Number(state?.monthly_price ?? IAP_DISPLAY_PRICES_CENTS.AI_ASSISTANT_MONTHLY / 100);
   const currency = state?.currency ?? 'USD';
   const monthlyPriceCents = Math.round(monthlyPrice * 100);
-  const appleBillingReady = isPaidBillingAvailable({
+  const billingReady = isPaidBillingAvailable({
     priceCents: monthlyPriceCents,
+    stripeReady: state?.stripe_billing_configured,
     appleProductId: state?.apple_product_id,
     appleIapConfigured: state?.apple_iap_configured,
   });
@@ -123,14 +125,15 @@ export function AiAssistantScreen() {
   const subscribe = async () => {
     if (subscribing || restoring) return;
 
+    if (!billingReady) {
+      setErr(PRICING_LABELS.subscriptionUnavailable);
+      return;
+    }
+
     setErr(null);
     setSubscribing(true);
     try {
       if (shouldUseAppleIap()) {
-        if (!appleBillingReady) {
-          setErr('Subscription is not available for purchase right now.');
-          return;
-        }
         const productId = String(state?.apple_product_id ?? '').trim();
         await purchaseAiAssistantSubscription(productId, monthlyPriceCents);
         const active = await refreshEntitlement();
@@ -245,11 +248,14 @@ export function AiAssistantScreen() {
             <PaymentCtaButton
               label={`Subscribe — ${formatMoney(monthlyPrice, currency)}/month`}
               onPress={() => void subscribe()}
-              disabled={!appleBillingReady || restoring}
+              disabled={!billingReady || restoring}
               loading={subscribing}
-              loadingLabel="Subscribing…"
+              loadingLabel={PRICING_LABELS.subscribing}
               style={styles.gateCta}
             />
+            {!billingReady ? (
+              <Text style={styles.unavailableText}>{PRICING_LABELS.subscriptionUnavailable}</Text>
+            ) : null}
             <SubscriptionLegalFooter onRestore={() => void restore()} restoring={restoring} />
             {!!err && <Text style={styles.error}>{err}</Text>}
           </View>
@@ -523,6 +529,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: spacing.lg,
     width: '100%',
+  },
+  unavailableText: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   error: {
     marginTop: spacing.md,

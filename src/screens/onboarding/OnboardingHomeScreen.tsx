@@ -47,12 +47,13 @@ import {
 } from './onboardingConstants';
 import { SeekerOnboardingContent } from './SeekerOnboardingContent';
 import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
-import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { formatSubscriptionPrice } from '../../utils/money';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
 import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
-import { buildProviderSubscriptionPricingHint, isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
+import { isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
 
 const MAX_USER_SERVICES = 8;
 
@@ -918,7 +919,7 @@ export function OnboardingHomeScreen({
       if (!iapPlanUuid || !appleProductId) {
         setBusy(false);
         setProcessingMessage(null);
-        setError('This plan is not available for In-App Purchase yet.');
+        setError(PRICING_LABELS.planUnavailable);
         return;
       }
       setProcessingMessage('Processing…');
@@ -946,7 +947,7 @@ export function OnboardingHomeScreen({
         onCheckoutRequired(checkout);
         return;
       }
-      navigation.navigate('StripeCheckout', { checkoutUrl: checkout });
+      navigation.navigate('StripeCheckout', { checkoutUrl: checkout, variant: 'onboarding' });
       return;
     }
     await completeOnboardingSession(payload?.user ?? null);
@@ -961,7 +962,7 @@ export function OnboardingHomeScreen({
 
   const selectablePlans = useMemo(() => {
     const plans = meta?.subscriptionPlans ?? [];
-    const stripeReady = !!meta?.stripeBillingReady;
+    const stripeReady = meta?.stripeBillingReady;
     const appleIapConfigured = meta?.appleIapConfigured === true;
     const selectedType = providerPrimaryService.trim();
     return plans.filter((p) => {
@@ -1004,11 +1005,6 @@ export function OnboardingHomeScreen({
     if (!only) return null;
     return formatSubscriptionPrice(only.price_cents ?? 0, only.currency ?? 'USD', only.billing_cycle);
   }, [selectablePlans]);
-
-  const providerPricingHint = useMemo(
-    () => buildProviderSubscriptionPricingHint(selectablePlans),
-    [selectablePlans],
-  );
 
   useEffect(() => {
     if (step !== 7 || selectablePlans.length !== 1 || planUuid) {
@@ -1379,11 +1375,6 @@ export function OnboardingHomeScreen({
         <>
           <SectionLabel flushTop>Subscription</SectionLabel>
           <PaidFeatureBadge label="Requires subscription" />
-          <Text style={[styles.mutedBlock, { marginTop: spacing.sm }]}>
-            Service Provider Subscription — unlock provider profile access and provider tools. Free plans activate
-            instantly; paid plans require a subscription purchase.
-          </Text>
-          <Text style={styles.mutedBlock}>{providerPricingHint}</Text>
           {meta?.providerSubscriptionPromo?.trial_eligible &&
           (meta.providerSubscriptionPromo.trial_months ?? 0) > 0 ? (
             <Text style={styles.promoBox}>

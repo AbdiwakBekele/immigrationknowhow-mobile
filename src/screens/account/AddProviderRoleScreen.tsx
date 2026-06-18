@@ -68,7 +68,9 @@ export function AddProviderRoleScreen() {
     <OnboardingHomeScreen
       flow="addProvider"
       onFlowComplete={() => void onFlowComplete()}
-      onCheckoutRequired={(checkoutUrl) => navigation.navigate('StripeCheckout', { checkoutUrl })}
+      onCheckoutRequired={(checkoutUrl) =>
+        navigation.navigate('StripeCheckout', { checkoutUrl, variant: 'onboarding' })
+      }
     />
   );
 }

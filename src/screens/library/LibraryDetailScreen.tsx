@@ -29,6 +29,7 @@ import { radii } from '../../theme/layout';
 import { shadows } from '../../theme/shadows';
 import * as libraryApi from '../../api/libraryApi';
 import { purchaseLibraryTitle } from '../../services/appleIapService';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
@@ -125,7 +126,6 @@ function DetailActionBlock({
   checkoutLoading,
   buyingFree,
   redeemingCoupon,
-  useAppleIap,
   appleBillingReady,
   couponAvailable,
   onRead,
@@ -141,7 +141,6 @@ function DetailActionBlock({
   checkoutLoading: boolean;
   buyingFree: boolean;
   redeemingCoupon: boolean;
-  useAppleIap: boolean;
   appleBillingReady: boolean;
   couponAvailable: boolean;
   onRead: () => void;
@@ -173,7 +172,7 @@ function DetailActionBlock({
 
   if (isPaid) {
     const isEbook = item?.type === 'ebook';
-    const payLabel = isEbook ? 'Buy Ebook' : `Pay ${price}`;
+    const payLabel = isEbook ? PRICING_LABELS.buyEbook : `Pay ${price}`;
 
     return (
       <>
@@ -237,11 +236,11 @@ function DetailActionBlock({
           </>
         ) : null}
         <PaymentCtaButton
-          label={!appleBillingReady ? 'Unavailable' : isEbook ? 'Buy Ebook' : payLabel}
+          label={!appleBillingReady ? PRICING_LABELS.unavailable : isEbook ? PRICING_LABELS.buyEbook : payLabel}
           onPress={onPay}
           disabled={checkoutLoading || !appleBillingReady}
           loading={checkoutLoading}
-          loadingLabel="Processing…"
+          loadingLabel={PRICING_LABELS.processing}
           style={[compact && s.primaryBtnCompact]}
         />
       </>
@@ -320,7 +319,7 @@ export function LibraryDetailScreen() {
     priceCents: itemPriceCents,
     appleProductId,
     appleIapConfigured: data?.apple_iap_configured === true,
-    stripeReady: data?.stripe_configured === true,
+    stripeReady: data?.stripe_configured,
   });
 
   const pay = async () => {
@@ -333,8 +332,8 @@ export function LibraryDetailScreen() {
           Alert.alert(
             'Purchase',
             __DEV__ && !appleProductId
-              ? 'Ebook purchase IAP is not configured (check APPLE_LIBRARY_EBOOK_PRODUCT_ID).'
-              : 'This title is not available for purchase right now. Please try again later.',
+              ? 'Ebook purchase is not configured.'
+              : PRICING_LABELS.itemUnavailable,
           );
           return;
         }
@@ -802,7 +801,6 @@ render();
       checkoutLoading={checkoutLoading}
       buyingFree={buyingFree}
       redeemingCoupon={redeemingCoupon}
-      useAppleIap={useAppleIap}
       appleBillingReady={appleBillingReady}
       couponAvailable={couponAvailable}
       onRead={() => void openReader()}
