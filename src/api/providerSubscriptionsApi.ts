@@ -53,7 +53,7 @@ export async function getProviderSubscriptions(): Promise<ApiResponse<{ subscrip
 }
 
 export async function startSubscriptionCheckout(planUuid: string): Promise<
-  ApiResponse<{ checkout_url: string | null; free_plan_activated?: boolean }>
+  ApiResponse<{ checkout_url: string | null; free_plan_activated?: boolean; checkout_session_id?: string }>
 > {
   try {
     const res = await apiClient.post(`/api/mobile/provider/subscriptions/checkout/${planUuid}`);
@@ -102,6 +102,28 @@ export async function changeSubscriptionPlan(
       `/api/mobile/provider/subscriptions/${subscriptionUuid}/change-plan/${planUuid}`
     );
     return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function confirmSubscriptionCheckout(sessionId: string): Promise<ApiResponse<Record<string, never>>> {
+  try {
+    const res = await apiClient.post('/api/mobile/provider/subscriptions/confirm-checkout', {
+      session_id: sessionId,
+    });
+    if (res.data?.success === false) {
+      return {
+        success: false,
+        message: typeof res.data.message === 'string' ? res.data.message : 'Could not confirm subscription.',
+        errors: res.data.errors,
+      };
+    }
+    return {
+      success: true,
+      message: typeof res.data?.message === 'string' ? res.data.message : 'OK',
+      data: {},
+    };
   } catch (e) {
     return normalizeApiError(e);
   }

@@ -24,7 +24,7 @@ import * as authApi from '../../api/authApi';
 import { useAuth } from '../../context/AuthContext';
 import type { ProviderTabParamList } from '../../navigation/ProviderTabs';
 import type { ProviderDashboardStackParamList } from './ProviderDashboardStack';
-import { shouldUseAppleIap } from '../../utils/platformPayments';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import {
   backgroundCheckBody,
   backgroundCheckHeadline,
@@ -243,8 +243,6 @@ export function ProviderDashboardScreen() {
   const [sendingVerification, setSendingVerification] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
   const emailNotVerified = !authUser?.email_verified_at;
-  const useAppleIap = shouldUseAppleIap();
-
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -515,13 +513,7 @@ export function ProviderDashboardScreen() {
 
         {!dashboard?.subscription_checkout_configured && (
           <View style={styles.subBanner}>
-            <Text style={styles.subBannerText}>
-              {useAppleIap
-                ? dashboard?.apple_iap_configured
-                  ? 'Paid provider plans need matching products in App Store Connect before you can subscribe on iPhone. Free plans may still be available.'
-                  : 'In-App Purchase billing is not configured on the server yet. Review your plan below or contact support.'
-                : 'Subscription billing is not fully configured. Review your plan below or contact support for help activating your provider account.'}
-            </Text>
+            <Text style={styles.subBannerText}>{PRICING_LABELS.subscriptionBillingUnavailable}</Text>
             <Pressable onPress={() => navigation.navigate('ProviderSubscription')} style={{ marginTop: spacing.md }}>
               <Text style={styles.subBannerLink}>Plan & subscription</Text>
             </Pressable>

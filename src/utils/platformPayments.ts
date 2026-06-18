@@ -5,10 +5,18 @@ export function shouldUseAppleIap(): boolean {
   return Platform.OS === 'ios';
 }
 
+/** Android Stripe gate: enabled unless the API explicitly reports billing as unavailable. */
+export function resolveStripeBillingReady(configured?: boolean | null): boolean {
+  if (shouldUseAppleIap()) {
+    return false;
+  }
+  return configured !== false;
+}
+
 /** True when a paid plan/item can be purchased on the current platform. */
 export function isPaidBillingAvailable(options: {
   priceCents: number;
-  stripeReady?: boolean;
+  stripeReady?: boolean | null;
   appleProductId?: string | null;
   /** Server credential flag — informational only; purchase validation happens on the backend. */
   appleIapConfigured?: boolean;
@@ -21,7 +29,7 @@ export function isPaidBillingAvailable(options: {
     // Do not gate on apple_iap_configured — that only affects server validation after purchase.
     return String(options.appleProductId ?? '').trim() !== '';
   }
-  return Boolean(options.stripeReady);
+  return resolveStripeBillingReady(options.stripeReady);
 }
 
 export async function openAppleSubscriptionManagement(): Promise<void> {

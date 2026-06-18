@@ -31,6 +31,7 @@ import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
 import { IAP_DISPLAY_PRICES_CENTS } from '../../config/iapCatalog';
 import * as adsApi from '../../api/adsApi';
 import { purchaseAdPublish } from '../../services/appleIapService';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import type { AdsStackParamList } from './AdsStack';
@@ -71,6 +72,7 @@ export function AdsListScreen() {
     free_remaining?: number;
     next_ad_price_cents?: number;
     apple_product_id?: string | null;
+    stripe_billing_configured?: boolean;
   } | null>(null);
 
   const useAppleIap = shouldUseAppleIap();
@@ -126,10 +128,11 @@ export function AdsListScreen() {
     return fromPosting;
   };
 
-  const canPayAdWithApple = (item: AdItem): boolean => {
+  const canPayForAd = (item: AdItem): boolean => {
     const priceCents = item.price_cents ?? postingPrice?.next_ad_price_cents ?? postingPrice?.amount_cents ?? 0;
     return isPaidBillingAvailable({
       priceCents,
+      stripeReady: postingPrice?.stripe_billing_configured,
       appleProductId: resolveAdAppleProductId(item),
     });
   };
@@ -139,12 +142,12 @@ export function AdsListScreen() {
     try {
       if (useAppleIap) {
         const appleProductId = resolveAdAppleProductId(item);
-        if (!canPayAdWithApple(item)) {
+        if (!canPayForAd(item)) {
           Alert.alert(
             'Ads',
             __DEV__
-              ? 'Ad publish Apple product ID is missing (check APPLE_AD_PUBLISH_PRODUCT_ID).'
-              : 'This ad is not available for In-App Purchase right now. Please try again later.',
+              ? 'Ad publish product is not configured.'
+              : PRICING_LABELS.itemUnavailable,
           );
           return;
         }
@@ -244,8 +247,7 @@ export function AdsListScreen() {
               multiColumn={listColumns > 1}
               stackActions={stackActions}
               paying={payingUuid === item.uuid}
-              appleBillingReady={canPayAdWithApple(item)}
-              useAppleIap={useAppleIap}
+              billingReady={canPayForAd(item)}
               publishFeeLabel={
                 formatAdPricePerUnit(
                   item.price_cents ?? postingPrice?.amount_cents,
@@ -268,8 +270,7 @@ function AdCard({
   multiColumn,
   stackActions,
   paying,
-  appleBillingReady,
-  useAppleIap,
+  billingReady,
   publishFeeLabel,
   onPay,
   onEdit,
@@ -279,8 +280,7 @@ function AdCard({
   multiColumn: boolean;
   stackActions: boolean;
   paying: boolean;
-  appleBillingReady: boolean;
-  useAppleIap: boolean;
+  billingReady: boolean;
   publishFeeLabel?: string | null;
   onPay: () => void;
   onEdit: () => void;
@@ -372,17 +372,17 @@ function AdCard({
         {item.status === 'pending_payment' ? (
           <View style={styles.payBlock}>
             <OneTimePaywallNote
-              title="Publish Ad"
+              title={PRICING_LABELS.publishAd}
               description="One-time purchase to publish a paid ad after the free ad limit is used."
               priceCents={item.price_cents ?? IAP_DISPLAY_PRICES_CENTS.AD_PUBLISH}
               currency={item.currency ?? 'USD'}
             />
             <PaymentCtaButton
-              label={!appleBillingReady ? 'Unavailable' : 'Publish Ad'}
+              label={!billingReady ? PRICING_LABELS.unavailable : PRICING_LABELS.publishAd}
               onPress={onPay}
-              disabled={paying || !appleBillingReady}
+              disabled={paying || !billingReady}
               loading={paying}
-              loadingLabel="Processing…"
+              loadingLabel={PRICING_LABELS.processing}
               style={[styles.payButtonInBlock, shadows.soft]}
             />
           </View>

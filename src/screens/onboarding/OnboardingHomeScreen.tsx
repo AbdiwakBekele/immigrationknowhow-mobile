@@ -47,9 +47,10 @@ import {
 } from './onboardingConstants';
 import { SeekerOnboardingContent } from './SeekerOnboardingContent';
 import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
-import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { formatSubscriptionPrice } from '../../utils/money';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
 import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
 import { buildProviderSubscriptionPricingHint, isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
@@ -918,7 +919,7 @@ export function OnboardingHomeScreen({
       if (!iapPlanUuid || !appleProductId) {
         setBusy(false);
         setProcessingMessage(null);
-        setError('This plan is not available for In-App Purchase yet.');
+        setError(PRICING_LABELS.planUnavailable);
         return;
       }
       setProcessingMessage('Processing…');
@@ -946,7 +947,7 @@ export function OnboardingHomeScreen({
         onCheckoutRequired(checkout);
         return;
       }
-      navigation.navigate('StripeCheckout', { checkoutUrl: checkout });
+      navigation.navigate('StripeCheckout', { checkoutUrl: checkout, variant: 'onboarding' });
       return;
     }
     await completeOnboardingSession(payload?.user ?? null);
@@ -961,7 +962,7 @@ export function OnboardingHomeScreen({
 
   const selectablePlans = useMemo(() => {
     const plans = meta?.subscriptionPlans ?? [];
-    const stripeReady = !!meta?.stripeBillingReady;
+    const stripeReady = meta?.stripeBillingReady;
     const appleIapConfigured = meta?.appleIapConfigured === true;
     const selectedType = providerPrimaryService.trim();
     return plans.filter((p) => {
