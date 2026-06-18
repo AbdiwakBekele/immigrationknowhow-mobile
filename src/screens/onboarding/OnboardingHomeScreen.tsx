@@ -53,7 +53,7 @@ import { formatSubscriptionPrice } from '../../utils/money';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
 import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
-import { buildProviderSubscriptionPricingHint, isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
+import { isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
 
 const MAX_USER_SERVICES = 8;
 
@@ -1006,11 +1006,6 @@ export function OnboardingHomeScreen({
     return formatSubscriptionPrice(only.price_cents ?? 0, only.currency ?? 'USD', only.billing_cycle);
   }, [selectablePlans]);
 
-  const providerPricingHint = useMemo(
-    () => buildProviderSubscriptionPricingHint(selectablePlans),
-    [selectablePlans],
-  );
-
   useEffect(() => {
     if (step !== 7 || selectablePlans.length !== 1 || planUuid) {
       return;
@@ -1380,11 +1375,6 @@ export function OnboardingHomeScreen({
         <>
           <SectionLabel flushTop>Subscription</SectionLabel>
           <PaidFeatureBadge label="Requires subscription" />
-          <Text style={[styles.mutedBlock, { marginTop: spacing.sm }]}>
-            Service Provider Subscription — unlock provider profile access and provider tools. Free plans activate
-            instantly; paid plans require a subscription purchase.
-          </Text>
-          <Text style={styles.mutedBlock}>{providerPricingHint}</Text>
           {meta?.providerSubscriptionPromo?.trial_eligible &&
           (meta.providerSubscriptionPromo.trial_months ?? 0) > 0 ? (
             <Text style={styles.promoBox}>

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,7 +28,7 @@ import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { formatSubscriptionPrice } from '../../utils/money';
-import { isActiveProviderSubscription, buildProviderSubscriptionPricingHint, providerRequiresSubscription } from '../../utils/providerSubscription';
+import { isActiveProviderSubscription, providerRequiresSubscription } from '../../utils/providerSubscription';
 import { PRICING_LABELS } from '../../config/pricingLabels';
 
 function subscriptionDurationLabel(billingCycle?: string | null): string {
@@ -256,7 +256,6 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
   const current = payload?.current_subscription ?? null;
   const pending = payload?.pending_subscription ?? null;
   const plans = payload?.plans ?? [];
-  const pricingHint = useMemo(() => buildProviderSubscriptionPricingHint(plans), [plans]);
 
   const restorePurchases = async () => {
     if (restoring || Boolean(processingMessage)) return;
@@ -325,10 +324,6 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
             <Ionicons name="lock-closed-outline" size={22} color={colors.primary[700]} />
             <View style={styles.requiredCopy}>
               <Text style={styles.requiredTitle}>Subscription required</Text>
-              <Text style={styles.requiredBody}>
-                Choose a monthly or annual plan to access your provider dashboard. Service provider features require a
-                separate subscription.
-              </Text>
             </View>
           </View>
         ) : (
@@ -337,11 +332,6 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
 
         <View style={styles.paywallIntro}>
           <PaidFeatureBadge label="Requires subscription" />
-          <Text style={styles.paywallTitle}>Service Provider Subscription</Text>
-          <Text style={styles.paywallBody}>
-            Unlock service provider features, provider profile access, and provider tools. Auto-renewable subscription.
-          </Text>
-          <Text style={styles.paywallHint}>{pricingHint}</Text>
         </View>
 
         {pending && !isActiveProviderSubscription(current) ? (
@@ -505,31 +495,7 @@ const styles = StyleSheet.create({
   },
   paywallIntro: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    gap: spacing.sm,
-  },
-  paywallTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    textAlign: 'center',
-  },
-  paywallBody: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  paywallHint: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
-    textAlign: 'center',
+    marginBottom: spacing.lg,
   },
   requiredBanner: {
     flexDirection: 'row',
@@ -549,12 +515,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
     fontSize: typography.fontSize.md,
-  },
-  requiredBody: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.sm,
-    lineHeight: 20,
   },
   pendingCard: {
     flexDirection: 'row',
