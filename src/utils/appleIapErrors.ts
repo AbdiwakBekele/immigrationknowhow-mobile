@@ -2,6 +2,7 @@ const USER_CANCELLED = /user cancelled|cancelled|canceled|E_USER_CANCELLED/i;
 const INACTIVE_SUBSCRIPTION = /inactive subscription/i;
 const NOT_CONFIGURED = /not configured|temporarily unavailable/i;
 const IN_PROGRESS = /already in progress/i;
+const TIMED_OUT = /timed out|purchase reset/i;
 const MISSING_PRODUCT = /no skus|product.*not found|invalid product|sku/i;
 
 export function logAppleIapError(context: string, error: unknown): void {
@@ -31,7 +32,11 @@ export function mapAppleIapUserMessage(error: unknown, context = 'purchase'): st
   }
 
   if (IN_PROGRESS.test(raw)) {
-    return 'A purchase is already in progress. Please wait a moment.';
+    return 'A purchase is already in progress. Wait a moment, tap Restore Purchases, or fully close and reopen the app.';
+  }
+
+  if (TIMED_OUT.test(raw)) {
+    return 'The purchase took too long. Please try again or tap Restore Purchases.';
   }
 
   if (MISSING_PRODUCT.test(raw)) {

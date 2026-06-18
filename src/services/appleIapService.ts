@@ -13,6 +13,13 @@ import {
 } from 'expo-iap';
 import * as appleIapApi from '../api/appleIapApi';
 import { logIapPurchaseIntent, type IapFeatureKind } from '../config/iapCatalog';
+import {
+  iapLogFlowEnd,
+  iapLogFlowStart,
+  iapLogPurchaseSnapshot,
+  iapLogStep,
+  iapLogWait,
+} from '../utils/appleIapDebug';
 import { logAppleIapError, mapAppleIapUserMessage } from '../utils/appleIapErrors';
 
 type PurchaseKind = 'library' | 'ai_assistant' | 'provider_subscription' | 'video' | 'ad';
@@ -24,6 +31,7 @@ type PendingPurchase = {
   planUuid?: string;
   adUuid?: string;
   retryCount: number;
+  startedAtMs: number;
   resolve: (value: void) => void;
   reject: (reason: Error) => void;
 };
@@ -45,9 +53,71 @@ function isSubscriptionKind(kind: PurchaseKind): boolean {
 let connectionReady = false;
 let listenersAttached = false;
 let pending: PendingPurchase | null = null;
+let pendingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/** After this age a silent StoreKit session is treated as abandoned. */
+const STALE_PURCHASE_MS = 2 * 60 * 1000;
+/** Hard cap so "Processing…" cannot hang forever. */
+const PURCHASE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function isApplePurchaseInProgress(): boolean {
   return pending !== null;
+}
+
+function clearPendingTimeout(): void {
+  if (pendingTimeout) {
+    clearTimeout(pendingTimeout);
+    pendingTimeout = null;
+  }
+}
+
+function abandonPendingPurchase(reason: string): boolean {
+  if (!pending) {
+    return false;
+  }
+
+  const current = pending;
+  pending = null;
+  clearPendingTimeout();
+  iapLogStep('purchase.abandoned', { reason, ageMs: Date.now() - current.startedAtMs });
+  iapLogFlowEnd('error', reason);
+  current.reject(new Error(reason));
+  return true;
+}
+
+/** Clears a hung purchase lock (e.g. after StoreKit never called back). */
+export function resetApplePurchaseInProgress(): void {
+  abandonPendingPurchase('Purchase reset. Please try again.');
+}
+
+function clearStuckPendingIfStale(): boolean {
+  if (!pending) {
+    return false;
+  }
+
+  const ageMs = Date.now() - pending.startedAtMs;
+  if (ageMs < STALE_PURCHASE_MS) {
+    return false;
+  }
+
+  abandonPendingPurchase('Previous purchase timed out. Please try again or use Restore Purchases.');
+  return true;
+}
+
+function schedulePendingTimeout(current: PendingPurchase): void {
+  clearPendingTimeout();
+  pendingTimeout = setTimeout(() => {
+    if (pending !== current) {
+      return;
+    }
+    abandonPendingPurchase('Purchase timed out. Please try again or use Restore Purchases.');
+  }, PURCHASE_TIMEOUT_MS);
+}
+
+function settlePendingFailure(current: PendingPurchase, error: Error): void {
+  clearPendingTimeout();
+  pending = null;
+  current.reject(error);
 }
 
 function purchaseTransactionId(purchase: Purchase): string {
@@ -104,37 +174,63 @@ async function drainStaleIosTransactions(productId?: string): Promise<void> {
     return;
   }
 
-  await syncIOS().catch(() => undefined);
+  iapLogStep('drainStale.syncIOS');
+  await syncIOS().catch((error) => {
+    iapLogStep('drainStale.syncIOS.failed', { message: error instanceof Error ? error.message : String(error) });
+    return undefined;
+  });
 
+  iapLogStep('drainStale.getAvailablePurchases', { filterProductId: productId ?? 'all' });
   const purchases = await getAvailablePurchases({
     alsoPublishToEventListenerIOS: false,
     onlyIncludeActiveItemsIOS: false,
   });
 
+  iapLogStep('drainStale.found', { count: purchases.length });
+
+  let finished = 0;
+  let skippedActive = 0;
+  let skippedOtherProduct = 0;
+
   for (const purchase of purchases) {
     if (productId && purchase.productId !== productId) {
+      skippedOtherProduct += 1;
       continue;
     }
 
     const ios = purchase as Purchase & { expirationDateIOS?: number };
     if (ios.expirationDateIOS !== undefined && isActiveSubscriptionPurchase(purchase)) {
+      skippedActive += 1;
       continue;
     }
 
     try {
+      iapLogPurchaseSnapshot(purchase as unknown as Record<string, unknown>, 'drain-finish');
       await finishTransaction({ purchase, isConsumable: false });
+      finished += 1;
     } catch (error) {
       logAppleIapError('drainStale', error);
     }
   }
+
+  iapLogStep('drainStale.done', { finished, skippedActive, skippedOtherProduct });
 }
 
 async function ensureProductAvailable(productId: string, kind: PurchaseKind): Promise<void> {
   const type = isSubscriptionKind(kind) ? 'subs' : 'in-app';
+  iapLogStep('fetchProducts.start', { productId, type });
   const products = await fetchProducts({ skus: [productId], type });
   if (!Array.isArray(products) || products.length === 0) {
+    iapLogStep('fetchProducts.notFound', { productId, type });
     throw new Error(`Product not found in App Store: ${productId}`);
   }
+  const first = products[0] as { id?: string; title?: string; displayPrice?: string };
+  iapLogStep('fetchProducts.ok', {
+    productId,
+    title: first?.title,
+    displayPrice: first?.displayPrice,
+    count: products.length,
+  });
 }
 
 async function ensureConnection(): Promise<void> {
@@ -142,14 +238,21 @@ async function ensureConnection(): Promise<void> {
     throw new Error('Apple In-App Purchase is only available on iOS.');
   }
   if (!connectionReady) {
+    iapLogStep('initConnection.start');
     await initConnection();
     connectionReady = true;
+    iapLogStep('initConnection.ok');
     await drainStaleIosTransactions();
+  } else {
+    iapLogStep('initConnection.skip', { reason: 'already connected' });
   }
   if (!listenersAttached) {
     purchaseUpdatedListener(handlePurchaseUpdated);
     purchaseErrorListener(handlePurchaseError);
     listenersAttached = true;
+    iapLogStep('listeners.attached');
+  } else {
+    iapLogStep('listeners.skip', { reason: 'already attached' });
   }
 }
 
@@ -167,6 +270,16 @@ function buildApplePayload(purchase: Purchase): ApplePurchasePayload {
 async function confirmWithBackend(current: PendingPurchase, payload: ApplePurchasePayload): Promise<void> {
   const { transactionId, originalTransactionId, productId } = payload;
 
+  iapLogStep('backend.confirm.start', {
+    kind: current.kind,
+    planUuid: current.planUuid,
+    slug: current.slug,
+    adUuid: current.adUuid,
+    transactionId,
+    originalTransactionId: originalTransactionId ?? '—',
+    productId,
+  });
+
   if (current.kind === 'library' && current.slug) {
     const res = await appleIapApi.confirmLibraryApplePurchase(current.slug, {
       transaction_id: transactionId,
@@ -174,8 +287,10 @@ async function confirmWithBackend(current: PendingPurchase, payload: ApplePurcha
       product_id: productId,
     });
     if (!res.success) {
+      iapLogStep('backend.confirm.failed', { kind: 'library', message: res.message });
       throw new Error(res.message);
     }
+    iapLogStep('backend.confirm.ok', { kind: 'library' });
     return;
   }
 
@@ -186,8 +301,10 @@ async function confirmWithBackend(current: PendingPurchase, payload: ApplePurcha
       product_id: productId,
     });
     if (!res.success) {
+      iapLogStep('backend.confirm.failed', { kind: 'ai_assistant', message: res.message });
       throw new Error(res.message);
     }
+    iapLogStep('backend.confirm.ok', { kind: 'ai_assistant' });
     return;
   }
 
@@ -198,8 +315,14 @@ async function confirmWithBackend(current: PendingPurchase, payload: ApplePurcha
       product_id: productId,
     });
     if (!res.success) {
+      iapLogStep('backend.confirm.failed', {
+        kind: 'provider_subscription',
+        planUuid: current.planUuid,
+        message: res.message,
+      });
       throw new Error(res.message);
     }
+    iapLogStep('backend.confirm.ok', { kind: 'provider_subscription', planUuid: current.planUuid });
     return;
   }
 
@@ -210,8 +333,10 @@ async function confirmWithBackend(current: PendingPurchase, payload: ApplePurcha
       product_id: productId,
     });
     if (!res.success) {
+      iapLogStep('backend.confirm.failed', { kind: 'video', message: res.message });
       throw new Error(res.message);
     }
+    iapLogStep('backend.confirm.ok', { kind: 'video' });
     return;
   }
 
@@ -222,17 +347,25 @@ async function confirmWithBackend(current: PendingPurchase, payload: ApplePurcha
       product_id: productId,
     });
     if (!res.success) {
+      iapLogStep('backend.confirm.failed', { kind: 'ad', message: res.message });
       throw new Error(res.message);
     }
+    iapLogStep('backend.confirm.ok', { kind: 'ad' });
   }
 }
 
 async function startStorePurchase(current: PendingPurchase): Promise<void> {
+  const type = isSubscriptionKind(current.kind) ? 'subs' : 'in-app';
+  iapLogStep('requestPurchase.start', { productId: current.productId, type });
   await requestPurchase({
-    type: isSubscriptionKind(current.kind) ? 'subs' : 'in-app',
+    type,
     request: {
       apple: { sku: current.productId },
     },
+  });
+  iapLogWait('requestPurchase.returned', {
+    note: 'StoreKit sheet may still be open; waiting for purchaseUpdatedListener',
+    productId: current.productId,
   });
 }
 
@@ -242,6 +375,7 @@ async function retryPurchaseAfterInactiveTransaction(current: PendingPurchase): 
   }
 
   current.retryCount += 1;
+  iapLogStep('retry.inactiveSubscription', { retryCount: current.retryCount, productId: current.productId });
   await drainStaleIosTransactions(current.productId);
   await startStorePurchase(current);
 }
@@ -249,12 +383,17 @@ async function retryPurchaseAfterInactiveTransaction(current: PendingPurchase): 
 async function handlePurchaseUpdated(purchase: Purchase): Promise<void> {
   const current = pending;
 
+  iapLogStep('purchaseUpdated.received');
+  iapLogPurchaseSnapshot(purchase as unknown as Record<string, unknown>);
+
   if (!current) {
+    iapLogStep('purchaseUpdated.orphan', { note: 'No pending purchase; finishing transaction only' });
     const ios = purchase as Purchase & { expirationDateIOS?: number };
     const isExpiredSubscription = ios.expirationDateIOS !== undefined && !isActiveSubscriptionPurchase(purchase);
 
     try {
       await finishTransaction({ purchase, isConsumable: false });
+      iapLogStep('purchaseUpdated.orphan.finished');
     } catch (error) {
       if (!isExpiredSubscription) {
         logAppleIapError('orphan-finish', error);
@@ -265,18 +404,23 @@ async function handlePurchaseUpdated(purchase: Purchase): Promise<void> {
 
   const incomingProductId = String(purchase.productId ?? '').trim();
   if (incomingProductId && incomingProductId !== current.productId) {
-    // Ignore unrelated App Store events (e.g. subscription renewals) during an active purchase.
+    iapLogStep('purchaseUpdated.ignored_product_mismatch', {
+      expected: current.productId,
+      incoming: incomingProductId,
+      note: 'Pending purchase still waiting — this can cause a hang if StoreKit never sends the expected product',
+    });
     return;
   }
 
   const payload = buildApplePayload(purchase);
   if (!payload.transactionId) {
-    pending = null;
-    current.reject(new Error('Missing transaction ID from App Store.'));
+    settlePendingFailure(current, new Error('Missing transaction ID from App Store.'));
+    iapLogFlowEnd('error', 'Missing transaction ID from App Store.');
     return;
   }
 
   if (isSubscriptionKind(current.kind) && purchase.productId === current.productId && !isActiveSubscriptionPurchase(purchase)) {
+    iapLogStep('purchaseUpdated.inactiveSubscription', { productId: current.productId });
     try {
       await finishTransaction({ purchase, isConsumable: false });
     } catch (error) {
@@ -286,49 +430,60 @@ async function handlePurchaseUpdated(purchase: Purchase): Promise<void> {
     try {
       await retryPurchaseAfterInactiveTransaction(current);
     } catch (error) {
-      pending = null;
-      current.reject(toUserFacingError(error, 'inactive-subscription'));
+      const friendly = toUserFacingError(error, 'inactive-subscription');
+      settlePendingFailure(current, friendly);
+      iapLogFlowEnd('error', friendly.message);
     }
     return;
   }
 
   try {
     await confirmWithBackend(current, payload);
+    iapLogStep('finishTransaction.start', { isConsumable: isConsumableKind(current.kind) });
     await finishTransaction({ purchase, isConsumable: isConsumableKind(current.kind) });
+    clearPendingTimeout();
     pending = null;
+    iapLogFlowEnd('success');
     current.resolve();
   } catch (error) {
-    pending = null;
-    current.reject(toUserFacingError(error, 'confirm'));
+    const friendly = toUserFacingError(error, 'confirm');
+    settlePendingFailure(current, friendly);
+    iapLogFlowEnd('error', friendly.message);
   }
 }
 
 function handlePurchaseError(error: { message?: string }): void {
   const current = pending;
+  iapLogStep('purchaseError.received', { message: error?.message ?? 'unknown' });
+
   if (!current) {
+    iapLogStep('purchaseError.ignored', { reason: 'no pending purchase' });
     return;
   }
 
   if (isUserCancelledError(error)) {
-    pending = null;
-    current.reject(new Error('Purchase cancelled.'));
+    settlePendingFailure(current, new Error('Purchase cancelled.'));
+    iapLogFlowEnd('cancelled');
     return;
   }
 
   if (isInactiveSubscriptionError(error)) {
+    iapLogStep('purchaseError.inactiveSubscription.retry');
     void (async () => {
       try {
         await retryPurchaseAfterInactiveTransaction(current);
       } catch (retryError) {
-        pending = null;
-        current.reject(toUserFacingError(retryError, 'inactive-subscription-retry'));
+        const friendly = toUserFacingError(retryError, 'inactive-subscription-retry');
+        settlePendingFailure(current, friendly);
+        iapLogFlowEnd('error', friendly.message);
       }
     })();
     return;
   }
 
-  pending = null;
-  current.reject(toUserFacingError(error, 'purchase-error'));
+  const friendly = toUserFacingError(error, 'purchase-error');
+  settlePendingFailure(current, friendly);
+  iapLogFlowEnd('error', friendly.message);
 }
 
 function runPurchase(
@@ -336,6 +491,8 @@ function runPurchase(
   options?: { feature?: IapFeatureKind; priceCents?: number | null },
 ): Promise<void> {
   return new Promise(async (resolve, reject) => {
+    clearStuckPendingIfStale();
+
     if (pending) {
       reject(toUserFacingError(new Error('Another purchase is already in progress.'), 'concurrent'));
       return;
@@ -345,8 +502,24 @@ function runPurchase(
       logIapPurchaseIntent(options.feature, params.productId, options.priceCents);
     }
 
-    const current: PendingPurchase = { ...params, retryCount: 0, resolve, reject };
+    iapLogFlowStart(`purchase:${params.kind}`, {
+      productId: params.productId,
+      planUuid: params.planUuid,
+      slug: params.slug,
+      adUuid: params.adUuid,
+      feature: options?.feature,
+      priceCents: options?.priceCents,
+    });
+
+    const current: PendingPurchase = {
+      ...params,
+      retryCount: 0,
+      startedAtMs: Date.now(),
+      resolve,
+      reject,
+    };
     pending = current;
+    schedulePendingTimeout(current);
 
     try {
       await ensureConnection();
@@ -354,19 +527,22 @@ function runPurchase(
       await ensureProductAvailable(params.productId, params.kind);
       await startStorePurchase(current);
     } catch (error) {
-      pending = null;
       if (isInactiveSubscriptionError(error)) {
         try {
-          pending = current;
           await retryPurchaseAfterInactiveTransaction(current);
           return;
         } catch (retryError) {
-          pending = null;
-          reject(toUserFacingError(retryError, 'inactive-subscription-start'));
+          const friendly = toUserFacingError(retryError, 'inactive-subscription-start');
+          settlePendingFailure(current, friendly);
+          iapLogFlowEnd('error', friendly.message);
+          reject(friendly);
           return;
         }
       }
-      reject(toUserFacingError(error, 'start'));
+      const friendly = toUserFacingError(error, 'start');
+      settlePendingFailure(current, friendly);
+      iapLogFlowEnd('error', friendly.message);
+      reject(friendly);
     }
   });
 }
@@ -451,6 +627,12 @@ export async function restoreApplePurchasesOnDevice(): Promise<{
   videos_restored: number;
   errors: string[];
 }> {
+  clearStuckPendingIfStale();
+  if (pending) {
+    abandonPendingPurchase('Cleared for Restore Purchases.');
+  }
+
+  iapLogFlowStart('restore');
   await ensureConnection();
   await restorePurchases();
   const purchases = await getAvailablePurchases({
@@ -518,14 +700,17 @@ export async function restoreApplePurchasesOnDevice(): Promise<{
   });
 
   if (!res.success) {
+    iapLogFlowEnd('error', res.message);
     throw toUserFacingError(new Error(res.message), 'restore');
   }
 
-  return {
+  const result = {
     library_restored: res.data?.library_restored ?? 0,
     ai_assistant_active: res.data?.ai_assistant_active ?? false,
     provider_subscription_active: res.data?.provider_subscription_active ?? false,
     videos_restored: res.data?.videos_restored ?? 0,
     errors: res.data?.errors ?? [],
   };
+  iapLogFlowEnd('success', JSON.stringify(result));
+  return result;
 }

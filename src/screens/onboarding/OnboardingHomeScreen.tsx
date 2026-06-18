@@ -46,7 +46,9 @@ import {
   userSelectedPetSitterService,
 } from './onboardingConstants';
 import { SeekerOnboardingContent } from './SeekerOnboardingContent';
-import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
+import { purchaseProviderSubscription, resetApplePurchaseInProgress, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
+import { BASE_URL } from '../../config/api';
+import { iapLogStep } from '../../utils/appleIapDebug';
 import { PRICING_LABELS } from '../../config/pricingLabels';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import { formatSubscriptionPrice } from '../../utils/money';
@@ -871,6 +873,11 @@ export function OnboardingHomeScreen({
     setBusy(true);
     setError(null);
     setProcessingMessage('Saving your provider profile…');
+    console.log('[Onboarding] ├── complete.start', {
+      apiBase: BASE_URL,
+      planUuid: planUuid || null,
+      planCount: selectablePlans.length,
+    });
     const res = await onboardingApi.complete({
       address_line_1: pStreet.trim(),
       address_line_2: pLine2.trim() || undefined,
@@ -900,6 +907,7 @@ export function OnboardingHomeScreen({
       ...(selectablePlans.length > 0 ? { subscription: { plan_uuid: planUuid } } : {}),
     });
     if (!res.success) {
+      console.log('[Onboarding] └── complete.failed', { message: friendlyApiErrorMessage(res) });
       setBusy(false);
       setProcessingMessage(null);
       setError(friendlyApiErrorMessage(res));
@@ -916,21 +924,33 @@ export function OnboardingHomeScreen({
     if (payload?.requires_apple_iap && shouldUseAppleIap()) {
       const iapPlanUuid = payload.plan_uuid;
       const appleProductId = payload.apple_product_id?.trim();
+      console.log('[Onboarding] ├── complete.requires_apple_iap', {
+        planUuid: iapPlanUuid,
+        appleProductId: appleProductId ?? null,
+      });
       if (!iapPlanUuid || !appleProductId) {
+        console.log('[Onboarding] └── iap.missing_product_config');
         setBusy(false);
         setProcessingMessage(null);
         setError(PRICING_LABELS.planUnavailable);
         return;
       }
       setProcessingMessage('Processing…');
+      iapLogStep('onboarding.starting_provider_purchase', {
+        planUuid: iapPlanUuid,
+        appleProductId,
+      });
       try {
         const selectedPlan = selectablePlans.find((plan) => plan.uuid === iapPlanUuid);
         await purchaseProviderSubscription(iapPlanUuid, appleProductId, selectedPlan?.price_cents);
+        console.log('[Onboarding] ├── iap.purchase_done — finalizing session');
         setProcessingMessage('Processing…');
         await completeOnboardingSession(payload.user ?? null);
+        console.log('[Onboarding] └── onboarding.complete.success');
         onFlowComplete?.();
       } catch (e) {
         const message = mapAppleIapUserMessage(e, 'provider-onboarding');
+        console.log('[Onboarding] └── iap.purchase_failed', { message });
         setError(message ?? 'Subscription purchase could not be completed.');
       } finally {
         setBusy(false);
@@ -1422,7 +1442,30 @@ export function OnboardingHomeScreen({
           )}
           <SubscriptionLegalFooter
             onRestore={() => {
-              void restoreApplePurchasesOnDevice().catch(() => undefined);
+              void (async () => {
+                setBusy(true);
+                setError(null);
+                setProcessingMessage('Restoring purchases…');
+                try {
+                  resetApplePurchaseInProgress();
+                  const restored = await restoreApplePurchasesOnDevice();
+                  if (restored.provider_subscription_active) {
+                    console.log('[Onboarding] ├── restore.provider_subscription_active — finishing onboarding');
+                    await completeOnboardingSession(null);
+                    onFlowComplete?.();
+                    return;
+                  }
+                  setError(
+                    restored.errors[0] ??
+                      'No active provider subscription found. Complete purchase or try again.',
+                  );
+                } catch (e) {
+                  setError(mapAppleIapUserMessage(e, 'provider-onboarding-restore') ?? 'Could not restore purchases.');
+                } finally {
+                  setBusy(false);
+                  setProcessingMessage(null);
+                }
+              })();
             }}
           />
         </>
