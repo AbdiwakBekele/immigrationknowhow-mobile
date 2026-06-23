@@ -48,9 +48,11 @@
       "bundler": "metro"
     },
     "plugins": [
+      "expo-dev-client",
       "expo-secure-store",
       "expo-font",
-      "expo-iap"
+      "expo-iap",
+      "expo-image-picker"
     ],
     "extra": {
       "eas": {

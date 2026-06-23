@@ -24,7 +24,7 @@ import type { AuthStackParamList } from '../../navigation/AuthStack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 export function SignInScreen() {
-  const { signIn } = useAuth();
+  const { signIn, enterGuestMode } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -96,6 +96,10 @@ export function SignInScreen() {
             </Pressable>
 
             <AppButton title="Sign In" onPress={onSubmit} loading={loading} />
+
+            <Pressable onPress={() => void enterGuestMode()} style={styles.guestLink} hitSlop={12}>
+              <Text style={styles.guestText}>Continue as Guest</Text>
+            </Pressable>
           </View>
 
           <Pressable onPress={() => navigation.navigate('SignUp')} style={styles.footerLink} hitSlop={12}>
@@ -185,5 +189,14 @@ const styles = StyleSheet.create({
   footerBold: {
     color: colors.primary[700],
     fontWeight: typography.fontWeight.semibold,
+  },
+  guestLink: {
+    marginTop: spacing.lg,
+    alignItems: 'center',
+  },
+  guestText: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
   },
 });
