@@ -5,13 +5,11 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
 import { LibraryCover } from '../../components/library/LibraryCover';
@@ -28,18 +26,47 @@ import { useGuestActions } from '../../context/GuestActionsContext';
 const CARD_GAP = spacing.md;
 const NUM_COLUMNS = 2;
 
-function FilterChip({
-  label,
-  active,
+function MetaTag({ label, tone }: { label: string; tone: 'category' | 'country' }) {
+  const text = label.trim();
+  if (!text) return null;
+
+  return (
+    <View style={[styles.metaTag, tone === 'category' ? styles.metaTagCategory : styles.metaTagCountry]}>
+      <Text style={[styles.metaTagText, tone === 'category' ? styles.metaTagTextCategory : styles.metaTagTextCountry]}>
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+function GuestLibraryCard({
+  item,
+  width,
   onPress,
 }: {
-  label: string;
-  active: boolean;
+  item: GuestLibraryItem;
+  width: number;
   onPress: () => void;
 }) {
+  const cover = resolveMediaUrl(item.cover_image_url);
+  const countries = (item.countries ?? []).map((c) => c.trim()).filter(Boolean);
+
   return (
-    <Pressable onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    <Pressable onPress={onPress} style={[styles.card, { width }]}>
+      <LibraryCover uri={cover} width={width} height={width * 1.25} borderRadius={radii.lg} />
+      <View style={styles.cardBody}>
+        <Text style={styles.title} numberOfLines={2}>
+          {item.title}
+        </Text>
+        <View style={styles.tagRow}>
+          {item.category?.name ? <MetaTag label={item.category.name} tone="category" /> : null}
+          {countries.length > 0 ? (
+            countries.map((country) => <MetaTag key={country} label={country} tone="country" />)
+          ) : (
+            <MetaTag label="Worldwide" tone="country" />
+          )}
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -50,134 +77,99 @@ export function GuestLibraryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<GuestLibraryItem[]>([]);
-  const [categories, setCategories] = useState<Array<{ id: number; name: string; slug: string }>>([]);
-  const [regions, setRegions] = useState<Array<{ value: string; label: string }>>([]);
+  const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<string | null>(null);
-  const [region, setRegion] = useState<string | null>(null);
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = (screenWidth - spacing.lg * 2 - CARD_GAP) / NUM_COLUMNS;
 
-  const load = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    const res = await guestApi.browseGuestLibrary({
-      per_page: 24,
-      search: search.trim() || undefined,
-      category: category || undefined,
-      region: region || undefined,
-    });
-    if (isRefresh) setRefreshing(false);
-    else setLoading(false);
-    if (!res.success) {
-      setError(res.message);
-      return;
-    }
-    setItems(res.data.items.data ?? []);
-    setCategories(res.data.categories ?? []);
-    setRegions(res.data.regions ?? []);
-  }, [search, category, region]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void load(false);
-    }, [load]),
+  const load = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      const res = await guestApi.browseGuestLibrary({
+        per_page: 24,
+        search: search || undefined,
+      });
+      if (isRefresh) setRefreshing(false);
+      else setLoading(false);
+      if (!res.success) {
+        setError(res.message);
+        return;
+      }
+      setItems(res.data.items.data ?? []);
+    },
+    [search],
   );
 
   useEffect(() => {
-    void load(false);
-  }, [category, region]);
+    const timer = setTimeout(() => setSearch(searchDraft.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [searchDraft]);
 
-  return (
-    <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
+  useEffect(() => {
+    void load(false);
+  }, [load]);
+
+  const listHeader = (
+    <View style={styles.headerBlock}>
       <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Browse eBooks</Text>
-        <Text style={styles.heroSubtitle}>Preview titles by category and country. Sign in to read, purchase, or save favorites.</Text>
+        <Text style={styles.heroSubtitle}>
+          Preview titles from our library. Sign in to read, purchase, or save favorites.
+        </Text>
         <View style={styles.searchWrap}>
           <Ionicons name="search-outline" size={18} color={colors.text.muted} />
           <TextInput
-            value={search}
-            onChangeText={setSearch}
-            onSubmitEditing={() => void load()}
+            value={searchDraft}
+            onChangeText={setSearchDraft}
             returnKeyType="search"
-            placeholder="Search titles..."
+            placeholder="Search by title..."
             placeholderTextColor={colors.text.muted}
             style={styles.searchInput}
           />
+          {searchDraft.length > 0 ? (
+            <Pressable onPress={() => setSearchDraft('')} hitSlop={8} accessibilityLabel="Clear search">
+              <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
-      {categories.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          <FilterChip label="All categories" active={!category} onPress={() => setCategory(null)} />
-          {categories.map((cat) => (
-            <FilterChip
-              key={cat.slug}
-              label={cat.name}
-              active={category === cat.slug}
-              onPress={() => setCategory(cat.slug)}
-            />
-          ))}
-        </ScrollView>
-      ) : null}
+      <Text style={styles.resultsText}>
+        {loading ? 'Loading…' : `${items.length} title${items.length === 1 ? '' : 's'}`}
+      </Text>
+    </View>
+  );
 
-      {regions.length > 0 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          <FilterChip label="All countries" active={!region} onPress={() => setRegion(null)} />
-          {regions.map((r) => (
-            <FilterChip key={r.value} label={r.label} active={region === r.value} onPress={() => setRegion(r.value)} />
-          ))}
-        </ScrollView>
-      ) : null}
-
-      {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.primary[600]} />
-        </View>
-      ) : error ? (
-        <Text style={styles.errorText}>{error}</Text>
-      ) : (
-        <FlatList
-          data={items}
-          numColumns={NUM_COLUMNS}
-          columnWrapperStyle={{ gap: CARD_GAP }}
-          contentContainerStyle={styles.listContent}
-          keyExtractor={(item) => item.slug}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
-          renderItem={({ item }) => {
-            const cover = resolveMediaUrl(item.cover_image_url);
-            const countries = (item.countries ?? []).join(', ');
-            return (
-              <Pressable
-                onPress={() => setAuthPromptOpen(true)}
-                style={[styles.card, { width: cardWidth }]}
-              >
-                <LibraryCover uri={cover} width={cardWidth} height={cardWidth * 1.25} borderRadius={radii.lg} />
-                <View style={styles.cardBody}>
-                  <Text style={styles.title} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  {!!item.category?.name && (
-                    <Text style={styles.meta} numberOfLines={1}>
-                      {item.category.name}
-                    </Text>
-                  )}
-                  {!!countries && (
-                    <Text style={styles.meta} numberOfLines={1}>
-                      {countries}
-                    </Text>
-                  )}
-                </View>
-              </Pressable>
-            );
-          }}
-          ItemSeparatorComponent={() => <View style={{ height: CARD_GAP }} />}
-          ListEmptyComponent={<Text style={styles.emptyText}>No books match your filters.</Text>}
-        />
-      )}
+  return (
+    <AppScreen variant="gradient" safeAreaEdges={['left', 'right']} style={styles.screen}>
+      <FlatList
+        data={items}
+        numColumns={NUM_COLUMNS}
+        columnWrapperStyle={styles.columnWrapper}
+        contentContainerStyle={styles.listContent}
+        keyExtractor={(item) => item.slug}
+        ListHeaderComponent={listHeader}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
+        renderItem={({ item }) => (
+          <GuestLibraryCard item={item} width={cardWidth} onPress={() => setAuthPromptOpen(true)} />
+        )}
+        ItemSeparatorComponent={() => <View style={styles.rowGap} />}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator color={colors.primary[600]} />
+            </View>
+          ) : error ? (
+            <Text style={styles.emptyText}>{error}</Text>
+          ) : (
+            <Text style={styles.emptyText}>No books match your search.</Text>
+          )
+        }
+      />
 
       <GuestAuthPrompt
         visible={authPromptOpen}
@@ -199,6 +191,9 @@ export function GuestLibraryScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  headerBlock: {
+    paddingBottom: spacing.md,
+  },
   heroCard: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
@@ -237,35 +232,27 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     paddingVertical: spacing.sm,
   },
-  filterRow: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  chipActive: {
-    borderColor: colors.primary[300],
-    backgroundColor: colors.primary[50],
-  },
-  chipText: {
+  resultsText: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
     fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    color: colors.text.muted,
     fontWeight: typography.fontWeight.medium,
   },
-  chipTextActive: {
-    color: colors.primary[700],
-    fontWeight: typography.fontWeight.semibold,
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing['2xl'],
   },
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  errorText: { margin: spacing.lg, color: colors.danger, textAlign: 'center' },
+  emptyText: {
+    textAlign: 'center',
+    color: colors.text.muted,
+    marginTop: spacing.lg,
+    lineHeight: 20,
+    paddingHorizontal: spacing.lg,
+  },
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing['3xl'] },
+  columnWrapper: { gap: CARD_GAP },
+  rowGap: { height: CARD_GAP },
   card: {
     borderRadius: radii.lg,
     borderWidth: 1,
@@ -280,14 +267,34 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     lineHeight: 18,
   },
-  meta: {
-    marginTop: 2,
-    fontSize: typography.fontSize.xs,
-    color: colors.text.muted,
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
   },
-  emptyText: {
-    textAlign: 'center',
-    color: colors.text.muted,
-    marginTop: spacing['2xl'],
+  metaTag: {
+    borderRadius: radii.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderWidth: 1,
+  },
+  metaTagCategory: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[100],
+  },
+  metaTagCountry: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+  },
+  metaTagText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  metaTagTextCategory: {
+    color: colors.primary[800],
+  },
+  metaTagTextCountry: {
+    color: '#166534',
   },
 });

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
 import { colors } from '../../theme/colors';
 import { radii } from '../../theme/layout';
@@ -34,7 +33,7 @@ export function GuestHowItWorksScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.intro}>
-            Browse providers and educational resources as a guest. Create an account when you are ready to connect, purchase, or save your progress.
+            Browse service providers and educational resources as a guest. Create an account when you are ready to connect, purchase, or save your progress.
           </Text>
           {steps.map((step, index) => (
             <View key={step.title} style={styles.stepCard}>
@@ -47,12 +46,6 @@ export function GuestHowItWorksScreen() {
               </View>
             </View>
           ))}
-          <View style={styles.noteCard}>
-            <Ionicons name="information-circle-outline" size={22} color={colors.primary[600]} />
-            <Text style={styles.noteText}>
-              Guest browsing is limited to previews. Matching, messaging, favorites, purchases, and premium tools require a free account.
-            </Text>
-          </View>
         </ScrollView>
       )}
     </AppScreen>
@@ -111,22 +104,6 @@ const styles = StyleSheet.create({
   stepDescription: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-    lineHeight: 20,
-  },
-  noteCard: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radii.lg,
-    backgroundColor: colors.primary[50],
-    borderWidth: 1,
-    borderColor: colors.primary[100],
-    marginTop: spacing.md,
-  },
-  noteText: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[800],
     lineHeight: 20,
   },
 });

@@ -46,7 +46,7 @@ function GuestTabs() {
         <Tab.Screen
           name="GuestProviders"
           component={GuestProvidersScreen}
-          options={{ title: 'Providers', tabBarIcon: tabBarIcon('people-outline') }}
+          options={{ title: 'Service Providers', tabBarIcon: tabBarIcon('people-outline') }}
         />
         <Tab.Screen
           name="GuestLibrary"
