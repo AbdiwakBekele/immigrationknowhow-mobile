@@ -11,7 +11,6 @@ export type GuestLibraryItem = {
 
 export type GuestProviderItem = {
   slug: string;
-  avatar_url?: string | null;
   business_type: string;
   location: string;
 };

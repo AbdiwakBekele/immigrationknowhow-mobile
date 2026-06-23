@@ -20,6 +20,7 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import { useAuth } from '../../context/AuthContext';
+import { useContinueAsGuest } from '../../hooks/useContinueAsGuest';
 import * as authApi from '../../api/authApi';
 import type { RegisterPayload } from '../../api/authApi';
 import { PicklistField } from '../onboarding/components/PicklistField';
@@ -51,7 +52,8 @@ const ROLES: RoleOption[] = [
 ];
 
 export function SignUpScreen() {
-  const { signUp, enterGuestMode } = useAuth();
+  const { signUp } = useAuth();
+  const continueAsGuest = useContinueAsGuest();
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
 
   const [role, setRole] = useState<RoleOption['value']>('user');
@@ -271,7 +273,7 @@ export function SignUpScreen() {
             </Text>
           </Pressable>
 
-          <Pressable onPress={() => void enterGuestMode()} style={styles.guestLink} hitSlop={12}>
+          <Pressable onPress={() => void continueAsGuest()} style={styles.guestLink} hitSlop={12}>
             <Text style={styles.guestText}>Continue as Guest</Text>
           </Pressable>
         </ScrollView>

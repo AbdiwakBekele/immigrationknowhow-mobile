@@ -20,11 +20,13 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import { useAuth } from '../../context/AuthContext';
+import { useContinueAsGuest } from '../../hooks/useContinueAsGuest';
 import type { AuthStackParamList } from '../../navigation/AuthStack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 export function SignInScreen() {
-  const { signIn, enterGuestMode } = useAuth();
+  const { signIn } = useAuth();
+  const continueAsGuest = useContinueAsGuest();
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,7 +99,7 @@ export function SignInScreen() {
 
             <AppButton title="Sign In" onPress={onSubmit} loading={loading} />
 
-            <Pressable onPress={() => void enterGuestMode()} style={styles.guestLink} hitSlop={12}>
+            <Pressable onPress={() => void continueAsGuest()} style={styles.guestLink} hitSlop={12}>
               <Text style={styles.guestText}>Continue as Guest</Text>
             </Pressable>
           </View>

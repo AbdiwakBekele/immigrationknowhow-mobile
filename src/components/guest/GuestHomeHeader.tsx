@@ -25,7 +25,6 @@ export function GuestHomeHeader({ onSignIn, onSignUp }: Props) {
           <Text style={styles.signUpText}>Sign Up</Text>
         </Pressable>
       </View>
-      <Text style={styles.guestBadge}>Browsing as guest</Text>
     </View>
   );
 }
@@ -66,10 +65,5 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.inverse,
-  },
-  guestBadge: {
-    marginTop: spacing.sm,
-    fontSize: typography.fontSize.xs,
-    color: colors.text.muted,
   },
 });
