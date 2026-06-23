@@ -51,7 +51,7 @@ const ROLES: RoleOption[] = [
 ];
 
 export function SignUpScreen() {
-  const { signUp } = useAuth();
+  const { signUp, enterGuestMode } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
 
   const [role, setRole] = useState<RoleOption['value']>('user');
@@ -270,6 +270,10 @@ export function SignUpScreen() {
               Already have an account? <Text style={styles.footerBold}>Sign in</Text>
             </Text>
           </Pressable>
+
+          <Pressable onPress={() => void enterGuestMode()} style={styles.guestLink} hitSlop={12}>
+            <Text style={styles.guestText}>Continue as Guest</Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </AppScreen>
@@ -401,6 +405,15 @@ const styles = StyleSheet.create({
   footerBold: {
     color: colors.primary[700],
     fontWeight: typography.fontWeight.semibold,
+  },
+  guestLink: {
+    marginTop: spacing.lg,
+    alignItems: 'center',
+  },
+  guestText: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
   },
   metaLoading: {
     color: colors.text.secondary,

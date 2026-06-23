@@ -4,12 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { DvLotteryProvider } from '../context/DvLotteryContext';
 import { SplashScreen } from '../screens/common/SplashScreen';
 import { AuthStack } from './AuthStack';
+import { GuestNavigator } from './GuestNavigator';
 import { OnboardingStack } from './OnboardingStack';
 import { ProviderTabs } from './ProviderTabs';
 import { SeekerTabs } from './SeekerTabs';
 import { AdvertiserTabs } from './AdvertiserTabs';
 export function RootNavigator() {
-  const { isBootstrapping, isAuthenticated, role, user } = useAuth();
+  const { isBootstrapping, isAuthenticated, isGuest, role, user } = useAuth();
 
   if (isBootstrapping) return <SplashScreen />;
 
@@ -17,7 +18,9 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer>
-      {!isAuthenticated ? (
+      {!isAuthenticated && isGuest ? (
+        <GuestNavigator />
+      ) : !isAuthenticated ? (
         <AuthStack />
       ) : needsOnboarding ? (
         <OnboardingStack />
