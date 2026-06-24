@@ -61,7 +61,7 @@ export function SignInScreen() {
           <View style={styles.header}>
             <BrandWordmark width={248} />
             <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in to continue to your account.</Text>
+            <Text style={styles.subtitle}>Browse eBooks and service providers without an account, or sign in below.</Text>
           </View>
 
           <View style={styles.card}>
@@ -99,9 +99,17 @@ export function SignInScreen() {
 
             <AppButton title="Sign In" onPress={onSubmit} loading={loading} />
 
-            <Pressable onPress={() => void continueAsGuest()} style={styles.guestLink} hitSlop={12}>
-              <Text style={styles.guestText}>Continue as Guest</Text>
-            </Pressable>
+            <View style={styles.orRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>or</Text>
+              <View style={styles.orLine} />
+            </View>
+
+            <AppButton
+              title="Continue as Guest"
+              variant="ghost"
+              onPress={() => void continueAsGuest()}
+            />
           </View>
 
           <Pressable onPress={() => navigation.navigate('SignUp')} style={styles.footerLink} hitSlop={12}>
@@ -178,6 +186,22 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
   },
+  orRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginVertical: spacing.lg,
+  },
+  orLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
+  orText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
+    fontWeight: typography.fontWeight.medium,
+  },
   footerLink: {
     marginTop: spacing['2xl'],
     flexDirection: 'row',
@@ -191,14 +215,5 @@ const styles = StyleSheet.create({
   footerBold: {
     color: colors.primary[700],
     fontWeight: typography.fontWeight.semibold,
-  },
-  guestLink: {
-    marginTop: spacing.lg,
-    alignItems: 'center',
-  },
-  guestText: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
   },
 });

@@ -26,6 +26,7 @@ import type { RegisterPayload } from '../../api/authApi';
 import { PicklistField } from '../onboarding/components/PicklistField';
 import type { AuthStackParamList } from '../../navigation/AuthStack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { AccountMatchingNotice } from '../../components/auth/AccountMatchingNotice';
 import type { IonIconName } from '../../navigation/tabBar';
 
 type RoleOption = { value: 'user' | 'provider' | 'advertiser'; label: string; description: string; icon: IonIconName };
@@ -154,8 +155,18 @@ export function SignUpScreen() {
           <View style={styles.header}>
             <BrandWordmark width={248} />
             <Text style={styles.title}>Create your account</Text>
-            <Text style={styles.subtitle}>{"Choose how you'll use ImmigrationKnowHow."}</Text>
+            <Text style={styles.subtitle}>{"Choose how you'll use ImmigrationKnowHow, or browse without an account."}</Text>
           </View>
+
+          <AppButton
+            title="Continue as Guest"
+            variant="ghost"
+            onPress={() => void continueAsGuest()}
+            style={styles.guestButton}
+          />
+          <Text style={styles.guestHint}>Browse eBooks and service providers — no account needed.</Text>
+
+          <AccountMatchingNotice />
 
           <View style={styles.roleList}>
             <Text style={styles.roleSectionLabel}>Account type</Text>
@@ -273,9 +284,6 @@ export function SignUpScreen() {
             </Text>
           </Pressable>
 
-          <Pressable onPress={() => void continueAsGuest()} style={styles.guestLink} hitSlop={12}>
-            <Text style={styles.guestText}>Continue as Guest</Text>
-          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </AppScreen>
@@ -408,14 +416,15 @@ const styles = StyleSheet.create({
     color: colors.primary[700],
     fontWeight: typography.fontWeight.semibold,
   },
-  guestLink: {
-    marginTop: spacing.lg,
-    alignItems: 'center',
+  guestButton: {
+    marginBottom: spacing.sm,
   },
-  guestText: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
+  guestHint: {
+    textAlign: 'center',
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
+    marginBottom: spacing.xl,
+    lineHeight: 20,
   },
   metaLoading: {
     color: colors.text.secondary,
