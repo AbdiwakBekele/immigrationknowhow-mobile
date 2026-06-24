@@ -255,12 +255,10 @@ export function ProfileScreen() {
           <AppButton title="Log out" onPress={confirmSignOut} variant="ghost" />
         </View>
 
-        {!isAdvertiserPortal ? (
-          <DeleteAccountSection
-            hasMultipleRoles={Boolean(roleMeta?.can_switch || (roleMeta?.has_seeker && roleMeta?.has_provider))}
-            onDeleted={() => signOut()}
-          />
-        ) : null}
+        <DeleteAccountSection
+          hasMultipleRoles={Boolean(roleMeta?.can_switch || (roleMeta?.has_seeker && roleMeta?.has_provider))}
+          onDeleted={() => signOut()}
+        />
       </ScrollView>
   );
 

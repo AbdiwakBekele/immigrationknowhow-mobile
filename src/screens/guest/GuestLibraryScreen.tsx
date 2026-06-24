@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -10,10 +10,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppScreen } from '../../components/AppScreen';
 import { LibraryCover } from '../../components/library/LibraryCover';
 import { GuestAuthPrompt } from '../../components/guest/GuestAuthPrompt';
+import { GuestActiveFiltersRow } from '../../components/guest/GuestChipRow';
 import { colors } from '../../theme/colors';
 import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
@@ -22,6 +24,13 @@ import * as guestApi from '../../api/guestApi';
 import type { GuestLibraryItem } from '../../api/guestApi';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { useGuestActions } from '../../context/GuestActionsContext';
+import {
+  EMPTY_GUEST_LIBRARY_FILTERS,
+  GuestLibraryFilterModal,
+  guestLibraryFiltersToQuery,
+  hasActiveGuestLibraryFilters,
+  type GuestLibraryFilters,
+} from './GuestLibraryFilterModal';
 
 const CARD_GAP = spacing.md;
 const NUM_COLUMNS = 2;
@@ -77,12 +86,34 @@ export function GuestLibraryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<GuestLibraryItem[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [regionOptions, setRegionOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [filters, setFilters] = useState<GuestLibraryFilters>(EMPTY_GUEST_LIBRARY_FILTERS);
+  const [draftFilters, setDraftFilters] = useState<GuestLibraryFilters>(EMPTY_GUEST_LIBRARY_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = (screenWidth - spacing.lg * 2 - CARD_GAP) / NUM_COLUMNS;
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchDraft.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [searchDraft]);
+
+  const loadMeta = useCallback(async () => {
+    const res = await guestApi.getGuestMeta();
+    if (!res.success) return;
+    setCategoryOptions(
+      (res.data.library_categories ?? []).map((category) => ({
+        value: category.slug,
+        label: category.name,
+      })),
+    );
+    setRegionOptions(res.data.library_regions ?? []);
+  }, []);
 
   const load = useCallback(
     async (isRefresh = false) => {
@@ -92,6 +123,7 @@ export function GuestLibraryScreen() {
       const res = await guestApi.browseGuestLibrary({
         per_page: 24,
         search: search || undefined,
+        ...guestLibraryFiltersToQuery(filters),
       });
       if (isRefresh) setRefreshing(false);
       else setLoading(false);
@@ -100,43 +132,98 @@ export function GuestLibraryScreen() {
         return;
       }
       setItems(res.data.items.data ?? []);
+      if (categoryOptions.length === 0 && res.data.categories?.length) {
+        setCategoryOptions(
+          res.data.categories.map((category) => ({
+            value: category.slug,
+            label: category.name,
+          })),
+        );
+      }
+      if (regionOptions.length === 0 && res.data.regions?.length) {
+        setRegionOptions(res.data.regions);
+      }
     },
-    [search],
+    [categoryOptions.length, filters, regionOptions.length, search],
   );
 
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchDraft.trim()), 350);
-    return () => clearTimeout(timer);
-  }, [searchDraft]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadMeta();
+    }, [loadMeta]),
+  );
 
   useEffect(() => {
     void load(false);
   }, [load]);
+
+  const filtersActive = hasActiveGuestLibraryFilters(filters);
+
+  const activeFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+    if (filters.category) {
+      const match = categoryOptions.find((option) => option.value === filters.category);
+      labels.push(match?.label ?? filters.category);
+    }
+    if (filters.region) {
+      const match = regionOptions.find((option) => option.value === filters.region);
+      labels.push(match?.label ?? filters.region);
+    }
+    return labels;
+  }, [categoryOptions, filters, regionOptions]);
+
+  function openFilterModal() {
+    setDraftFilters(filters);
+    setFilterOpen(true);
+  }
 
   const listHeader = (
     <View style={styles.headerBlock}>
       <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Browse eBooks</Text>
         <Text style={styles.heroSubtitle}>
-          Preview titles from our library. Sign in to read, purchase, or save favorites.
+          Preview titles from our library. Filter by category or region, or search by title.
         </Text>
-        <View style={styles.searchWrap}>
-          <Ionicons name="search-outline" size={18} color={colors.text.muted} />
-          <TextInput
-            value={searchDraft}
-            onChangeText={setSearchDraft}
-            returnKeyType="search"
-            placeholder="Search by title..."
-            placeholderTextColor={colors.text.muted}
-            style={styles.searchInput}
-          />
-          {searchDraft.length > 0 ? (
-            <Pressable onPress={() => setSearchDraft('')} hitSlop={8} accessibilityLabel="Clear search">
-              <Ionicons name="close-circle" size={18} color={colors.text.muted} />
-            </Pressable>
-          ) : null}
+        <View style={styles.searchRow}>
+          <View style={styles.searchWrap}>
+            <Ionicons name="search-outline" size={18} color={colors.text.muted} />
+            <TextInput
+              value={searchDraft}
+              onChangeText={setSearchDraft}
+              returnKeyType="search"
+              placeholder="Search by title..."
+              placeholderTextColor={colors.text.muted}
+              style={styles.searchInput}
+            />
+            {searchDraft.length > 0 ? (
+              <Pressable onPress={() => setSearchDraft('')} hitSlop={8} accessibilityLabel="Clear search">
+                <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+              </Pressable>
+            ) : null}
+          </View>
+          <Pressable
+            onPress={openFilterModal}
+            style={[styles.filterButton, filtersActive && styles.filterButtonActive]}
+            accessibilityRole="button"
+            accessibilityLabel="Open eBook filters"
+          >
+            <Ionicons
+              name="options-outline"
+              size={20}
+              color={filtersActive ? colors.primary[600] : colors.text.muted}
+            />
+            {filtersActive ? <View style={styles.filterIndicator} /> : null}
+          </Pressable>
         </View>
       </View>
+
+      <GuestActiveFiltersRow
+        labels={activeFilterLabels}
+        onClear={() => {
+          setFilters(EMPTY_GUEST_LIBRARY_FILTERS);
+          setSearchDraft('');
+        }}
+      />
 
       <Text style={styles.resultsText}>
         {loading ? 'Loading…' : `${items.length} title${items.length === 1 ? '' : 's'}`}
@@ -166,9 +253,23 @@ export function GuestLibraryScreen() {
           ) : error ? (
             <Text style={styles.emptyText}>{error}</Text>
           ) : (
-            <Text style={styles.emptyText}>No books match your search.</Text>
+            <Text style={styles.emptyText}>No books match your search or filters.</Text>
           )
         }
+      />
+
+      <GuestLibraryFilterModal
+        visible={filterOpen}
+        draft={draftFilters}
+        categoryOptions={categoryOptions}
+        regionOptions={regionOptions}
+        onChange={setDraftFilters}
+        onClose={() => setFilterOpen(false)}
+        onApply={() => {
+          setFilters(draftFilters);
+          setFilterOpen(false);
+        }}
+        onClear={() => setDraftFilters(EMPTY_GUEST_LIBRARY_FILTERS)}
       />
 
       <GuestAuthPrompt
@@ -197,6 +298,7 @@ const styles = StyleSheet.create({
   heroCard: {
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
+    marginBottom: spacing.sm,
     padding: spacing.lg,
     borderRadius: radii.xl,
     backgroundColor: colors.surfaceElevated,
@@ -214,11 +316,17 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     lineHeight: 20,
   },
-  searchWrap: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.lg,
+  },
+  searchWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     borderWidth: 1,
@@ -232,9 +340,32 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     paddingVertical: spacing.sm,
   },
+  filterButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterButtonActive: {
+    borderColor: colors.primary[300],
+    backgroundColor: colors.primary[50],
+  },
+  filterIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary[600],
+  },
   resultsText: {
     marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     fontSize: typography.fontSize.sm,
     color: colors.text.muted,
     fontWeight: typography.fontWeight.medium,

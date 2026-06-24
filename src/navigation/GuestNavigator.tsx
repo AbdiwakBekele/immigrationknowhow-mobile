@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { GuestActionsProvider } from '../context/GuestActionsContext';
 import { GuestHomeHeader } from '../components/guest/GuestHomeHeader';
+import { GuestCategoriesScreen } from '../screens/guest/GuestCategoriesScreen';
 import { GuestProvidersScreen } from '../screens/guest/GuestProvidersScreen';
 import { GuestLibraryScreen } from '../screens/guest/GuestLibraryScreen';
 import { GuestHowItWorksScreen } from '../screens/guest/GuestHowItWorksScreen';
@@ -14,7 +15,8 @@ import { SignUpScreen } from '../screens/auth/SignUpScreen';
 import { tabBarIcon, useModernTabBarOptions } from './tabBar';
 
 export type GuestTabParamList = {
-  GuestProviders: undefined;
+  GuestCategories: undefined;
+  GuestProviders: { service_type?: string } | undefined;
   GuestLibrary: undefined;
   GuestHowItWorks: undefined;
 };
@@ -44,9 +46,14 @@ function GuestTabs() {
         />
         <Tab.Navigator screenOptions={modernTabBarOptions}>
         <Tab.Screen
+          name="GuestCategories"
+          component={GuestCategoriesScreen}
+          options={{ title: 'Categories', tabBarIcon: tabBarIcon('grid-outline') }}
+        />
+        <Tab.Screen
           name="GuestProviders"
           component={GuestProvidersScreen}
-          options={{ title: 'Service Providers', tabBarIcon: tabBarIcon('people-outline') }}
+          options={{ title: 'Providers', tabBarIcon: tabBarIcon('people-outline') }}
         />
         <Tab.Screen
           name="GuestLibrary"

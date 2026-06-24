@@ -125,7 +125,7 @@ export function ProvidersFilterModal({
             <TextInput
               value={draft.location}
               onChangeText={(location) => onChange({ ...draft, location })}
-              placeholder="City or state"
+              placeholder="City, state, or ZIP code"
               placeholderTextColor={colors.text.muted}
               style={styles.textInput}
               autoCapitalize="words"
