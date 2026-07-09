@@ -56,8 +56,15 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "710e80e5-4c19-4d06-a4a8-1a061c5db28e"
+        "projectId": "d1497186-9595-44d5-953e-20354d19112e"
       }
+    },
+    "owner": "georgeact",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d1497186-9595-44d5-953e-20354d19112e"
     }
   }
 }
