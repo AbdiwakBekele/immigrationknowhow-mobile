@@ -308,6 +308,21 @@ export function LibraryDetailScreen() {
     navigation.setParams({ slug, readerMode: isReaderMode });
   }, [navigation, slug, isReaderMode]);
 
+  useEffect(() => {
+    if (data?.item?.type !== 'ebook' || data?.item?.ai_summary) {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      const res = await libraryApi.getLibraryItem(slug);
+      if (res.success && res.data?.item?.ai_summary) {
+        setData(res.data);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [slug, data?.item?.type, data?.item?.ai_summary]);
+
   const useAppleIap = shouldUseAppleIap();
   const appleProductId =
     typeof data?.apple_product_id === 'string' && data.apple_product_id.trim() !== ''
@@ -921,10 +936,16 @@ render();
           </View>
         ) : null}
 
-        {hasAccess && item?.ai_summary ? (
+        {item?.type === 'ebook' ? (
           <View style={[s.descriptionCard, isProvider && s.descriptionCardCompact]}>
-            <Text style={[s.sectionTitle, isProvider && s.sectionTitleCompact]}>Summary</Text>
-            <Text style={[s.descriptionText, isProvider && s.descriptionTextCompact]}>{item.ai_summary}</Text>
+            <Text style={[s.sectionTitle, isProvider && s.sectionTitleCompact]}>AI Summary</Text>
+            {item.ai_summary ? (
+              <Text style={[s.descriptionText, isProvider && s.descriptionTextCompact]}>{item.ai_summary}</Text>
+            ) : (
+              <Text style={[s.descriptionText, isProvider && s.descriptionTextCompact]}>
+                Summary will appear here when ready.
+              </Text>
+            )}
           </View>
         ) : null}
 
