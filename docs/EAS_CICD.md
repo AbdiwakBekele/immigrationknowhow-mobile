@@ -9,7 +9,8 @@ This repo now includes committed GitHub Actions workflows for Android production
   - Triggers `eas build --platform android --profile production --non-interactive --no-wait`.
 - `.github/workflows/eas-android-production-release.yml`
   - Runs on manual dispatch and when a tag matching `android-v*` is pushed.
-  - Triggers `eas build --platform android --profile production --auto-submit --non-interactive --no-wait`.
+  - Triggers `eas build --platform android --profile production --auto-submit --non-interactive --wait`.
+  - Waits for both the EAS build and the Play submission to finish before GitHub marks the job successful.
 
 ## Required GitHub setup
 
@@ -24,6 +25,7 @@ Add this repository secret before running the workflows:
 The workflows assume the Android production build and submit flow already works in non-interactive mode:
 
 - `eas.json` contains the `production` build and submit profiles.
+- The Android submit profile targets the Google Play `production` track.
 - The Expo project is linked through `expo.extra.eas.projectId` in `app.json`.
 - Android app signing credentials are already configured in EAS.
 - A Google Service Account key for Play submissions is already uploaded to the EAS project credentials.
@@ -48,3 +50,8 @@ The release workflow uses `--auto-submit`, so it replaces the local two-step flo
 eas build --platform android --profile production
 eas submit --platform android --profile production
 ```
+
+## Important behavior
+
+- A successful GitHub release run now means the Play submission finished successfully, not just that Expo queued it.
+- Android submissions from the `production` submit profile go to the Play Console `production` track instead of Expo's default `internal` track.
