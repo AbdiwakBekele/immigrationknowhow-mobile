@@ -1,0 +1,39 @@
+name: EAS Android Production Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'android-v*'
+
+concurrency:
+  group: eas-android-production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and submit Android production release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Trigger EAS Android production build with auto-submit
+        run: eas build --platform android --profile production --auto-submit --non-interactive --no-wait
