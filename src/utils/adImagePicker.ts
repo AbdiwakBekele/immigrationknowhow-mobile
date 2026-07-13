@@ -71,38 +71,39 @@ export function normalizePickedAdImage(asset: ImagePicker.ImagePickerAsset): AdI
   return { uri: asset.uri, name, type: mime };
 }
 
-/** Pick a still image for ad upload; iOS uses a compatible representation (JPEG when possible). */
+/** Pick a still image for ad upload via the system photo picker (no broad gallery permission). */
 export async function pickAdImageFromLibrary(): Promise<AdImageFile | null> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) {
-    throw new Error('Photo library permission is required to upload an image.');
+  try {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsEditing: false,
+      legacy: false,
+      ...(Platform.OS === 'ios'
+        ? {
+            preferredAssetRepresentationMode:
+              ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+          }
+        : {}),
+    });
+
+    if (result.canceled || !result.assets?.length) {
+      return null;
+    }
+
+    const asset = result.assets[0];
+    if (asset.type === 'livePhoto') {
+      throw new Error('Live Photos are not supported. Please choose a still image.');
+    }
+
+    const normalized = normalizePickedAdImage(asset);
+    if (!normalized) {
+      throw new Error('Please choose an image file.');
+    }
+
+    return normalized;
+  } catch (error) {
+    console.error('Failed to select image:', error);
+    throw error;
   }
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ['images'],
-    quality: 0.85,
-    allowsEditing: false,
-    ...(Platform.OS === 'ios'
-      ? {
-          preferredAssetRepresentationMode:
-            ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-        }
-      : {}),
-  });
-
-  if (result.canceled || !result.assets?.length) {
-    return null;
-  }
-
-  const asset = result.assets[0];
-  if (asset.type === 'livePhoto') {
-    throw new Error('Live Photos are not supported. Please choose a still image.');
-  }
-
-  const normalized = normalizePickedAdImage(asset);
-  if (!normalized) {
-    throw new Error('Please choose an image file.');
-  }
-
-  return normalized;
 }
