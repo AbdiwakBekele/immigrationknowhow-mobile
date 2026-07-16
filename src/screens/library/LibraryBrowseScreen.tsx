@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -17,36 +17,85 @@ import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const CARD_GAP = spacing.md;
 const NUM_COLUMNS = 2;
+const PAGE_SIZE = 50;
+
+function extractBrowsePage(payload: any): { items: any[]; page: number; lastPage: number; total: number } {
+  const bucket = payload?.items;
+  const items = Array.isArray(bucket?.data?.data)
+    ? bucket.data.data
+    : Array.isArray(bucket?.data)
+      ? bucket.data
+      : [];
+  const meta = bucket?.meta ?? bucket?.data?.meta ?? {};
+  return {
+    items,
+    page: Number(meta.current_page ?? 1),
+    lastPage: Number(meta.last_page ?? 1),
+    total: Number(meta.total ?? items.length),
+  };
+}
 
 export function LibraryBrowseScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [items, setItems] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+  const loadingMoreRef = useRef(false);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = (screenWidth - spacing.xl * 2 - CARD_GAP) / NUM_COLUMNS;
 
-  const load = async () => {
-    setLoading(true);
-    const res = await libraryApi.browseLibrary({ per_page: 20 });
-    setLoading(false);
+  const load = async (nextPage = 1, append = false) => {
+    if (append) {
+      if (loadingMoreRef.current || nextPage > lastPage) return;
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setErr(null);
+    }
+
+    const res = await libraryApi.browseLibrary({ per_page: PAGE_SIZE, page: nextPage });
+
+    if (append) {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    } else {
+      setLoading(false);
+    }
+
     if (!res.success) {
-      setErr(res.message);
+      if (!append) setErr(res.message);
       return;
     }
-    setItems(res.data?.items?.data?.data ?? res.data?.items?.data ?? []);
+
+    const parsed = extractBrowsePage(res.data);
+    setPage(parsed.page);
+    setLastPage(parsed.lastPage);
+    setTotal(parsed.total);
+    setItems((prev) => {
+      if (!append) return parsed.items;
+      const seen = new Set(prev.map((item) => String(item.slug ?? item.id)));
+      return [...prev, ...parsed.items.filter((item) => !seen.has(String(item.slug ?? item.id)))];
+    });
   };
 
   useFocusEffect(
     useCallback(() => {
-      void load();
+      void load(1, false);
     }, []),
   );
 
   return (
     <AppScreen style={{ padding: spacing.xl }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={s.countText}>
+          {loading ? 'Loading…' : `${total} title${total === 1 ? '' : 's'}`}
+        </Text>
         <Pressable onPress={() => navigation.navigate('LibraryMy')}>
           <Text style={{ color: colors.primary[600], fontWeight: typography.fontWeight.semibold }}>Purchased</Text>
         </Pressable>
@@ -62,6 +111,15 @@ export function LibraryBrowseScreen() {
           numColumns={NUM_COLUMNS}
           columnWrapperStyle={{ gap: CARD_GAP }}
           keyExtractor={(it) => String(it.slug)}
+          onEndReachedThreshold={0.4}
+          onEndReached={() => {
+            if (page < lastPage) void load(page + 1, true);
+          }}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary[600]} />
+            ) : null
+          }
           renderItem={({ item }) => {
             const cover = resolveMediaUrl(item.cover_image_url);
             const isPaid = Boolean(item.is_premium) || Number(item.price || 0) > 0;
@@ -103,6 +161,11 @@ export function LibraryBrowseScreen() {
 }
 
 const s = StyleSheet.create({
+  countText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
+    fontWeight: typography.fontWeight.medium,
+  },
   card: {
     borderRadius: radii.lg,
     borderWidth: 1,

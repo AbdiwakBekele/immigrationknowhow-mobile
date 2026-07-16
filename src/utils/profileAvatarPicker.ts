@@ -10,6 +10,16 @@ export type ProfileAvatarFile = {
 /** Soft client-side ceiling; backend remains the source of truth for size limits. */
 const MAX_AVATAR_BYTES = 10 * 1024 * 1024;
 
+const ALLOWED_AVATAR_MIME = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+]);
+
 let pickInFlight = false;
 
 /**
@@ -49,12 +59,17 @@ export async function pickProfileAvatarFromLibrary(): Promise<ProfileAvatarFile 
     }
 
     const mime = (asset.mimeType || '').trim().toLowerCase() || 'image/jpeg';
+    const normalizedMime = mime === 'image/jpg' ? 'image/jpeg' : mime;
+    if (!ALLOWED_AVATAR_MIME.has(normalizedMime)) {
+      throw new Error('Please choose a JPEG, PNG, GIF, WebP, or HEIC image.');
+    }
+
     const name = asset.fileName?.trim() || `avatar-${Date.now()}.jpg`;
 
     return {
       uri: asset.uri,
       name,
-      type: mime === 'image/jpg' ? 'image/jpeg' : mime,
+      type: normalizedMime,
       file: (asset as { file?: Blob }).file,
     };
   } finally {

@@ -118,41 +118,48 @@ export function ProviderProfileScreen() {
     );
   }, [providerProfile, businessName, tagline, bio, website, yearsExperience, hourlyRate, specializations, serviceAreas]);
 
-  const openDashboardScreen = (screen: keyof ProviderDashboardStackParamList) => {
+  const openDashboardScreen = (screen: 'ProviderBackgroundCheck') => {
     tabNavigation?.navigate('Dashboard', { screen });
   };
 
   const onSave = async () => {
+    if (saving) return;
     setSaving(true);
     setSaveMessage(null);
     setError(null);
-    const specs = specializations
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const areas = serviceAreas
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const res = await profileApi.updateProviderProfile({
-      business_name: businessName.trim(),
-      tagline: tagline.trim() || null,
-      bio: bio.trim() || null,
-      website: website.trim() || null,
-      years_experience: yearsExperience.trim() ? Number(yearsExperience.trim()) : null,
-      hourly_rate: hourlyRate.trim() ? Number(hourlyRate.trim()) : null,
-      specializations: specs,
-      service_areas: areas,
-    });
-    setSaving(false);
-    if (!res.success) {
-      setError(friendlyApiErrorMessage(res));
-      return;
+    try {
+      const specs = specializations
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const areas = serviceAreas
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const res = await profileApi.updateProviderProfile({
+        business_name: businessName.trim(),
+        tagline: tagline.trim() || null,
+        bio: bio.trim() || null,
+        website: website.trim() || null,
+        years_experience: yearsExperience.trim() ? Number(yearsExperience.trim()) : null,
+        hourly_rate: hourlyRate.trim() ? Number(hourlyRate.trim()) : null,
+        specializations: specs,
+        service_areas: areas,
+      });
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setProfileUser(res.data.user);
+      setProviderProfile(res.data.provider);
+      hydrateForm(res.data.provider);
+      setSaveMessage('Saved');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to save your provider profile right now.';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setProfileUser(res.data.user);
-    setProviderProfile(res.data.provider);
-    hydrateForm(res.data.provider);
-    setSaveMessage('Saved');
   };
 
   const onPickAvatar = async () => {
@@ -183,18 +190,25 @@ export function ProviderProfileScreen() {
   };
 
   const onRemoveAvatar = async () => {
+    if (avatarBusy) return;
     setAvatarBusy(true);
     setSaveMessage(null);
     setError(null);
-    const res = await profileApi.deleteAvatar();
-    setAvatarBusy(false);
-    if (!res.success) {
-      setError(friendlyApiErrorMessage(res));
-      return;
+    try {
+      const res = await profileApi.deleteAvatar();
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setProfileUser(res.data.user);
+      setSaveMessage('Profile photo removed');
+      await refreshMe();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to remove your profile photo right now.';
+      setError(message);
+    } finally {
+      setAvatarBusy(false);
     }
-    setProfileUser(res.data.user);
-    setSaveMessage('Profile photo removed');
-    await refreshMe();
   };
 
   return (

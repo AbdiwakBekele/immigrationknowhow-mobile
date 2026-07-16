@@ -111,30 +111,37 @@ export function ProfileScreen() {
   );
 
   const onSave = async () => {
+    if (saving) return;
     setSaving(true);
     setSaveMessage(null);
     setError(null);
-    const payload = {
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      email: email.trim(),
-      phone: phone.trim() || null,
-      city: city.trim() || null,
-      state: state.trim() || null,
-      country: country.trim().toUpperCase() || null,
-      postal_code: postalCode.trim() || null,
-      preferred_language: preferredLanguage.trim().toLowerCase() || 'en',
-    };
-    const res = await profileApi.updateProfile(payload);
-    setSaving(false);
-    if (!res.success) {
-      setError(friendlyApiErrorMessage(res));
-      return;
+    try {
+      const payload = {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim() || null,
+        city: city.trim() || null,
+        state: state.trim() || null,
+        country: country.trim().toUpperCase() || null,
+        postal_code: postalCode.trim() || null,
+        preferred_language: preferredLanguage.trim().toLowerCase() || 'en',
+      };
+      const res = await profileApi.updateProfile(payload);
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setProfileUser(res.data.user);
+      hydrateForm(res.data.user);
+      setSaveMessage('Saved');
+      await refreshMe();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to save your profile right now.';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setProfileUser(res.data.user);
-    hydrateForm(res.data.user);
-    setSaveMessage('Saved');
-    await refreshMe();
   };
 
   const onPickAvatar = async () => {
@@ -165,18 +172,25 @@ export function ProfileScreen() {
   };
 
   const onRemoveAvatar = async () => {
+    if (avatarBusy) return;
     setAvatarBusy(true);
     setSaveMessage(null);
     setError(null);
-    const res = await profileApi.deleteAvatar();
-    setAvatarBusy(false);
-    if (!res.success) {
-      setError(friendlyApiErrorMessage(res));
-      return;
+    try {
+      const res = await profileApi.deleteAvatar();
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setProfileUser(res.data.user);
+      setSaveMessage('Profile photo removed');
+      await refreshMe();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to remove your profile photo right now.';
+      setError(message);
+    } finally {
+      setAvatarBusy(false);
     }
-    setProfileUser(res.data.user);
-    setSaveMessage('Profile photo removed');
-    await refreshMe();
   };
 
   const body = (
