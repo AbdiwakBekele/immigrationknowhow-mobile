@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -30,6 +30,7 @@ import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const CARD_GAP = spacing.md;
 const NUM_COLUMNS = 2;
+const PAGE_SIZE = 50;
 
 type LibraryFilter = 'all' | 'ebook' | 'audio' | `category:${string}`;
 
@@ -44,33 +45,69 @@ function matchesFilter(item: any, filter: LibraryFilter): boolean {
   return true;
 }
 
+function extractMyPage(payload: any, tab: 'purchased' | 'available') {
+  const raw = payload?.section === tab ? payload?.items : payload?.items;
+  const items = Array.isArray(raw?.data) ? raw.data : [];
+  return {
+    items,
+    page: Number(raw?.current_page ?? 1),
+    lastPage: Number(raw?.last_page ?? 1),
+  };
+}
+
 export function LibraryMyScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
   const { role } = useAuth();
   const isProvider = role === 'provider';
   const [tab, setTab] = useState<'purchased' | 'available'>('available');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [items, setItems] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [filterOpen, setFilterOpen] = useState(false);
+  const loadingMoreRef = useRef(false);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = (screenWidth - spacing.xl * 2 - CARD_GAP) / NUM_COLUMNS;
 
-  const load = async () => {
-    setLoading(true);
-    const res = await libraryApi.getMyLibrary(tab, 1);
-    setLoading(false);
+  const load = async (nextPage = 1, append = false) => {
+    if (append) {
+      if (loadingMoreRef.current || nextPage > lastPage) return;
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+
+    const res = await libraryApi.getMyLibrary(tab, nextPage, PAGE_SIZE);
+
+    if (append) {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    } else {
+      setLoading(false);
+    }
+
     if (!res.success) return;
-    const raw = res.data?.section === tab ? res.data?.items : res.data?.items;
-    const coll = raw?.data ?? [];
-    setItems(coll);
+
+    const parsed = extractMyPage(res.data, tab);
+    setPage(parsed.page);
+    setLastPage(parsed.lastPage);
+    setItems((prev) => {
+      if (!append) return parsed.items;
+      const seen = new Set(prev.map((item) => String(item.slug ?? item.id)));
+      return [...prev, ...parsed.items.filter((item) => !seen.has(String(item.slug ?? item.id)))];
+    });
   };
 
   useFocusEffect(
     useCallback(() => {
-      void load();
+      setPage(1);
+      setLastPage(1);
+      void load(1, false);
     }, [tab]),
   );
 
@@ -179,6 +216,15 @@ export function LibraryMyScreen() {
           columnWrapperStyle={isProvider ? undefined : { gap: CARD_GAP }}
           contentContainerStyle={isProvider ? s.listContent : undefined}
           keyExtractor={(it) => String(it.slug ?? it.id)}
+          onEndReachedThreshold={0.4}
+          onEndReached={() => {
+            if (page < lastPage) void load(page + 1, true);
+          }}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary[600]} />
+            ) : null
+          }
           renderItem={({ item }) => {
             const cover = resolveMediaUrl(item.cover_image_url);
             return (

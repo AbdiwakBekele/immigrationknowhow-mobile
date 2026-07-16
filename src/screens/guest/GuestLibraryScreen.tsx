@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -80,12 +80,18 @@ function GuestLibraryCard({
   );
 }
 
+const PAGE_SIZE = 50;
+
 export function GuestLibraryScreen() {
   const { goSignIn, goSignUp } = useGuestActions();
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<GuestLibraryItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [regionOptions, setRegionOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [filters, setFilters] = useState<GuestLibraryFilters>(EMPTY_GUEST_LIBRARY_FILTERS);
@@ -94,6 +100,7 @@ export function GuestLibraryScreen() {
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
+  const loadingMoreRef = useRef(false);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = (screenWidth - spacing.lg * 2 - CARD_GAP) / NUM_COLUMNS;
@@ -116,22 +123,54 @@ export function GuestLibraryScreen() {
   }, []);
 
   const load = useCallback(
-    async (isRefresh = false) => {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
+    async (options: { page?: number; append?: boolean; refresh?: boolean } = {}) => {
+      const nextPage = options.page ?? 1;
+      const append = Boolean(options.append);
+      const isRefresh = Boolean(options.refresh);
+
+      if (append) {
+        if (loadingMoreRef.current || nextPage > lastPage) return;
+        loadingMoreRef.current = true;
+        setLoadingMore(true);
+      } else if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
+
       const res = await guestApi.browseGuestLibrary({
-        per_page: 24,
+        per_page: PAGE_SIZE,
+        page: nextPage,
         search: search || undefined,
         ...guestLibraryFiltersToQuery(filters),
       });
-      if (isRefresh) setRefreshing(false);
-      else setLoading(false);
+
+      if (append) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      } else if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+
       if (!res.success) {
-        setError(res.message);
+        if (!append) setError(res.message);
         return;
       }
-      setItems(res.data.items.data ?? []);
+
+      const nextItems = res.data.items.data ?? [];
+      const meta = res.data.items.meta;
+      setPage(meta?.current_page ?? nextPage);
+      setLastPage(meta?.last_page ?? 1);
+      setTotal(meta?.total ?? nextItems.length);
+      setItems((prev) => {
+        if (!append) return nextItems;
+        const seen = new Set(prev.map((item) => item.slug));
+        return [...prev, ...nextItems.filter((item) => !seen.has(item.slug))];
+      });
+
       if (categoryOptions.length === 0 && res.data.categories?.length) {
         setCategoryOptions(
           res.data.categories.map((category) => ({
@@ -144,7 +183,7 @@ export function GuestLibraryScreen() {
         setRegionOptions(res.data.regions);
       }
     },
-    [categoryOptions.length, filters, regionOptions.length, search],
+    [categoryOptions.length, filters, lastPage, regionOptions.length, search],
   );
 
   useFocusEffect(
@@ -154,8 +193,8 @@ export function GuestLibraryScreen() {
   );
 
   useEffect(() => {
-    void load(false);
-  }, [load]);
+    void load({ page: 1, append: false });
+  }, [filters, search]);
 
   const filtersActive = hasActiveGuestLibraryFilters(filters);
 
@@ -226,7 +265,7 @@ export function GuestLibraryScreen() {
       />
 
       <Text style={styles.resultsText}>
-        {loading ? 'Loading…' : `${items.length} title${items.length === 1 ? '' : 's'}`}
+        {loading ? 'Loading…' : `${total} title${total === 1 ? '' : 's'}`}
       </Text>
     </View>
   );
@@ -240,7 +279,16 @@ export function GuestLibraryScreen() {
         contentContainerStyle={styles.listContent}
         keyExtractor={(item) => item.slug}
         ListHeaderComponent={listHeader}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load({ page: 1, refresh: true })} />}
+        onEndReachedThreshold={0.4}
+        onEndReached={() => {
+          if (page < lastPage) void load({ page: page + 1, append: true });
+        }}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary[600]} />
+          ) : null
+        }
         renderItem={({ item }) => (
           <GuestLibraryCard item={item} width={cardWidth} onPress={() => setAuthPromptOpen(true)} />
         )}

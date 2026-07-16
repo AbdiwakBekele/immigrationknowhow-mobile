@@ -19,9 +19,15 @@ export async function getLibraryItem(slug: string): Promise<ApiResponse<any>> {
   }
 }
 
-export async function getMyLibrary(section: 'purchased' | 'available', page = 1): Promise<ApiResponse<any>> {
+export async function getMyLibrary(
+  section: 'purchased' | 'available',
+  page = 1,
+  perPage = 50,
+): Promise<ApiResponse<any>> {
   try {
-    const res = await apiClient.get('/api/mobile/library/my', { params: { section, page } });
+    const res = await apiClient.get('/api/mobile/library/my', {
+      params: { section, page, per_page: perPage },
+    });
     return { success: true, message: res.data?.message ?? 'OK', data: res.data?.data };
   } catch (e) {
     return normalizeApiError(e);
