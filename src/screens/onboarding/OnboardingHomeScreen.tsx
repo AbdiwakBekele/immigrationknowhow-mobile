@@ -51,6 +51,7 @@ import { BASE_URL } from '../../config/api';
 import { iapLogStep } from '../../utils/appleIapDebug';
 import { PRICING_LABELS } from '../../config/pricingLabels';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
 import { formatSubscriptionPrice } from '../../utils/money';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
@@ -963,11 +964,16 @@ export function OnboardingHomeScreen({
     if (checkout && typeof checkout === 'string') {
       setBusy(false);
       setProcessingMessage(null);
-      if (onCheckoutRequired) {
-        onCheckoutRequired(checkout);
+      const safeUrl = resolveSafeStripeCheckoutUrl(checkout);
+      if (!safeUrl) {
+        alertPaymentsUnavailable();
         return;
       }
-      navigation.navigate('StripeCheckout', { checkoutUrl: checkout, variant: 'onboarding' });
+      if (onCheckoutRequired) {
+        onCheckoutRequired(safeUrl);
+        return;
+      }
+      navigation.navigate('StripeCheckout', { checkoutUrl: safeUrl, variant: 'onboarding' });
       return;
     }
     await completeOnboardingSession(payload?.user ?? null);

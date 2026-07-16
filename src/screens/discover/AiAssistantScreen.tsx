@@ -25,6 +25,7 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as aiApi from '../../api/aiAssistantApi';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
 import { PRICING_LABELS } from '../../config/pricingLabels';
 import { purchaseAiAssistantSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
@@ -158,12 +159,15 @@ export function AiAssistantScreen() {
         return;
       }
       const url = res.data.checkout_url;
-      if (url) {
+      const safeUrl = resolveSafeStripeCheckoutUrl(url);
+      if (safeUrl) {
         navigation.navigate('StripeCheckout', {
-          checkoutUrl: url,
+          checkoutUrl: safeUrl,
           variant: 'aiAssistant',
           checkoutSessionId: res.data.checkout_session_id || undefined,
         });
+      } else if (url) {
+        alertPaymentsUnavailable();
       }
     } catch (e) {
       if (e instanceof Error && e.message === 'Purchase cancelled.') {

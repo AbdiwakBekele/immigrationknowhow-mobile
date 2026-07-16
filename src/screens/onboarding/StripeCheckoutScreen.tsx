@@ -21,6 +21,10 @@ import * as adsApi from '../../api/adsApi';
 import * as aiApi from '../../api/aiAssistantApi';
 import * as subApi from '../../api/providerSubscriptionsApi';
 import * as videosApi from '../../api/videosApi';
+import {
+  alertPaymentsUnavailable,
+  resolveSafeStripeCheckoutUrl,
+} from '../../api/paymentApi';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -161,6 +165,18 @@ export function StripeCheckoutScreen() {
       );
     }
   }, [isIos, navigation]);
+
+  const safeCheckoutUrl = resolveSafeStripeCheckoutUrl(route.params.checkoutUrl);
+
+  useEffect(() => {
+    if (isIos) {
+      return;
+    }
+    if (!safeCheckoutUrl) {
+      alertPaymentsUnavailable();
+      navigation.goBack();
+    }
+  }, [isIos, safeCheckoutUrl, navigation]);
   const webViewRef = useRef<WebView>(null);
   const handledRef = useRef(false);
   const [loading, setLoading] = useState(true);
@@ -276,6 +292,14 @@ export function StripeCheckoutScreen() {
     );
   }
 
+  if (!safeCheckoutUrl) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={styles.loaderText}>{PRICING_LABELS.paymentsTemporarilyUnavailable}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -304,7 +328,7 @@ export function StripeCheckoutScreen() {
 
       <WebView
         ref={webViewRef}
-        source={{ uri: route.params.checkoutUrl }}
+        source={{ uri: safeCheckoutUrl }}
         style={styles.webView}
         onLoadEnd={() => setLoading(false)}
         onNavigationStateChange={(event) => {

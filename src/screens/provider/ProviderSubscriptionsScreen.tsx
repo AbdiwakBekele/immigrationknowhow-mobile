@@ -24,6 +24,7 @@ import { radii } from '../../theme/layout';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as subApi from '../../api/providerSubscriptionsApi';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
 import { purchaseProviderSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
@@ -194,10 +195,13 @@ export function ProviderSubscriptionsScreen({ requiredMode = false, onSubscripti
         return;
       }
       const url = res.data.checkout_url;
-      if (url) {
+      const safeUrl = resolveSafeStripeCheckoutUrl(url);
+      if (safeUrl) {
         checkoutHandledRef.current = false;
         setCheckoutWebLoading(true);
-        setCheckoutUrl(url);
+        setCheckoutUrl(safeUrl);
+      } else if (url) {
+        alertPaymentsUnavailable();
       }
     } finally {
       setSubscribingUuid(null);

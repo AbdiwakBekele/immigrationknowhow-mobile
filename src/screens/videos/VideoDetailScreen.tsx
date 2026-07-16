@@ -13,6 +13,7 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { PRICING_LABELS } from '../../config/pricingLabels';
 import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
 import * as videosApi from '../../api/videosApi';
 import type { VideosStackParamList } from './VideosStack';
 
@@ -76,8 +77,11 @@ export function VideoDetailScreen() {
         return;
       }
       const url = res.data?.checkout_url;
-      if (url) {
-        navigation.navigate('StripeCheckout', { checkoutUrl: url, variant: 'default', videoSlug: slug });
+      const safeUrl = resolveSafeStripeCheckoutUrl(url);
+      if (safeUrl) {
+        navigation.navigate('StripeCheckout', { checkoutUrl: safeUrl, variant: 'default', videoSlug: slug });
+      } else if (url) {
+        alertPaymentsUnavailable();
       }
     } catch (e) {
       Alert.alert('Video', e instanceof Error ? e.message : 'Purchase could not be completed.');

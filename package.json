@@ -8,7 +8,8 @@
     "android": "node scripts/run-android.mjs",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "logs:android": "powershell -NoProfile -Command \"adb logcat '*:S' 'ReactNative:V' 'ReactNativeJS:V'\""
+    "logs:android": "powershell -NoProfile -Command \"adb logcat '*:S' 'ReactNative:V' 'ReactNativeJS:V'\"",
+    "security:stripe": "node scripts/check-no-stripe-secrets.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

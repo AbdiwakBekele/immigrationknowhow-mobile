@@ -28,6 +28,7 @@ import { typography } from '../../theme/typography';
 import { radii } from '../../theme/layout';
 import { shadows } from '../../theme/shadows';
 import * as libraryApi from '../../api/libraryApi';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
 import { purchaseLibraryTitle } from '../../services/appleIapService';
 import { PRICING_LABELS } from '../../config/pricingLabels';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
@@ -374,9 +375,12 @@ export function LibraryDetailScreen() {
         return;
       }
       const url = res.data?.checkout_url;
-      if (url) {
+      const safeUrl = resolveSafeStripeCheckoutUrl(url);
+      if (safeUrl) {
         setWebViewLoading(true);
-        setCheckoutUrl(url);
+        setCheckoutUrl(safeUrl);
+      } else if (url) {
+        alertPaymentsUnavailable();
       }
     } catch (e) {
       if (e instanceof Error && e.message === 'Purchase cancelled.') {
