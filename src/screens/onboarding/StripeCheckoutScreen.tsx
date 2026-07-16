@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -117,9 +117,10 @@ async function confirmAiAssistantWithRetry(
     for (const id of uniqueIds) {
       const res = await aiApi.confirmAiAssistantCheckout(id);
       if (isAiAssistantActivated(res)) {
+        const refreshed = await aiApi.getAiAssistant();
         const state =
-          res.data?.state ??
-          (await aiApi.getAiAssistant()).data?.state ??
+          (res.success ? res.data.state : undefined) ??
+          (refreshed.success ? refreshed.data.state : undefined) ??
           ({
             subscription: null,
             is_addon_active: true,
@@ -155,6 +156,14 @@ export function StripeCheckoutScreen() {
   const navigation = useNavigation<ScreenNav>();
   const insets = useSafeAreaInsets();
   const isIos = Platform.OS === 'ios';
+  const [loading, setLoading] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [title, setTitle] = useState('Checkout');
+  const [checkoutLoadFailed, setCheckoutLoadFailed] = useState(false);
+  const safeCheckoutUrl = useMemo(
+    () => resolveSafeStripeCheckoutUrl(route.params.checkoutUrl),
+    [route.params.checkoutUrl]
+  );
 
   useEffect(() => {
     if (isIos) {
@@ -165,8 +174,6 @@ export function StripeCheckoutScreen() {
       );
     }
   }, [isIos, navigation]);
-
-  const safeCheckoutUrl = resolveSafeStripeCheckoutUrl(route.params.checkoutUrl);
 
   useEffect(() => {
     if (isIos) {
@@ -179,9 +186,6 @@ export function StripeCheckoutScreen() {
   }, [isIos, safeCheckoutUrl, navigation]);
   const webViewRef = useRef<WebView>(null);
   const handledRef = useRef(false);
-  const [loading, setLoading] = useState(true);
-  const [confirming, setConfirming] = useState(false);
-  const [title, setTitle] = useState('Checkout');
   const variant = route.params.variant ?? 'onboarding';
   const adUuid = route.params.adUuid;
   const videoSlug = route.params.videoSlug;
@@ -284,6 +288,18 @@ export function StripeCheckoutScreen() {
     return true;
   }
 
+  function handleCheckoutLoadFailure() {
+    if (handledRef.current || confirming) {
+      return;
+    }
+    setLoading(false);
+    setCheckoutLoadFailed(true);
+    Alert.alert(
+      PRICING_LABELS.checkoutUnavailableTitle,
+      PRICING_LABELS.paymentsTemporarilyUnavailable
+    );
+  }
+
   if (isIos) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
@@ -326,11 +342,36 @@ export function StripeCheckoutScreen() {
         </View>
       )}
 
+      {checkoutLoadFailed && !confirming ? (
+        <View style={styles.errorState}>
+          <Text style={styles.loaderText}>{PRICING_LABELS.paymentsTemporarilyUnavailable}</Text>
+          <Pressable
+            onPress={() => {
+              setCheckoutLoadFailed(false);
+              setLoading(true);
+              webViewRef.current?.reload();
+            }}
+            style={styles.retryButton}
+            accessibilityRole="button"
+            accessibilityLabel="Retry checkout"
+          >
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <WebView
         ref={webViewRef}
         source={{ uri: safeCheckoutUrl }}
         style={styles.webView}
+        onLoadStart={() => setLoading(true)}
         onLoadEnd={() => setLoading(false)}
+        onError={handleCheckoutLoadFailure}
+        onHttpError={(event) => {
+          if (event.nativeEvent.statusCode >= 500) {
+            handleCheckoutLoadFailure();
+          }
+        }}
         onNavigationStateChange={(event) => {
           setTitle(event.title || 'Checkout');
           handleNavigationChange(event);
@@ -394,5 +435,25 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     color: colors.text.secondary,
     fontSize: typography.fontSize.sm,
+  },
+  errorState: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    backgroundColor: colors.background,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: 14,
+    backgroundColor: colors.primary[600],
+  },
+  retryButtonText: {
+    color: colors.text.inverse,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
 });
