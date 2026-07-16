@@ -41,6 +41,7 @@ export function AdsCreateScreen() {
   const insets = useSafeAreaInsets();
   const keyboardVerticalOffset = insets.top + HEADER_BAR_HEIGHT;
   const [busy, setBusy] = useState(false);
+  const [pickingImage, setPickingImage] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [cta, setCta] = useState('https://');
@@ -64,6 +65,8 @@ export function AdsCreateScreen() {
   );
 
   const pickImage = async () => {
+    if (pickingImage || busy) return;
+    setPickingImage(true);
     try {
       const picked = await pickAdImageFromLibrary();
       if (picked) {
@@ -72,6 +75,8 @@ export function AdsCreateScreen() {
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not use that image.';
       Alert.alert('Upload image', message);
+    } finally {
+      setPickingImage(false);
     }
   };
 
@@ -134,6 +139,7 @@ export function AdsCreateScreen() {
         <Text style={label()}>Ad image (optional)</Text>
         <Pressable
           onPress={() => void pickImage()}
+          disabled={pickingImage || busy}
           style={{
             marginTop: spacing.sm,
             borderWidth: 1,
@@ -141,10 +147,11 @@ export function AdsCreateScreen() {
             borderRadius: 12,
             padding: spacing.md,
             backgroundColor: colors.surface,
+            opacity: pickingImage || busy ? 0.6 : 1,
           }}
         >
           <Text style={{ color: colors.primary[700], fontWeight: typography.fontWeight.semibold }}>
-            {imageFile ? 'Change image' : 'Upload image'}
+            {pickingImage ? 'Opening gallery…' : imageFile ? 'Change image' : 'Upload image'}
           </Text>
         </Pressable>
         {imageFile ? (

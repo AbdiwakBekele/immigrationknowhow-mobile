@@ -7,6 +7,9 @@ export type AdImageFile = {
   type: string;
 };
 
+/** Soft client-side ceiling; backend remains the source of truth for size limits. */
+const MAX_AD_IMAGE_BYTES = 10 * 1024 * 1024;
+
 const ALLOWED_MIME = new Set([
   'image/jpeg',
   'image/jpg',
@@ -17,6 +20,8 @@ const ALLOWED_MIME = new Set([
   'image/heic',
   'image/heif',
 ]);
+
+let pickInFlight = false;
 
 function extensionForMime(mime: string): string {
   switch (mime) {
@@ -49,6 +54,10 @@ function guessMimeFromUri(uri: string): string {
 }
 
 export function normalizePickedAdImage(asset: ImagePicker.ImagePickerAsset): AdImageFile | null {
+  if (!asset?.uri) {
+    return null;
+  }
+
   if (asset.type === 'video' || asset.type === 'pairedVideo') {
     return null;
   }
@@ -59,6 +68,10 @@ export function normalizePickedAdImage(asset: ImagePicker.ImagePickerAsset): AdI
   }
   if (!mime || mime === 'application/octet-stream' || !ALLOWED_MIME.has(mime)) {
     mime = guessMimeFromUri(asset.uri);
+  }
+
+  if (!ALLOWED_MIME.has(mime)) {
+    return null;
   }
 
   const ext = extensionForMime(mime);
@@ -73,6 +86,11 @@ export function normalizePickedAdImage(asset: ImagePicker.ImagePickerAsset): AdI
 
 /** Pick a still image for ad upload via the system photo picker (no broad gallery permission). */
 export async function pickAdImageFromLibrary(): Promise<AdImageFile | null> {
+  if (pickInFlight) {
+    return null;
+  }
+
+  pickInFlight = true;
   try {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -92,18 +110,30 @@ export async function pickAdImageFromLibrary(): Promise<AdImageFile | null> {
     }
 
     const asset = result.assets[0];
+    if (!asset?.uri) {
+      throw new Error('The selected image could not be read. Please try another photo.');
+    }
+
     if (asset.type === 'livePhoto') {
       throw new Error('Live Photos are not supported. Please choose a still image.');
     }
 
+    if (typeof asset.fileSize === 'number' && asset.fileSize > MAX_AD_IMAGE_BYTES) {
+      throw new Error('That image is too large. Please choose a photo under 10 MB.');
+    }
+
     const normalized = normalizePickedAdImage(asset);
     if (!normalized) {
-      throw new Error('Please choose an image file.');
+      throw new Error('Please choose a JPEG, PNG, GIF, WebP, or HEIC image.');
     }
 
     return normalized;
   } catch (error) {
-    console.error('Failed to select image:', error);
-    throw error;
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Could not use that image.');
+  } finally {
+    pickInFlight = false;
   }
 }

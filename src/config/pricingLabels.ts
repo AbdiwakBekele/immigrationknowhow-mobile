@@ -19,4 +19,5 @@ export const PRICING_LABELS = {
   subscriptionUnavailable: 'Subscription is not available for purchase right now. Please try again later.',
   checkoutUnavailableTitle: 'Checkout unavailable',
   checkoutUnavailableBody: 'Complete your purchase from the previous screen.',
+  paymentsTemporarilyUnavailable: 'Payments are temporarily unavailable. Please try again later.',
 } as const;

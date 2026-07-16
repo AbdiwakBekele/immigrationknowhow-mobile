@@ -17,10 +17,8 @@
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "IKH needs camera access so users can take photos for profile pictures, documents, certificates, and service-related uploads.",
         "NSPhotoLibraryUsageDescription": "IKH needs photo library access so users can select and upload profile pictures, documents, certificates, and service-related images.",
         "NSPhotoLibraryAddUsageDescription": "IKH may save selected or processed images when required by the user.",
-        "NSMicrophoneUsageDescription": "IKH may need microphone access if users record or upload videos with audio.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -33,7 +31,9 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
@@ -55,9 +55,11 @@
         "expo-image-picker",
         {
           "photosPermission": "IKH needs photo library access so users can select and upload profile pictures, documents, certificates, and service-related images.",
-          "cameraPermission": false
+          "cameraPermission": false,
+          "microphonePermission": false
         }
-      ]
+      ],
+      "./plugins/withGradlePluginRepos.js"
     ],
     "extra": {
       "eas": {

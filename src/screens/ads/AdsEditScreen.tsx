@@ -61,6 +61,7 @@ export function AdsEditScreen() {
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [pickingImage, setPickingImage] = useState(false);
   const [status, setStatus] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -118,6 +119,8 @@ export function AdsEditScreen() {
   const adPrice = formatAdPricePerUnit(priceCents ?? undefined, priceCurrency);
 
   const pickImage = async () => {
+    if (pickingImage || busy) return;
+    setPickingImage(true);
     try {
       const picked = await pickAdImageFromLibrary();
       if (picked) {
@@ -127,6 +130,8 @@ export function AdsEditScreen() {
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not use that image.';
       Alert.alert('Upload image', message);
+    } finally {
+      setPickingImage(false);
     }
   };
 
@@ -235,8 +240,14 @@ export function AdsEditScreen() {
           <TextInput placeholder="https://…" value={cta} onChangeText={setCta} style={inp()} autoCapitalize="none" />
 
           <Text style={label()}>Ad image (optional)</Text>
-          <Pressable onPress={() => void pickImage()} style={styles.uploadButton}>
-            <Text style={styles.uploadButtonText}>{displayImageUri ? 'Change image' : 'Upload image'}</Text>
+          <Pressable
+            onPress={() => void pickImage()}
+            disabled={pickingImage || busy}
+            style={[styles.uploadButton, (pickingImage || busy) && styles.uploadButtonDisabled]}
+          >
+            <Text style={styles.uploadButtonText}>
+              {pickingImage ? 'Opening gallery…' : displayImageUri ? 'Change image' : 'Upload image'}
+            </Text>
           </Pressable>
           {displayImageUri ? (
             <View style={{ marginTop: spacing.sm }}>
@@ -358,6 +369,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: spacing.md,
     backgroundColor: colors.surface,
+  },
+  uploadButtonDisabled: {
+    opacity: 0.6,
   },
   uploadButtonText: {
     color: colors.primary[700],

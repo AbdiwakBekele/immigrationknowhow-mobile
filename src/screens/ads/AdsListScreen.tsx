@@ -30,6 +30,7 @@ import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
 import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
 import { IAP_DISPLAY_PRICES_CENTS } from '../../config/iapCatalog';
 import * as adsApi from '../../api/adsApi';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
 import { purchaseAdPublish } from '../../services/appleIapService';
 import { PRICING_LABELS } from '../../config/pricingLabels';
 import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
@@ -164,8 +165,11 @@ export function AdsListScreen() {
         return;
       }
       const checkoutUrl = res.data?.checkout_url;
-      if (checkoutUrl) {
-        navigation.navigate('StripeCheckout', { checkoutUrl, variant: 'default', adUuid: item.uuid });
+      const safeUrl = resolveSafeStripeCheckoutUrl(checkoutUrl);
+      if (safeUrl) {
+        navigation.navigate('StripeCheckout', { checkoutUrl: safeUrl, variant: 'default', adUuid: item.uuid });
+      } else if (checkoutUrl) {
+        alertPaymentsUnavailable();
       }
     } catch (e) {
       if (e instanceof Error && e.message === 'Purchase cancelled.') {

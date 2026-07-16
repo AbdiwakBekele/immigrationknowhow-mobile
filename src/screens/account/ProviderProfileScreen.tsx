@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,6 +20,7 @@ import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import { DeleteAccountSection } from '../../components/account/DeleteAccountSection';
 import { RoleAccountSection } from '../../components/account/RoleAccountSection';
 import * as rolesApi from '../../api/rolesApi';
+import { pickProfileAvatarFromLibrary } from '../../utils/profileAvatarPicker';
 
 export function ProviderProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList, 'ProfileHome'>>();
@@ -156,30 +156,17 @@ export function ProviderProfileScreen() {
   };
 
   const onPickAvatar = async () => {
+    if (avatarBusy) return;
     setAvatarBusy(true);
     setSaveMessage(null);
     setError(null);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-        legacy: false,
-      });
-      if (result.canceled || !result.assets?.length) {
-        setAvatarBusy(false);
+      const picked = await pickProfileAvatarFromLibrary();
+      if (!picked) {
         return;
       }
 
-      const asset = result.assets[0];
-      const res = await profileApi.uploadAvatar({
-        uri: asset.uri,
-        name: asset.fileName?.trim() || `avatar-${Date.now()}.jpg`,
-        type: asset.mimeType?.trim() || 'image/jpeg',
-        file: (asset as { file?: Blob }).file,
-      });
-      setAvatarBusy(false);
+      const res = await profileApi.uploadAvatar(picked);
       if (!res.success) {
         setError(friendlyApiErrorMessage(res));
         return;
@@ -188,9 +175,10 @@ export function ProviderProfileScreen() {
       setSaveMessage('Profile photo updated');
       await refreshMe();
     } catch (err) {
-      setAvatarBusy(false);
       const message = err instanceof Error ? err.message : 'Unable to pick a photo right now.';
       setError(message);
+    } finally {
+      setAvatarBusy(false);
     }
   };
 
