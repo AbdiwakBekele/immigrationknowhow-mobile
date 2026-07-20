@@ -448,6 +448,7 @@ export function SeekerDashboardScreen() {
           <ActionCard title="Find providers" subtitle="Search for services" onPress={openProvidersList} />
           <ActionCard title="Messages" subtitle={`${unreadMessages} unread`} badge={unreadBadge} onPress={() => navigation.navigate('Messages')} />
           <ActionCard title="Library" subtitle="E-books & audiobooks" onPress={() => navigation.navigate('Discover', { screen: 'Library' })} />
+          <ActionCard title="DV Lottery" subtitle="Official program info" onPress={() => navigation.navigate('Discover', { screen: 'DvLottery' })} />
           <ActionCard title="Profile" subtitle="Update your info" onPress={() => navigation.navigate('Profile')} />
           <ActionCard title="Community" subtitle="Join discussions" onPress={() => navigation.navigate('Discover', { screen: 'Community' })} />
           <ActionCard

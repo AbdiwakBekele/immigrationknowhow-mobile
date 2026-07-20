@@ -16,7 +16,6 @@ import {
   drawerBrandStyles,
   drawerScrollPadding,
 } from '../components/drawer/DrawerCollapsibleSection';
-import { useDvLottery } from '../context/DvLotteryContext';
 import { useAuth } from '../context/AuthContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -29,7 +28,6 @@ const Drawer = createDrawerNavigator<ProviderDrawerParamList>();
 function ProviderDrawerContent(props: DrawerContentComponentProps) {
   const { navigation } = props;
   const insets = useSafeAreaInsets();
-  const { showInMenu: dvInMenu } = useDvLottery();
   const { user } = useAuth();
 
   const goMain = (screen: keyof ProviderBottomTabParamList) => {
@@ -148,9 +146,7 @@ function ProviderDrawerContent(props: DrawerContentComponentProps) {
         </DrawerCollapsibleSection>
 
         <DrawerCollapsibleSection title="Hub & tools" defaultOpen>
-          {dvInMenu ? (
-            <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goHub('DvLottery')} indent />
-          ) : null}
+          <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goHub('DvLottery')} indent />
           <DrawerGradientLink icon="library-outline" label="My Library" onPress={() => goHub('Library')} indent />
           <DrawerGradientLink icon="megaphone-outline" label="My Ads" onPress={() => goHub('Ads')} indent />
           <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goHub('Community')} indent />
