@@ -39,7 +39,7 @@ export function DvLotteryProvider({ children }: { children: React.ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const showInMenu = !!content?.show_in_menu;
+  const showInMenu = content?.show_in_menu !== false;
 
   const value = useMemo(
     () => ({ loading, content, showInMenu, error, refresh }),

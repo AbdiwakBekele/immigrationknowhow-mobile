@@ -17,7 +17,7 @@ import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const CARD_GAP = spacing.md;
 const NUM_COLUMNS = 2;
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
 function extractBrowsePage(payload: any): { items: any[]; page: number; lastPage: number; total: number } {
   const bucket = payload?.items;

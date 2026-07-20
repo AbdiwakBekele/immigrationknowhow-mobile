@@ -22,7 +22,7 @@ export async function getLibraryItem(slug: string): Promise<ApiResponse<any>> {
 export async function getMyLibrary(
   section: 'purchased' | 'available',
   page = 1,
-  perPage = 50,
+  perPage = 100,
 ): Promise<ApiResponse<any>> {
   try {
     const res = await apiClient.get('/api/mobile/library/my', {

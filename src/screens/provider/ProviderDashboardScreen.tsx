@@ -599,6 +599,7 @@ export function ProviderDashboardScreen() {
         <Card>
           <QuickLink label="My profile" onPress={() => navigation.navigate('Profile')} />
           <QuickLink label="My library" onPress={() => navigation.navigate('ProviderHub', { screen: 'Library' })} />
+          <QuickLink label="DV Lottery" onPress={() => navigation.navigate('ProviderHub', { screen: 'DvLottery' })} />
           <QuickLink label="Edit listing details" onPress={() => navigation.navigate('Profile')} />
           {needsCertificateUpload && requiresCertificateUpload ? (
             <QuickLink label="Upload certificate" onPress={() => navigation.navigate('Profile')} highlight />

@@ -16,7 +16,6 @@ import {
   drawerBrandStyles,
   drawerScrollPadding,
 } from '../components/drawer/DrawerCollapsibleSection';
-import { useDvLottery } from '../context/DvLotteryContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 export type SeekerDrawerParamList = {
@@ -28,7 +27,6 @@ const Drawer = createDrawerNavigator<SeekerDrawerParamList>();
 function SeekerDrawerContent(props: DrawerContentComponentProps) {
   const { navigation } = props;
   const insets = useSafeAreaInsets();
-  const { showInMenu: dvInMenu } = useDvLottery();
 
   const goMain = (screen: keyof SeekerBottomTabParamList) => {
     navigation.dispatch(CommonActions.navigate({ name: 'Main', params: { screen } }));
@@ -100,9 +98,7 @@ function SeekerDrawerContent(props: DrawerContentComponentProps) {
         </DrawerCollapsibleSection>
 
         <DrawerCollapsibleSection title="Discover" defaultOpen>
-          {dvInMenu ? (
-            <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
-          ) : null}
+          <DrawerGradientLink icon="earth-outline" label="DV Lottery" onPress={() => goDiscover('DvLottery')} indent />
           <DrawerGradientLink icon="library-outline" label="My Library" onPress={() => goDiscover('Library')} indent />
           <DrawerGradientLink icon="play-circle-outline" label="Videos" onPress={() => goDiscover('Videos')} indent />
           <DrawerGradientLink icon="people-outline" label="Community" onPress={() => goDiscover('Community')} indent />

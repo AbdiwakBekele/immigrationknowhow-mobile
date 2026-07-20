@@ -30,8 +30,9 @@ import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const CARD_GAP = spacing.md;
 const NUM_COLUMNS = 2;
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
+type LibraryTab = 'all' | 'purchased' | 'available';
 type LibraryFilter = 'all' | 'ebook' | 'audio' | `category:${string}`;
 
 function matchesFilter(item: any, filter: LibraryFilter): boolean {
@@ -45,13 +46,26 @@ function matchesFilter(item: any, filter: LibraryFilter): boolean {
   return true;
 }
 
-function extractMyPage(payload: any, tab: 'purchased' | 'available') {
-  const raw = payload?.section === tab ? payload?.items : payload?.items;
+function extractMyPage(payload: any) {
+  const raw = payload?.items;
   const items = Array.isArray(raw?.data) ? raw.data : [];
   return {
     items,
     page: Number(raw?.current_page ?? 1),
     lastPage: Number(raw?.last_page ?? 1),
+    total: Number(raw?.total ?? items.length),
+  };
+}
+
+function extractBrowsePage(payload: any) {
+  const bucket = payload?.items;
+  const items = Array.isArray(bucket?.data) ? bucket.data : [];
+  const meta = bucket?.meta ?? {};
+  return {
+    items,
+    page: Number(meta.current_page ?? 1),
+    lastPage: Number(meta.last_page ?? 1),
+    total: Number(meta.total ?? items.length),
   };
 }
 
@@ -59,12 +73,13 @@ export function LibraryMyScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
   const { role } = useAuth();
   const isProvider = role === 'provider';
-  const [tab, setTab] = useState<'purchased' | 'available'>('available');
+  const [tab, setTab] = useState<LibraryTab>('all');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [items, setItems] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [filterOpen, setFilterOpen] = useState(false);
@@ -82,7 +97,10 @@ export function LibraryMyScreen() {
       setLoading(true);
     }
 
-    const res = await libraryApi.getMyLibrary(tab, nextPage, PAGE_SIZE);
+    const res =
+      tab === 'all'
+        ? await libraryApi.browseLibrary({ per_page: PAGE_SIZE, page: nextPage })
+        : await libraryApi.getMyLibrary(tab, nextPage, PAGE_SIZE);
 
     if (append) {
       loadingMoreRef.current = false;
@@ -93,9 +111,10 @@ export function LibraryMyScreen() {
 
     if (!res.success) return;
 
-    const parsed = extractMyPage(res.data, tab);
+    const parsed = tab === 'all' ? extractBrowsePage(res.data) : extractMyPage(res.data);
     setPage(parsed.page);
     setLastPage(parsed.lastPage);
+    setTotal(parsed.total);
     setItems((prev) => {
       if (!append) return parsed.items;
       const seen = new Set(prev.map((item) => String(item.slug ?? item.id)));
@@ -107,6 +126,7 @@ export function LibraryMyScreen() {
     useCallback(() => {
       setPage(1);
       setLastPage(1);
+      setTotal(0);
       void load(1, false);
     }, [tab]),
   );
@@ -150,11 +170,22 @@ export function LibraryMyScreen() {
       ? 'No titles match your search or filter.'
       : tab === 'purchased'
         ? 'No purchased titles yet.'
-        : 'No titles available right now.';
+        : tab === 'available'
+          ? 'No unpurchased titles right now.'
+          : 'No titles available right now.';
 
-  return (
-    <AppScreen style={{ paddingHorizontal: isProvider ? spacing.lg : spacing.xl, paddingBottom: spacing.xl }}>
+  const listHeader = (
+    <>
       <View style={s.tabRow}>
+        <Pressable
+          onPress={() => {
+            setTab('all');
+            setFilter('all');
+          }}
+          style={[s.tab, tab === 'all' && s.tabActive]}
+        >
+          <Text style={[s.tabText, tab === 'all' && s.tabTextActive]}>All books</Text>
+        </Pressable>
         <Pressable
           onPress={() => {
             setTab('available');
@@ -201,29 +232,54 @@ export function LibraryMyScreen() {
         </Pressable>
       </View>
       {filter !== 'all' ? <Text style={s.filterSummary}>Showing: {activeFilterLabel}</Text> : null}
+      {!loading && total > 0 ? (
+        <Text style={s.countText}>
+          Showing {visibleItems.length} of {total} title{total === 1 ? '' : 's'}
+        </Text>
+      ) : null}
+    </>
+  );
+
+  return (
+    <AppScreen style={{ flex: 1, paddingHorizontal: isProvider ? spacing.lg : spacing.xl, paddingBottom: spacing.xl }}>
       {loading ? (
-        <ActivityIndicator style={{ marginTop: spacing['3xl'] }} color={colors.primary[600]} />
+        <>
+          {listHeader}
+          <ActivityIndicator style={{ marginTop: spacing['3xl'] }} color={colors.primary[600]} />
+        </>
       ) : visibleItems.length === 0 ? (
-        <View style={s.empty}>
-          <Text style={s.emptyText}>{emptyMessage}</Text>
-        </View>
+        <>
+          {listHeader}
+          <View style={s.empty}>
+            <Text style={s.emptyText}>{emptyMessage}</Text>
+          </View>
+        </>
       ) : (
         <FlatList
-          style={{ marginTop: spacing.lg }}
+          style={{ flex: 1 }}
           data={visibleItems}
           numColumns={isProvider ? 1 : NUM_COLUMNS}
           key={isProvider ? 'list' : 'grid'}
           columnWrapperStyle={isProvider ? undefined : { gap: CARD_GAP }}
-          contentContainerStyle={isProvider ? s.listContent : undefined}
+          contentContainerStyle={isProvider ? s.listContent : { paddingBottom: spacing.xl }}
           keyExtractor={(it) => String(it.slug ?? it.id)}
-          onEndReachedThreshold={0.4}
+          ListHeaderComponent={listHeader}
+          onEndReachedThreshold={0.3}
           onEndReached={() => {
-            if (page < lastPage) void load(page + 1, true);
+            if (page < lastPage && !loadingMore) void load(page + 1, true);
           }}
           ListFooterComponent={
-            loadingMore ? (
-              <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary[600]} />
-            ) : null
+            <View style={s.footer}>
+              {loadingMore ? (
+                <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary[600]} />
+              ) : null}
+              {!loadingMore && page < lastPage ? (
+                <Text style={s.loadMoreHint}>Scroll down to load more</Text>
+              ) : null}
+              {!loadingMore && page >= lastPage && total > 0 ? (
+                <Text style={s.loadMoreHint}>All {total} titles loaded</Text>
+              ) : null}
+            </View>
           }
           renderItem={({ item }) => {
             const cover = resolveMediaUrl(item.cover_image_url);
@@ -233,7 +289,7 @@ export function LibraryMyScreen() {
                 coverUri={cover}
                 variant={isProvider ? 'compact' : 'grid'}
                 width={isProvider ? undefined : cardWidth}
-                owned={tab === 'purchased'}
+                owned={tab === 'purchased' || Boolean(item.has_access)}
                 onPress={() => item.slug && navigation.navigate('LibraryDetail', { slug: item.slug })}
               />
             );
@@ -307,6 +363,12 @@ const s = StyleSheet.create({
   listContent: {
     gap: spacing.sm,
   },
+  countText: {
+    marginTop: spacing.sm,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.muted,
+    fontWeight: typography.fontWeight.medium,
+  },
   searchInputWrap: {
     flex: 1,
     flexDirection: 'row',
@@ -353,6 +415,17 @@ const s = StyleSheet.create({
     marginTop: spacing.sm,
     fontSize: typography.fontSize.xs,
     color: colors.text.secondary,
+  },
+  footer: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  loadMoreHint: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    textAlign: 'center',
   },
   modalBackdrop: {
     flex: 1,
