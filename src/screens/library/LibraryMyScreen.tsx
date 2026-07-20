@@ -19,7 +19,6 @@ import {
   libraryItemHasAudio,
   libraryItemHasPdf,
 } from '../../components/library/LibraryBookCard';
-import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -71,8 +70,6 @@ function extractBrowsePage(payload: any) {
 
 export function LibraryMyScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
-  const { role } = useAuth();
-  const isProvider = role === 'provider';
   const [tab, setTab] = useState<LibraryTab>('all');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -241,7 +238,7 @@ export function LibraryMyScreen() {
   );
 
   return (
-    <AppScreen style={{ flex: 1, paddingHorizontal: isProvider ? spacing.lg : spacing.xl, paddingBottom: spacing.xl }}>
+    <AppScreen style={{ flex: 1, paddingHorizontal: spacing.xl, paddingBottom: spacing.xl }}>
       {loading ? (
         <>
           {listHeader}
@@ -258,25 +255,34 @@ export function LibraryMyScreen() {
         <FlatList
           style={{ flex: 1 }}
           data={visibleItems}
-          numColumns={isProvider ? 1 : NUM_COLUMNS}
-          key={isProvider ? 'list' : 'grid'}
-          columnWrapperStyle={isProvider ? undefined : { gap: CARD_GAP }}
-          contentContainerStyle={isProvider ? s.listContent : { paddingBottom: spacing.xl }}
+          numColumns={NUM_COLUMNS}
+          key="library-grid"
+          columnWrapperStyle={{ gap: CARD_GAP }}
+          contentContainerStyle={{ paddingBottom: spacing.xl }}
           keyExtractor={(it) => String(it.slug ?? it.id)}
           ListHeaderComponent={listHeader}
-          onEndReachedThreshold={0.3}
+          // Same catalog on iOS + Android; avoid clipped rows that skip onEndReached on Android grids.
+          removeClippedSubviews={false}
+          onEndReachedThreshold={0.2}
           onEndReached={() => {
-            if (page < lastPage && !loadingMore) void load(page + 1, true);
+            if (page < lastPage && !loadingMoreRef.current) void load(page + 1, true);
           }}
           ListFooterComponent={
             <View style={s.footer}>
               {loadingMore ? (
                 <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary[600]} />
-              ) : null}
-              {!loadingMore && page < lastPage ? (
-                <Text style={s.loadMoreHint}>Scroll down to load more</Text>
-              ) : null}
-              {!loadingMore && page >= lastPage && total > 0 ? (
+              ) : page < lastPage ? (
+                <Pressable
+                  style={s.loadMoreButton}
+                  onPress={() => {
+                    if (!loadingMoreRef.current) void load(page + 1, true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Load more books"
+                >
+                  <Text style={s.loadMoreText}>Load more books</Text>
+                </Pressable>
+              ) : total > 0 ? (
                 <Text style={s.loadMoreHint}>All {total} titles loaded</Text>
               ) : null}
             </View>
@@ -287,14 +293,14 @@ export function LibraryMyScreen() {
               <LibraryBookCard
                 item={item}
                 coverUri={cover}
-                variant={isProvider ? 'compact' : 'grid'}
-                width={isProvider ? undefined : cardWidth}
+                variant="grid"
+                width={cardWidth}
                 owned={tab === 'purchased' || Boolean(item.has_access)}
                 onPress={() => item.slug && navigation.navigate('LibraryDetail', { slug: item.slug })}
               />
             );
           }}
-          ItemSeparatorComponent={() => <View style={{ height: isProvider ? spacing.sm : CARD_GAP }} />}
+          ItemSeparatorComponent={() => <View style={{ height: CARD_GAP }} />}
         />
       )}
       <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
@@ -360,9 +366,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  listContent: {
-    gap: spacing.sm,
-  },
   countText: {
     marginTop: spacing.sm,
     fontSize: typography.fontSize.xs,
@@ -420,6 +423,19 @@ const s = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
     alignItems: 'center',
+  },
+  loadMoreButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[50] ?? '#EFF6FF',
+  },
+  loadMoreText: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.sm,
   },
   loadMoreHint: {
     color: colors.text.muted,

@@ -80,7 +80,7 @@ function GuestLibraryCard({
   );
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
 export function GuestLibraryScreen() {
   const { goSignIn, goSignUp } = useGuestActions();
@@ -280,13 +280,25 @@ export function GuestLibraryScreen() {
         keyExtractor={(item) => item.slug}
         ListHeaderComponent={listHeader}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load({ page: 1, refresh: true })} />}
-        onEndReachedThreshold={0.4}
+        removeClippedSubviews={false}
+        onEndReachedThreshold={0.2}
         onEndReached={() => {
-          if (page < lastPage) void load({ page: page + 1, append: true });
+          if (page < lastPage && !loadingMoreRef.current) void load({ page: page + 1, append: true });
         }}
         ListFooterComponent={
           loadingMore ? (
             <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary[600]} />
+          ) : page < lastPage ? (
+            <Pressable
+              style={styles.loadMoreButton}
+              onPress={() => {
+                if (!loadingMoreRef.current) void load({ page: page + 1, append: true });
+              }}
+            >
+              <Text style={styles.loadMoreText}>Load more books</Text>
+            </Pressable>
+          ) : total > 0 ? (
+            <Text style={styles.loadMoreHint}>All {total} titles loaded</Text>
           ) : null
         }
         renderItem={({ item }) => (
@@ -432,6 +444,28 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing['3xl'] },
   columnWrapper: { gap: CARD_GAP },
   rowGap: { height: CARD_GAP },
+  loadMoreButton: {
+    alignSelf: 'center',
+    marginVertical: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[50] ?? '#EFF6FF',
+  },
+  loadMoreText: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.sm,
+  },
+  loadMoreHint: {
+    textAlign: 'center',
+    marginVertical: spacing.lg,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
   card: {
     borderRadius: radii.lg,
     borderWidth: 1,
