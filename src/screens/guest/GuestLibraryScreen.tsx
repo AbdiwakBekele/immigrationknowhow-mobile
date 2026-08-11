@@ -235,7 +235,14 @@ export function GuestLibraryScreen() {
               style={styles.searchInput}
             />
             {searchDraft.length > 0 ? (
-              <Pressable onPress={() => setSearchDraft('')} hitSlop={8} accessibilityLabel="Clear search">
+              <Pressable
+                onPress={() => {
+                  setSearchDraft('');
+                  setSearch('');
+                }}
+                hitSlop={8}
+                accessibilityLabel="Clear search"
+              >
                 <Ionicons name="close-circle" size={18} color={colors.text.muted} />
               </Pressable>
             ) : null}
@@ -261,6 +268,7 @@ export function GuestLibraryScreen() {
         onClear={() => {
           setFilters(EMPTY_GUEST_LIBRARY_FILTERS);
           setSearchDraft('');
+          setSearch('');
         }}
       />
 

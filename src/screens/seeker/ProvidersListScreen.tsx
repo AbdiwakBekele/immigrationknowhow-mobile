@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -133,7 +133,8 @@ export function ProvidersListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ProviderListItem[]>([]);
-  const [query, setQuery] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [search, setSearch] = useState('');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(route.params?.favoritesOnly === true);
   const [favoriteSlug, setFavoriteSlug] = useState<string | null>(null);
   const [filters, setFilters] = useState<ProviderFilters>(EMPTY_PROVIDER_FILTERS);
@@ -151,6 +152,11 @@ export function ProvidersListScreen() {
   useEffect(() => {
     navigation.setOptions({ title: showFavoritesOnly ? 'Saved' : 'Find Provider' });
   }, [navigation, showFavoritesOnly]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchDraft.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [searchDraft]);
 
   useEffect(() => {
     void (async () => {
@@ -172,6 +178,7 @@ export function ProvidersListScreen() {
       const res = await providersApi.listProviders({
         per_page: 20,
         favorites: showFavoritesOnly || undefined,
+        search: search || undefined,
         ...providerFiltersToQuery(activeFilters),
       });
       if (isRefresh) setRefreshing(false);
@@ -182,7 +189,7 @@ export function ProvidersListScreen() {
       }
       setItems(res.data.providers.data ?? []);
     },
-    [showFavoritesOnly, filters]
+    [showFavoritesOnly, filters, search]
   );
 
   useFocusEffect(
@@ -190,18 +197,6 @@ export function ProvidersListScreen() {
       void load(false);
     }, [load])
   );
-
-  const filteredItems = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => {
-      const title = providerTitle(item);
-      const location = item.location_display || '';
-      const tagline = item.tagline || '';
-      const services = (item.service_types ?? []).join(' ');
-      return [title, location, tagline, services].some((part) => part.toLowerCase().includes(q));
-    });
-  }, [items, query]);
 
   const filtersActive = hasActiveProviderFilters(filters);
 
@@ -258,12 +253,26 @@ export function ProvidersListScreen() {
           <View style={styles.searchWrap}>
             <Ionicons name="search-outline" size={18} color={colors.text.muted} />
             <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder={showFavoritesOnly ? 'Search saved providers...' : 'Search provider name...'}
+              value={searchDraft}
+              onChangeText={setSearchDraft}
+              placeholder={showFavoritesOnly ? 'Search saved providers...' : 'Search by name, city, ZIP...'}
               placeholderTextColor={colors.text.muted}
               style={styles.searchInput}
+              returnKeyType="search"
+              onSubmitEditing={() => setSearch(searchDraft.trim())}
             />
+            {searchDraft.length > 0 ? (
+              <Pressable
+                onPress={() => {
+                  setSearchDraft('');
+                  setSearch('');
+                }}
+                hitSlop={8}
+                accessibilityLabel="Clear search"
+              >
+                <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+              </Pressable>
+            ) : null}
           </View>
           <Pressable
             onPress={openFilters}
@@ -283,7 +292,7 @@ export function ProvidersListScreen() {
 
       <View style={styles.resultsRow}>
         <Text style={styles.resultsText}>
-          {filteredItems.length} result{filteredItems.length === 1 ? '' : 's'}
+          {items.length} result{items.length === 1 ? '' : 's'}
         </Text>
         {showFavoritesOnly ? <Text style={styles.resultsTag}>Saved only</Text> : null}
       </View>
@@ -297,8 +306,9 @@ export function ProvidersListScreen() {
       ) : (
         <FlatList
           style={styles.list}
-          data={filteredItems}
+          data={items}
           keyExtractor={(p) => p.slug}
+          keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} />}
           renderItem={({ item }) => (
             <ProviderRow
@@ -310,7 +320,7 @@ export function ProvidersListScreen() {
           )}
           ListEmptyComponent={
             <Text style={styles.emptyText}>
-              {query.trim()
+              {search
                 ? 'No providers match your search.'
                 : showFavoritesOnly
                   ? 'No saved providers yet.'

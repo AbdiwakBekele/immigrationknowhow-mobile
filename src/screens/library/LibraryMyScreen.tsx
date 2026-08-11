@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -77,7 +77,8 @@ export function LibraryMyScreen() {
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [query, setQuery] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const loadingMoreRef = useRef(false);
@@ -85,7 +86,12 @@ export function LibraryMyScreen() {
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = (screenWidth - spacing.xl * 2 - CARD_GAP) / NUM_COLUMNS;
 
-  const load = async (nextPage = 1, append = false) => {
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchDraft.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [searchDraft]);
+
+  const load = useCallback(async (nextPage = 1, append = false) => {
     if (append) {
       if (loadingMoreRef.current || nextPage > lastPage) return;
       loadingMoreRef.current = true;
@@ -96,8 +102,12 @@ export function LibraryMyScreen() {
 
     const res =
       tab === 'all'
-        ? await libraryApi.browseLibrary({ per_page: PAGE_SIZE, page: nextPage })
-        : await libraryApi.getMyLibrary(tab, nextPage, PAGE_SIZE);
+        ? await libraryApi.browseLibrary({
+            per_page: PAGE_SIZE,
+            page: nextPage,
+            ...(search ? { search } : {}),
+          })
+        : await libraryApi.getMyLibrary(tab, nextPage, PAGE_SIZE, search || undefined);
 
     if (append) {
       loadingMoreRef.current = false;
@@ -117,7 +127,7 @@ export function LibraryMyScreen() {
       const seen = new Set(prev.map((item) => String(item.slug ?? item.id)));
       return [...prev, ...parsed.items.filter((item) => !seen.has(String(item.slug ?? item.id)))];
     });
-  };
+  }, [lastPage, search, tab]);
 
   useFocusEffect(
     useCallback(() => {
@@ -125,7 +135,9 @@ export function LibraryMyScreen() {
       setLastPage(1);
       setTotal(0);
       void load(1, false);
-    }, [tab]),
+      // Reload when tab or server search term changes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab, search]),
   );
 
   const filterOptions = useMemo(() => {
@@ -149,13 +161,8 @@ export function LibraryMyScreen() {
   }, [items]);
 
   const visibleItems = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items.filter((item) => {
-      const title = String(item?.title ?? '').toLowerCase();
-      const searchMatch = q === '' || title.includes(q);
-      return searchMatch && matchesFilter(item, filter);
-    });
-  }, [items, query, filter]);
+    return items.filter((item) => matchesFilter(item, filter));
+  }, [items, filter]);
 
   const activeFilterLabel = useMemo(
     () => filterOptions.find((option) => option.key === filter)?.label ?? 'All',
@@ -163,7 +170,7 @@ export function LibraryMyScreen() {
   );
 
   const emptyMessage =
-    query.trim() !== '' || filter !== 'all'
+    search !== '' || filter !== 'all'
       ? 'No titles match your search or filter.'
       : tab === 'purchased'
         ? 'No purchased titles yet.'
@@ -206,13 +213,27 @@ export function LibraryMyScreen() {
         <View style={s.searchInputWrap}>
           <Ionicons name="search-outline" size={18} color={colors.text.muted} />
           <TextInput
-            value={query}
-            onChangeText={setQuery}
+            value={searchDraft}
+            onChangeText={setSearchDraft}
             placeholder="Search by book name"
             placeholderTextColor={colors.text.muted}
             autoCapitalize="none"
+            returnKeyType="search"
+            onSubmitEditing={() => setSearch(searchDraft.trim())}
             style={s.searchInput}
           />
+          {searchDraft.length > 0 ? (
+            <Pressable
+              onPress={() => {
+                setSearchDraft('');
+                setSearch('');
+              }}
+              hitSlop={8}
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+            </Pressable>
+          ) : null}
         </View>
         <Pressable
           onPress={() => setFilterOpen(true)}
