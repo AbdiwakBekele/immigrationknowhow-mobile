@@ -182,7 +182,14 @@ export function GuestProvidersScreen() {
               returnKeyType="search"
             />
             {searchDraft.length > 0 ? (
-              <Pressable onPress={() => setSearchDraft('')} hitSlop={8} accessibilityLabel="Clear search">
+              <Pressable
+                onPress={() => {
+                  setSearchDraft('');
+                  setSearch('');
+                }}
+                hitSlop={8}
+                accessibilityLabel="Clear search"
+              >
                 <Ionicons name="close-circle" size={18} color={colors.text.muted} />
               </Pressable>
             ) : null}
@@ -208,6 +215,7 @@ export function GuestProvidersScreen() {
         onClear={() => {
           setFilters(EMPTY_PROVIDER_FILTERS);
           setSearchDraft('');
+          setSearch('');
         }}
       />
 

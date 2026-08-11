@@ -143,7 +143,15 @@ export function MessagesListScreen() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return groupedItems;
-    return groupedItems.filter((group) => group.title.toLowerCase().includes(q));
+    return groupedItems.filter((group) => {
+      const titleMatch = group.title.toLowerCase().includes(q);
+      if (titleMatch) return true;
+      return group.conversations.some((conversation) => {
+        const subject = String(conversation.subject ?? '').toLowerCase();
+        const preview = String(conversation.latest_message?.body ?? '').toLowerCase();
+        return subject.includes(q) || preview.includes(q);
+      });
+    });
   }, [groupedItems, search]);
 
   useLayoutEffect(() => {
@@ -170,6 +178,11 @@ export function MessagesListScreen() {
         placeholderTextColor={colors.text.muted}
         style={styles.searchInput}
       />
+      {search.length > 0 ? (
+        <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+          <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 
