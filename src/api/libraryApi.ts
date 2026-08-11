@@ -23,10 +23,16 @@ export async function getMyLibrary(
   section: 'purchased' | 'available',
   page = 1,
   perPage = 100,
+  search?: string,
 ): Promise<ApiResponse<any>> {
   try {
     const res = await apiClient.get('/api/mobile/library/my', {
-      params: { section, page, per_page: perPage },
+      params: {
+        section,
+        page,
+        per_page: perPage,
+        ...(search?.trim() ? { search: search.trim() } : {}),
+      },
     });
     return { success: true, message: res.data?.message ?? 'OK', data: res.data?.data };
   } catch (e) {
