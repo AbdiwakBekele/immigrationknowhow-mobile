@@ -17,6 +17,8 @@ import { WebView } from 'react-native-webview';
 import type { WebViewNavigation } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { EbookShareSheet } from '../../components/library/EbookShareSheet';
+import { EbookShareDetailCard } from '../../components/library/EbookShareDetailCard';
 import { AppScreen } from '../../components/AppScreen';
 import { formatLibraryPrice } from '../../components/library/LibraryBookCard';
 import { LibraryCover } from '../../components/library/LibraryCover';
@@ -278,6 +280,7 @@ export function LibraryDetailScreen() {
   const [webViewLoading, setWebViewLoading] = useState(true);
   const [buyingFree, setBuyingFree] = useState(false);
   const [redeemingCoupon, setRedeemingCoupon] = useState(false);
+  const [shareSheetVisible, setShareSheetVisible] = useState(false);
   const webViewRef = useRef<WebView>(null);
 
   const load = async () => {
@@ -773,6 +776,12 @@ render();
   }
 
   const item = data?.item;
+  const shareCampaign = data?.share_campaign;
+  const canShareForReward =
+    item?.type === 'ebook' && shareCampaign?.can_start === true && shareCampaign?.rewarded !== true;
+  const bookAlreadyShared = Array.isArray(shareCampaign?.events)
+    ? shareCampaign.events.some((event: any) => event.slug === slug && event.status === 'confirmed')
+    : false;
   const hasAccess = !!data?.has_access;
   const requiresPaid = !!data?.requires_paid_access;
   const isPaid = requiresPaid || Boolean(item?.is_premium) || Number(item?.price || 0) > 0;
@@ -910,6 +919,16 @@ render();
 
         {!isProvider ? <View style={s.actionCard}>{actionBlock}</View> : null}
 
+        {canShareForReward ? (
+          <EbookShareDetailCard
+            confirmedShares={shareCampaign?.confirmed_shares || 0}
+            requiredShares={shareCampaign?.required_shares || 5}
+            bookAlreadyShared={bookAlreadyShared}
+            onShare={() => setShareSheetVisible(true)}
+            onViewCampaign={() => navigation.navigate('EbookShareCampaign')}
+          />
+        ) : null}
+
         {providerDetailRows.length > 0 ? (
           <View style={[s.detailCard, isProvider && s.detailCardCompact]}>
             {!isProvider ? <Text style={s.sectionTitle}>Details</Text> : null}
@@ -961,6 +980,16 @@ render();
           {actionBlock}
         </View>
       ) : null}
+
+      <EbookShareSheet
+        visible={shareSheetVisible}
+        slug={slug}
+        title={item?.title || slug}
+        onClose={() => setShareSheetVisible(false)}
+        onUpdated={(campaign) => {
+          setData((prev: any) => (prev ? { ...prev, share_campaign: campaign } : prev));
+        }}
+      />
     </AppScreen>
   );
 }
