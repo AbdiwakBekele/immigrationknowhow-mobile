@@ -24,6 +24,8 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { radii } from '../../theme/layout';
 import * as libraryApi from '../../api/libraryApi';
+import * as ebookShareApi from '../../api/ebookShareApi';
+import { EbookShareCampaignBanner } from '../../components/library/EbookShareCampaignBanner';
 import type { LibraryStackParamList } from './LibraryStack';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
@@ -81,6 +83,7 @@ export function LibraryMyScreen() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [shareCampaign, setShareCampaign] = useState<any>(null);
   const loadingMoreRef = useRef(false);
 
   const screenWidth = Dimensions.get('window').width;
@@ -135,6 +138,9 @@ export function LibraryMyScreen() {
       setLastPage(1);
       setTotal(0);
       void load(1, false);
+      void ebookShareApi.getShareCampaign().then((res) => {
+        if (res.success) setShareCampaign(res.data);
+      });
       // Reload when tab or server search term changes.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab, search]),
@@ -180,6 +186,12 @@ export function LibraryMyScreen() {
 
   const listHeader = (
     <>
+      {(shareCampaign?.eligible && (shareCampaign?.can_start || (shareCampaign?.rewarded && shareCampaign?.coupon_code))) ? (
+        <EbookShareCampaignBanner
+          campaign={shareCampaign}
+          onPress={() => navigation.navigate('EbookShareCampaign')}
+        />
+      ) : null}
       <View style={s.tabRow}>
         <Pressable
           onPress={() => {
