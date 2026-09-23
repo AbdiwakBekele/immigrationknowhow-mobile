@@ -131,6 +131,7 @@ function DetailActionBlock({
   redeemingCoupon,
   appleBillingReady,
   couponAvailable,
+  availableInRegion,
   onRead,
   onPay,
   onFree,
@@ -146,6 +147,7 @@ function DetailActionBlock({
   redeemingCoupon: boolean;
   appleBillingReady: boolean;
   couponAvailable: boolean;
+  availableInRegion: boolean;
   onRead: () => void;
   onPay: () => void;
   onFree: () => void;
@@ -153,6 +155,17 @@ function DetailActionBlock({
   compact?: boolean;
 }) {
   const price = formatLibraryPrice(item);
+
+  if (!availableInRegion && !hasAccess) {
+    return (
+      <View style={[s.regionBlocked, compact && s.regionBlockedCompact]}>
+        <Ionicons name="globe-outline" size={20} color={colors.text.muted} />
+        <Text style={[s.regionBlockedText, compact && s.regionBlockedTextCompact]}>
+          This title is not available in your region.
+        </Text>
+      </View>
+    );
+  }
 
   if (hasAccess) {
     return (
@@ -273,6 +286,7 @@ export function LibraryDetailScreen() {
   const isProvider = role === 'provider';
   const { slug } = route.params;
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<any>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
@@ -285,9 +299,15 @@ export function LibraryDetailScreen() {
 
   const load = async () => {
     setLoading(true);
+    setError(null);
     const res = await libraryApi.getLibraryItem(slug);
     setLoading(false);
-    if (res.success) setData(res.data);
+    if (res.success) {
+      setData(res.data);
+      return;
+    }
+    setData(null);
+    setError(res.message || 'Could not load this title.');
   };
 
   useFocusEffect(
@@ -775,14 +795,33 @@ render();
     );
   }
 
-  const item = data?.item;
+  if (error || !data?.item) {
+    return (
+      <AppScreen style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl }}>
+        <Ionicons name="alert-circle-outline" size={40} color={colors.text.muted} />
+        <Text style={{ marginTop: spacing.md, fontSize: typography.fontSize.md, color: colors.text.secondary, textAlign: 'center' }}>
+          {error || 'This title could not be found.'}
+        </Text>
+        <Pressable onPress={() => void load()} style={{ marginTop: spacing.lg }}>
+          <Text style={{ fontSize: typography.fontSize.sm, fontWeight: typography.fontWeight.semibold, color: colors.primary[600] }}>
+            Try again
+          </Text>
+        </Pressable>
+      </AppScreen>
+    );
+  }
+
+  const item = data.item;
   const shareCampaign = data?.share_campaign;
+  const hasAccess = !!data?.has_access;
+  const availableInRegion = data?.available_in_region !== false;
   const canShareForReward =
-    item?.type === 'ebook' && shareCampaign?.can_start === true && shareCampaign?.rewarded !== true;
+    item?.type === 'ebook' &&
+    shareCampaign?.can_start === true &&
+    shareCampaign?.rewarded !== true;
   const bookAlreadyShared = Array.isArray(shareCampaign?.events)
     ? shareCampaign.events.some((event: any) => event.slug === slug && event.status === 'confirmed')
     : false;
-  const hasAccess = !!data?.has_access;
   const requiresPaid = !!data?.requires_paid_access;
   const isPaid = requiresPaid || Boolean(item?.is_premium) || Number(item?.price || 0) > 0;
   const cover = resolveMediaUrl(item?.cover_image_url);
@@ -831,6 +870,7 @@ render();
       redeemingCoupon={redeemingCoupon}
       appleBillingReady={appleBillingReady}
       couponAvailable={couponAvailable}
+      availableInRegion={availableInRegion}
       onRead={() => void openReader()}
       onPay={() => void pay()}
       onFree={() => void free()}
@@ -919,16 +959,6 @@ render();
 
         {!isProvider ? <View style={s.actionCard}>{actionBlock}</View> : null}
 
-        {canShareForReward ? (
-          <EbookShareDetailCard
-            confirmedShares={shareCampaign?.confirmed_shares || 0}
-            requiredShares={shareCampaign?.required_shares || 5}
-            bookAlreadyShared={bookAlreadyShared}
-            onShare={() => setShareSheetVisible(true)}
-            onViewCampaign={() => navigation.navigate('EbookShareCampaign')}
-          />
-        ) : null}
-
         {providerDetailRows.length > 0 ? (
           <View style={[s.detailCard, isProvider && s.detailCardCompact]}>
             {!isProvider ? <Text style={s.sectionTitle}>Details</Text> : null}
@@ -970,6 +1000,16 @@ render();
               </Text>
             )}
           </View>
+        ) : null}
+
+        {canShareForReward ? (
+          <EbookShareDetailCard
+            confirmedShares={shareCampaign?.confirmed_shares || 0}
+            requiredShares={shareCampaign?.required_shares || 5}
+            bookAlreadyShared={bookAlreadyShared}
+            onShare={() => setShareSheetVisible(true)}
+            onViewCampaign={() => navigation.navigate('EbookShareCampaign')}
+          />
         ) : null}
 
         <View style={{ height: isProvider ? 100 + insets.bottom : spacing['3xl'] }} />
@@ -1164,6 +1204,30 @@ const s = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: '#065F46',
+  },
+  regionBlocked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  regionBlockedCompact: {
+    justifyContent: 'center',
+  },
+  regionBlockedText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: 20,
+  },
+  regionBlockedTextCompact: {
+    flex: 0,
+    textAlign: 'center',
   },
   priceRow: {
     flexDirection: 'row',
