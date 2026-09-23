@@ -17,6 +17,8 @@ import { WebView } from 'react-native-webview';
 import type { WebViewNavigation } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { EbookShareSheet } from '../../components/library/EbookShareSheet';
+import { EbookShareDetailCard } from '../../components/library/EbookShareDetailCard';
 import { AppScreen } from '../../components/AppScreen';
 import { formatLibraryPrice } from '../../components/library/LibraryBookCard';
 import { LibraryCover } from '../../components/library/LibraryCover';
@@ -28,7 +30,15 @@ import { typography } from '../../theme/typography';
 import { radii } from '../../theme/layout';
 import { shadows } from '../../theme/shadows';
 import * as libraryApi from '../../api/libraryApi';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
+import { purchaseLibraryTitle } from '../../services/appleIapService';
+import { PRICING_LABELS } from '../../config/pricingLabels';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { EbookPurchaseNote } from '../../components/pricing/EbookPurchaseNote';
+import { OneTimePurchaseNote } from '../../components/pricing/OneTimePurchaseNote';
+import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
 import type { LibraryStackParamList } from './LibraryStack';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -58,6 +68,13 @@ function formatReadingTime(minutes: number | null | undefined): string | null {
   if (v < 60) return `${Math.round(v)} min read`;
   const h = v / 60;
   return `${Number.isInteger(h) ? h : h.toFixed(1)} hr read`;
+}
+
+function libraryAddedSuccessMessage(type: string | undefined): string {
+  if (type === 'ebook') {
+    return 'Thank you! The ebook is now in your library. You can start reading anytime.';
+  }
+  return 'Thank you! The audiobook is now in your library. You can start listening anytime.';
 }
 
 function summarizeUrl(value: string | null | undefined): string {
@@ -111,9 +128,13 @@ function DetailActionBlock({
   hasAudioCompanion,
   checkoutLoading,
   buyingFree,
+  redeemingCoupon,
+  appleBillingReady,
+  couponAvailable,
   onRead,
   onPay,
   onFree,
+  onRedeemCoupon,
   compact,
 }: {
   hasAccess: boolean;
@@ -122,9 +143,13 @@ function DetailActionBlock({
   hasAudioCompanion: boolean;
   checkoutLoading: boolean;
   buyingFree: boolean;
+  redeemingCoupon: boolean;
+  appleBillingReady: boolean;
+  couponAvailable: boolean;
   onRead: () => void;
   onPay: () => void;
   onFree: () => void;
+  onRedeemCoupon: () => void;
   compact?: boolean;
 }) {
   const price = formatLibraryPrice(item);
@@ -149,33 +174,78 @@ function DetailActionBlock({
   }
 
   if (isPaid) {
+    const isEbook = item?.type === 'ebook';
+    const payLabel = isEbook ? PRICING_LABELS.buyEbook : `Pay ${price}`;
+
     return (
       <>
         {!compact ? (
-          <View style={s.priceRow}>
-            <View>
-              <Text style={s.priceLabel}>Price</Text>
-              <Text style={s.priceValue}>{price}</Text>
+          isEbook ? (
+            <View style={s.priceRow}>
+              <View style={{ flex: 1 }}>
+                <EbookPurchaseNote
+                  price={Number(item?.price ?? 0)}
+                  currency={item?.currency ?? 'USD'}
+                />
+              </View>
+              <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
             </View>
-            <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
-          </View>
-        ) : null}
-        <Pressable onPress={onPay} style={[s.primaryBtn, compact && s.primaryBtnCompact]} disabled={checkoutLoading}>
-          {checkoutLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Ionicons name="card-outline" size={18} color="#fff" />
-          )}
-          <Text style={s.primaryBtnText}>
-            {checkoutLoading ? 'Starting checkout…' : compact ? `Buy · ${price}` : `Continue to Payment · ${price}`}
-          </Text>
-        </Pressable>
-        {!compact ? (
-          <View style={s.secureNote}>
-            <Ionicons name="shield-checkmark-outline" size={14} color="#059669" />
-            <Text style={s.secureNoteText}>Secure checkout powered by Stripe</Text>
+            <View style={s.priceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.priceLabel}>Price</Text>
+                <Text style={s.priceValue}>{price}</Text>
+                <OneTimePurchaseNote />
+              </View>
+              <Ionicons name="lock-closed-outline" size={22} color={colors.border} />
+            </View>
+          )
+        ) : (
+          <View style={s.compactPriceBlock}>
+            {isEbook ? (
+              <EbookPurchaseNote
+                price={Number(item?.price ?? 0)}
+                currency={item?.currency ?? 'USD'}
+                compact
+                center
+              />
+            ) : (
+              <>
+                <Text style={s.compactPriceValue}>{price}</Text>
+                <OneTimePurchaseNote compact center />
+              </>
+            )}
           </View>
+        )}
+        {couponAvailable ? (
+          <>
+            <Pressable
+              onPress={onRedeemCoupon}
+              style={[s.couponBtn, compact && s.couponBtnCompact]}
+              disabled={redeemingCoupon}
+            >
+              {redeemingCoupon ? (
+                <ActivityIndicator size="small" color={colors.primary[700]} />
+              ) : (
+                <Ionicons name="gift-outline" size={18} color={colors.primary[700]} />
+              )}
+              <Text style={s.couponBtnText}>
+                {redeemingCoupon ? 'Redeeming…' : 'Unlock with free signup coupon'}
+              </Text>
+            </Pressable>
+            {!compact ? (
+              <Text style={s.couponHint}>Use the one-time code from your welcome email.</Text>
+            ) : null}
+          </>
         ) : null}
+        <PaymentCtaButton
+          label={!appleBillingReady ? PRICING_LABELS.unavailable : isEbook ? PRICING_LABELS.buyEbook : payLabel}
+          onPress={onPay}
+          disabled={checkoutLoading || !appleBillingReady}
+          loading={checkoutLoading}
+          loadingLabel={PRICING_LABELS.processing}
+          style={[compact && s.primaryBtnCompact]}
+        />
       </>
     );
   }
@@ -209,6 +279,8 @@ export function LibraryDetailScreen() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [webViewLoading, setWebViewLoading] = useState(true);
   const [buyingFree, setBuyingFree] = useState(false);
+  const [redeemingCoupon, setRedeemingCoupon] = useState(false);
+  const [shareSheetVisible, setShareSheetVisible] = useState(false);
   const webViewRef = useRef<WebView>(null);
 
   const load = async () => {
@@ -240,18 +312,89 @@ export function LibraryDetailScreen() {
     navigation.setParams({ slug, readerMode: isReaderMode });
   }, [navigation, slug, isReaderMode]);
 
-  const pay = async () => {
-    setCheckoutLoading(true);
-    const res = await libraryApi.libraryStripeCheckout(slug);
-    setCheckoutLoading(false);
-    if (!res.success) {
-      Alert.alert('Checkout', res.message);
+  useEffect(() => {
+    if (data?.item?.type !== 'ebook' || data?.item?.ai_summary) {
       return;
     }
-    const url = res.data?.checkout_url;
-    if (url) {
-      setWebViewLoading(true);
-      setCheckoutUrl(url);
+
+    const interval = setInterval(async () => {
+      const res = await libraryApi.getLibraryItem(slug);
+      if (res.success && res.data?.item?.ai_summary) {
+        setData(res.data);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [slug, data?.item?.type, data?.item?.ai_summary]);
+
+  const useAppleIap = shouldUseAppleIap();
+  const appleProductId =
+    typeof data?.apple_product_id === 'string' && data.apple_product_id.trim() !== ''
+      ? data.apple_product_id.trim()
+      : null;
+  const couponAvailable = data?.ebook_coupon_available === true;
+  const itemPriceCents = Math.round(Number(data?.item?.price ?? 0) * 100);
+  const appleBillingReady = isPaidBillingAvailable({
+    priceCents: itemPriceCents,
+    appleProductId,
+    appleIapConfigured: data?.apple_iap_configured === true,
+    stripeReady: data?.stripe_configured,
+  });
+
+  const pay = async () => {
+    if (checkoutLoading) return;
+
+    setCheckoutLoading(true);
+    try {
+      if (useAppleIap) {
+        if (!appleBillingReady) {
+          Alert.alert(
+            'Purchase',
+            __DEV__ && !appleProductId
+              ? 'Ebook purchase is not configured.'
+              : PRICING_LABELS.itemUnavailable,
+          );
+          return;
+        }
+        await purchaseLibraryTitle(slug, appleProductId!, itemPriceCents);
+        const refreshed = await libraryApi.getLibraryItem(slug);
+        if (refreshed.success) {
+          setData(refreshed.data);
+        }
+        if (refreshed.success && refreshed.data.has_access) {
+          Alert.alert('Purchase', libraryAddedSuccessMessage(data?.item?.type));
+        } else {
+          Alert.alert(
+            'Purchase',
+            'Purchase completed, but we could not refresh your access. Please tap Restore Purchases or try again.',
+          );
+        }
+        return;
+      }
+
+      const res = await libraryApi.libraryStripeCheckout(slug);
+      if (!res.success) {
+        Alert.alert('Checkout', res.message);
+        return;
+      }
+      const url = res.data?.checkout_url;
+      const safeUrl = resolveSafeStripeCheckoutUrl(url);
+      if (safeUrl) {
+        setWebViewLoading(true);
+        setCheckoutUrl(safeUrl);
+      } else if (url) {
+        alertPaymentsUnavailable();
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message === 'Purchase cancelled.') {
+        return;
+      }
+      const message = mapAppleIapUserMessage(e, 'library-purchase');
+      if (message) {
+        Alert.alert('Purchase', message);
+      }
+    } finally {
+      setCheckoutLoading(false);
     }
   };
 
@@ -261,6 +404,22 @@ export function LibraryDetailScreen() {
     setBuyingFree(false);
     if (!res.success) Alert.alert('Library', res.message);
     else void load();
+  };
+
+  const redeemCoupon = async () => {
+    if (redeemingCoupon) return;
+    setRedeemingCoupon(true);
+    try {
+      const res = await libraryApi.redeemEbookCoupon(slug);
+      if (!res.success) {
+        Alert.alert('Coupon', res.message);
+        return;
+      }
+      await load();
+      Alert.alert('Coupon', libraryAddedSuccessMessage('ebook'));
+    } finally {
+      setRedeemingCoupon(false);
+    }
   };
 
   const openReader = async () => {
@@ -313,6 +472,7 @@ export function LibraryDetailScreen() {
         await libraryApi.libraryConfirmCheckout(slug, sessionId);
       }
       await load();
+      Alert.alert('Purchase', libraryAddedSuccessMessage(data?.item?.type));
     };
 
     void fulfill();
@@ -616,6 +776,12 @@ render();
   }
 
   const item = data?.item;
+  const shareCampaign = data?.share_campaign;
+  const canShareForReward =
+    item?.type === 'ebook' && shareCampaign?.can_start === true && shareCampaign?.rewarded !== true;
+  const bookAlreadyShared = Array.isArray(shareCampaign?.events)
+    ? shareCampaign.events.some((event: any) => event.slug === slug && event.status === 'confirmed')
+    : false;
   const hasAccess = !!data?.has_access;
   const requiresPaid = !!data?.requires_paid_access;
   const isPaid = requiresPaid || Boolean(item?.is_premium) || Number(item?.price || 0) > 0;
@@ -662,9 +828,13 @@ render();
       hasAudioCompanion={hasAudioCompanion}
       checkoutLoading={checkoutLoading}
       buyingFree={buyingFree}
+      redeemingCoupon={redeemingCoupon}
+      appleBillingReady={appleBillingReady}
+      couponAvailable={couponAvailable}
       onRead={() => void openReader()}
       onPay={() => void pay()}
       onFree={() => void free()}
+      onRedeemCoupon={() => void redeemCoupon()}
       compact={isProvider}
     />
   );
@@ -707,7 +877,20 @@ render();
               </Text>
             ) : null}
             {isProvider && isPaid && !hasAccess ? (
-              <Text style={s.heroPrice}>{formatLibraryPrice(item)}</Text>
+              item?.type === 'ebook' ? (
+                <EbookPurchaseNote
+                  price={Number(item?.price ?? 0)}
+                  currency={item?.currency ?? 'USD'}
+                  compact
+                  center
+                  style={s.heroOneTimeNote}
+                />
+              ) : (
+                <>
+                  <Text style={s.heroPrice}>{formatLibraryPrice(item)}</Text>
+                  <OneTimePurchaseNote compact center style={s.heroOneTimeNote} />
+                </>
+              )
             ) : null}
             {isProvider && hasAccess ? (
               <View style={s.accessBadgeInline}>
@@ -735,6 +918,16 @@ render();
         ) : null}
 
         {!isProvider ? <View style={s.actionCard}>{actionBlock}</View> : null}
+
+        {canShareForReward ? (
+          <EbookShareDetailCard
+            confirmedShares={shareCampaign?.confirmed_shares || 0}
+            requiredShares={shareCampaign?.required_shares || 5}
+            bookAlreadyShared={bookAlreadyShared}
+            onShare={() => setShareSheetVisible(true)}
+            onViewCampaign={() => navigation.navigate('EbookShareCampaign')}
+          />
+        ) : null}
 
         {providerDetailRows.length > 0 ? (
           <View style={[s.detailCard, isProvider && s.detailCardCompact]}>
@@ -766,10 +959,16 @@ render();
           </View>
         ) : null}
 
-        {hasAccess && item?.ai_summary ? (
+        {item?.type === 'ebook' ? (
           <View style={[s.descriptionCard, isProvider && s.descriptionCardCompact]}>
-            <Text style={[s.sectionTitle, isProvider && s.sectionTitleCompact]}>Summary</Text>
-            <Text style={[s.descriptionText, isProvider && s.descriptionTextCompact]}>{item.ai_summary}</Text>
+            <Text style={[s.sectionTitle, isProvider && s.sectionTitleCompact]}>AI Summary</Text>
+            {item.ai_summary ? (
+              <Text style={[s.descriptionText, isProvider && s.descriptionTextCompact]}>{item.ai_summary}</Text>
+            ) : (
+              <Text style={[s.descriptionText, isProvider && s.descriptionTextCompact]}>
+                Summary will appear here when ready.
+              </Text>
+            )}
           </View>
         ) : null}
 
@@ -781,6 +980,16 @@ render();
           {actionBlock}
         </View>
       ) : null}
+
+      <EbookShareSheet
+        visible={shareSheetVisible}
+        slug={slug}
+        title={item?.title || slug}
+        onClose={() => setShareSheetVisible(false)}
+        onUpdated={(campaign) => {
+          setData((prev: any) => (prev ? { ...prev, share_campaign: campaign } : prev));
+        }}
+      />
     </AppScreen>
   );
 }
@@ -981,6 +1190,46 @@ const s = StyleSheet.create({
     color: colors.text.primary,
     marginTop: 2,
   },
+  couponBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingVertical: 12,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[200] ?? '#BFDBFE',
+    backgroundColor: colors.primary[50] ?? '#EFF6FF',
+  },
+  couponBtnCompact: {
+    paddingVertical: 10,
+  },
+  couponBtnText: {
+    color: colors.primary[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  couponHint: {
+    marginBottom: spacing.sm,
+    fontSize: 11,
+    color: colors.text.muted,
+    textAlign: 'center',
+  },
+  compactPriceBlock: {
+    marginBottom: spacing.sm,
+    alignItems: 'center',
+  },
+  compactPriceValue: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
+    textAlign: 'center',
+  },
+  heroOneTimeNote: {
+    marginTop: spacing.xs,
+    maxWidth: 280,
+  },
   freeLabel: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
@@ -999,21 +1248,13 @@ const s = StyleSheet.create({
   primaryBtnCompact: {
     paddingVertical: 12,
   },
+  primaryBtnDisabled: {
+    opacity: 0.5,
+  },
   primaryBtnText: {
     color: '#fff',
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-  },
-  secureNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    marginTop: spacing.sm,
-  },
-  secureNoteText: {
-    fontSize: 11,
-    color: colors.text.muted,
   },
   detailCard: {
     marginTop: spacing.lg,

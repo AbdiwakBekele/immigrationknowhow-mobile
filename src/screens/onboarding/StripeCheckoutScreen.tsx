@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,9 +15,16 @@ import { WebView } from 'react-native-webview';
 import type { WebViewNavigation } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import { useAuth } from '../../context/AuthContext';
 import * as adsApi from '../../api/adsApi';
 import * as aiApi from '../../api/aiAssistantApi';
+import * as subApi from '../../api/providerSubscriptionsApi';
+import * as videosApi from '../../api/videosApi';
+import {
+  alertPaymentsUnavailable,
+  resolveSafeStripeCheckoutUrl,
+} from '../../api/paymentApi';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
@@ -29,6 +36,8 @@ export type StripeCheckoutParams = {
   variant?: 'onboarding' | 'default' | 'aiAssistant';
   /** Required for ad checkout — confirms payment via API when WebView intercepts the return URL. */
   adUuid?: string;
+  /** Required for video checkout — confirms payment via API when WebView intercepts the return URL. */
+  videoSlug?: string;
   /** Fallback Stripe session id when the return URL does not include session_id (AI Assistant). */
   checkoutSessionId?: string;
 };
@@ -59,6 +68,12 @@ function isCheckoutSuccess(url: string): boolean {
   if (url.includes('/mobile/ai-assistant/checkout-return') && url.includes('session_id=')) {
     return true;
   }
+  if (url.includes('/mobile/provider-subscription/checkout-return') && url.includes('session_id=')) {
+    return true;
+  }
+  if (url.includes('/mobile/video/checkout-return') && url.includes('session_id=')) {
+    return true;
+  }
   return url.includes('purchase/return') && url.includes('session_id=');
 }
 
@@ -67,6 +82,12 @@ function isCheckoutCancelled(url: string): boolean {
     return true;
   }
   if (url.includes('/mobile/ai-assistant/checkout-return') && url.includes('checkout=cancelled')) {
+    return true;
+  }
+  if (url.includes('/mobile/provider-subscription/checkout-return') && url.includes('checkout=cancelled')) {
+    return true;
+  }
+  if (url.includes('/mobile/video/checkout-return') && url.includes('checkout=cancelled')) {
     return true;
   }
   return url.includes('purchase/cancel');
@@ -96,9 +117,10 @@ async function confirmAiAssistantWithRetry(
     for (const id of uniqueIds) {
       const res = await aiApi.confirmAiAssistantCheckout(id);
       if (isAiAssistantActivated(res)) {
+        const refreshed = await aiApi.getAiAssistant();
         const state =
-          res.data?.state ??
-          (await aiApi.getAiAssistant()).data?.state ??
+          (res.success ? res.data.state : undefined) ??
+          (refreshed.success ? refreshed.data.state : undefined) ??
           ({
             subscription: null,
             is_addon_active: true,
@@ -133,13 +155,40 @@ export function StripeCheckoutScreen() {
   const route = useRoute<ScreenRoute>();
   const navigation = useNavigation<ScreenNav>();
   const insets = useSafeAreaInsets();
-  const webViewRef = useRef<WebView>(null);
-  const handledRef = useRef(false);
+  const isIos = Platform.OS === 'ios';
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [title, setTitle] = useState('Checkout');
+  const [checkoutLoadFailed, setCheckoutLoadFailed] = useState(false);
+  const safeCheckoutUrl = useMemo(
+    () => resolveSafeStripeCheckoutUrl(route.params.checkoutUrl),
+    [route.params.checkoutUrl]
+  );
+
+  useEffect(() => {
+    if (isIos) {
+      Alert.alert(
+        PRICING_LABELS.checkoutUnavailableTitle,
+        PRICING_LABELS.checkoutUnavailableBody,
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
+    }
+  }, [isIos, navigation]);
+
+  useEffect(() => {
+    if (isIos) {
+      return;
+    }
+    if (!safeCheckoutUrl) {
+      alertPaymentsUnavailable();
+      navigation.goBack();
+    }
+  }, [isIos, safeCheckoutUrl, navigation]);
+  const webViewRef = useRef<WebView>(null);
+  const handledRef = useRef(false);
   const variant = route.params.variant ?? 'onboarding';
   const adUuid = route.params.adUuid;
+  const videoSlug = route.params.videoSlug;
   const checkoutSessionId = route.params.checkoutSessionId;
 
   async function completeCheckoutSuccess(url: string) {
@@ -166,7 +215,29 @@ export function StripeCheckoutScreen() {
         if (res.message) {
           Alert.alert('Payment', res.message);
         }
+      } else if (videoSlug) {
+        const sessionId = extractSessionId(url);
+        if (!sessionId) {
+          Alert.alert('Video', 'Missing payment session. Please contact support if you were charged.');
+          handledRef.current = false;
+          return;
+        }
+        const res = await videosApi.confirmVideoCheckout(videoSlug, sessionId);
+        if (!res.success) {
+          Alert.alert('Video', res.message);
+          handledRef.current = false;
+          return;
+        }
       } else if (variant === 'onboarding') {
+        const sessionId = extractSessionId(url);
+        if (sessionId) {
+          const res = await subApi.confirmSubscriptionCheckout(sessionId);
+          if (!res.success) {
+            Alert.alert('Subscription', res.message);
+            handledRef.current = false;
+            return;
+          }
+        }
         await refreshMe();
         await setActiveRole('provider');
       } else if (variant === 'aiAssistant') {
@@ -217,6 +288,34 @@ export function StripeCheckoutScreen() {
     return true;
   }
 
+  function handleCheckoutLoadFailure() {
+    if (handledRef.current || confirming) {
+      return;
+    }
+    setLoading(false);
+    setCheckoutLoadFailed(true);
+    Alert.alert(
+      PRICING_LABELS.checkoutUnavailableTitle,
+      PRICING_LABELS.paymentsTemporarilyUnavailable
+    );
+  }
+
+  if (isIos) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={styles.loaderText}>{PRICING_LABELS.checkoutUnavailableBody}</Text>
+      </View>
+    );
+  }
+
+  if (!safeCheckoutUrl) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={styles.loaderText}>{PRICING_LABELS.paymentsTemporarilyUnavailable}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -243,11 +342,36 @@ export function StripeCheckoutScreen() {
         </View>
       )}
 
+      {checkoutLoadFailed && !confirming ? (
+        <View style={styles.errorState}>
+          <Text style={styles.loaderText}>{PRICING_LABELS.paymentsTemporarilyUnavailable}</Text>
+          <Pressable
+            onPress={() => {
+              setCheckoutLoadFailed(false);
+              setLoading(true);
+              webViewRef.current?.reload();
+            }}
+            style={styles.retryButton}
+            accessibilityRole="button"
+            accessibilityLabel="Retry checkout"
+          >
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <WebView
         ref={webViewRef}
-        source={{ uri: route.params.checkoutUrl }}
+        source={{ uri: safeCheckoutUrl }}
         style={styles.webView}
+        onLoadStart={() => setLoading(true)}
         onLoadEnd={() => setLoading(false)}
+        onError={handleCheckoutLoadFailure}
+        onHttpError={(event) => {
+          if (event.nativeEvent.statusCode >= 500) {
+            handleCheckoutLoadFailure();
+          }
+        }}
         onNavigationStateChange={(event) => {
           setTitle(event.title || 'Checkout');
           handleNavigationChange(event);
@@ -311,5 +435,25 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     color: colors.text.secondary,
     fontSize: typography.fontSize.sm,
+  },
+  errorState: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.xl,
+    backgroundColor: colors.background,
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: 14,
+    backgroundColor: colors.primary[600],
+  },
+  retryButtonText: {
+    color: colors.text.inverse,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
 });

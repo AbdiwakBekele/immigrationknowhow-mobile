@@ -24,6 +24,7 @@ import * as seekerDashboardApi from '../../api/seekerDashboardApi';
 import type { ProviderListItem } from '../../types/provider';
 import * as authApi from '../../api/authApi';
 import { useAuth } from '../../context/AuthContext';
+import { formatMoney, formatPerUnit } from '../../utils/money';
 
 type SeekerDashboardNav = CompositeNavigationProp<
   BottomTabNavigationProp<SeekerBottomTabParamList>,
@@ -447,6 +448,7 @@ export function SeekerDashboardScreen() {
           <ActionCard title="Find providers" subtitle="Search for services" onPress={openProvidersList} />
           <ActionCard title="Messages" subtitle={`${unreadMessages} unread`} badge={unreadBadge} onPress={() => navigation.navigate('Messages')} />
           <ActionCard title="Library" subtitle="E-books & audiobooks" onPress={() => navigation.navigate('Discover', { screen: 'Library' })} />
+          <ActionCard title="DV Lottery" subtitle="Official program info" onPress={() => navigation.navigate('Discover', { screen: 'DvLottery' })} />
           <ActionCard title="Profile" subtitle="Update your info" onPress={() => navigation.navigate('Profile')} />
           <ActionCard title="Community" subtitle="Join discussions" onPress={() => navigation.navigate('Discover', { screen: 'Community' })} />
           <ActionCard
@@ -761,7 +763,7 @@ function formatProviderRating(rating: number | null | undefined): string {
 function formatLibraryPrice(item: seekerDashboardApi.SeekerLibraryItem): string | undefined {
   const price = item.price;
   if (price != null && Number(price) > 0) {
-    return `${item.currency ?? 'USD'} ${price}`;
+    return formatPerUnit(Number(price), item.currency ?? 'USD', 'book');
   }
   if (item.is_premium) {
     return 'Paid';
@@ -772,11 +774,11 @@ function formatLibraryPrice(item: seekerDashboardApi.SeekerLibraryItem): string 
 function formatPurchasePrice(row: seekerDashboardApi.SeekerPurchasedItem): string | undefined {
   const paid = row.purchase_amount;
   if (paid !== null && paid !== undefined && String(paid).trim() !== '' && Number(paid) > 0) {
-    return `${row.purchase_currency ?? 'USD'} ${paid}`;
+    return formatMoney(Number(paid), row.purchase_currency ?? 'USD');
   }
   const itemPrice = row.item?.price;
   if (itemPrice != null && Number(itemPrice) > 0) {
-    return `${row.item?.currency ?? 'USD'} ${itemPrice}`;
+    return formatPerUnit(Number(itemPrice), row.item?.currency ?? 'USD', 'book');
   }
   return undefined;
 }

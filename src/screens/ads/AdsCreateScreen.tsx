@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +12,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +23,9 @@ import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as adsApi from '../../api/adsApi';
+import { formatAdPricePerUnit } from '../../utils/adUi';
+import { pickAdImageFromLibrary, type AdImageFile } from '../../utils/adImagePicker';
+import { ONE_TIME_PURCHASE_LABEL } from '../../utils/money';
 
 const HEADER_BAR_HEIGHT = 56;
 
@@ -38,27 +41,43 @@ export function AdsCreateScreen() {
   const insets = useSafeAreaInsets();
   const keyboardVerticalOffset = insets.top + HEADER_BAR_HEIGHT;
   const [busy, setBusy] = useState(false);
+  const [pickingImage, setPickingImage] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [cta, setCta] = useState('https://');
-  const [imageFile, setImageFile] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [imageFile, setImageFile] = useState<AdImageFile | null>(null);
+  const [postingPrice, setPostingPrice] = useState<{
+    amount_cents?: number;
+    currency?: string;
+    free_limit?: number;
+    free_remaining?: number;
+  } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      void (async () => {
+        const res = await adsApi.listAds();
+        if (res.success) {
+          setPostingPrice(res.data?.ad_posting_price ?? null);
+        }
+      })();
+    }, []),
+  );
 
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.length) {
-      return;
+    if (pickingImage || busy) return;
+    setPickingImage(true);
+    try {
+      const picked = await pickAdImageFromLibrary();
+      if (picked) {
+        setImageFile(picked);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not use that image.';
+      Alert.alert('Upload image', message);
+    } finally {
+      setPickingImage(false);
     }
-    const asset = result.assets[0];
-    const filename = asset.fileName?.trim() || `ad-${Date.now()}.jpg`;
-    const mime = asset.mimeType?.trim() || 'image/jpeg';
-    setImageFile({
-      uri: asset.uri,
-      name: filename,
-      type: mime,
-    });
   };
 
   const submit = async () => {
@@ -100,7 +119,13 @@ export function AdsCreateScreen() {
           contentContainerStyle={[styles.scrollContent, isAdvertiserPortal && advertiserUi.scrollContent]}
           automaticallyAdjustKeyboardInsets
         >
-          <Text style={styles.subtitle}>Your ad will be reviewed (and may require payment) before publishing.</Text>
+          <Text style={styles.subtitle}>
+            {(postingPrice?.free_remaining ?? 0) > 0
+              ? `This ad is free — ${postingPrice?.free_remaining} of ${postingPrice?.free_limit ?? 0} complimentary slots remaining. It will be reviewed before publishing.`
+              : postingPrice?.amount_cents != null
+                ? `${ONE_TIME_PURCHASE_LABEL} ${formatAdPricePerUnit(postingPrice.amount_cents, postingPrice.currency)}. Your ad will be reviewed before publishing.`
+                : 'Your ad will be reviewed (and may require payment) before publishing.'}
+          </Text>
 
         <Text style={label()}>Title</Text>
         <TextInput placeholder="Ad title" value={title} onChangeText={setTitle} style={inp()} />
@@ -114,6 +139,7 @@ export function AdsCreateScreen() {
         <Text style={label()}>Ad image (optional)</Text>
         <Pressable
           onPress={() => void pickImage()}
+          disabled={pickingImage || busy}
           style={{
             marginTop: spacing.sm,
             borderWidth: 1,
@@ -121,10 +147,11 @@ export function AdsCreateScreen() {
             borderRadius: 12,
             padding: spacing.md,
             backgroundColor: colors.surface,
+            opacity: pickingImage || busy ? 0.6 : 1,
           }}
         >
           <Text style={{ color: colors.primary[700], fontWeight: typography.fontWeight.semibold }}>
-            {imageFile ? 'Change image' : 'Upload image'}
+            {pickingImage ? 'Opening gallery…' : imageFile ? 'Change image' : 'Upload image'}
           </Text>
         </Pressable>
         {imageFile ? (

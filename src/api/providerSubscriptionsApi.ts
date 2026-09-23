@@ -10,20 +10,33 @@ export type SubscriptionPlanRow = {
   billing_cycle: string | null;
   status: string;
   stripe_price_id: string | null;
+  apple_product_id?: string | null;
 };
 
 export type ProviderSubscriptionRow = {
   uuid: string;
   status: string;
   cancel_at_period_end?: boolean;
+  apple_original_transaction_id?: string | null;
+  stripe_subscription_id?: string | null;
   plan?: SubscriptionPlanRow | null;
 };
 
 export type SubscriptionsPayload = {
   plans: SubscriptionPlanRow[];
   current_subscription: ProviderSubscriptionRow | null;
+  pending_subscription?: ProviderSubscriptionRow | null;
+  has_active_subscription?: boolean;
+  requires_subscription?: boolean;
   subscription_history: ProviderSubscriptionRow[];
   stripe_billing_configured: boolean;
+  apple_iap_configured?: boolean;
+  subscription_billing_configured?: boolean;
+  ios_requires_apple_iap?: boolean;
+  provider_subscription_promo?: {
+    trial_months: number;
+    trial_eligible: boolean;
+  };
 };
 
 export async function getProviderSubscriptions(): Promise<ApiResponse<{ subscriptions: SubscriptionsPayload }>> {
@@ -40,7 +53,7 @@ export async function getProviderSubscriptions(): Promise<ApiResponse<{ subscrip
 }
 
 export async function startSubscriptionCheckout(planUuid: string): Promise<
-  ApiResponse<{ checkout_url: string | null; free_plan_activated?: boolean }>
+  ApiResponse<{ checkout_url: string | null; free_plan_activated?: boolean; checkout_session_id?: string }>
 > {
   try {
     const res = await apiClient.post(`/api/mobile/provider/subscriptions/checkout/${planUuid}`);
@@ -89,6 +102,28 @@ export async function changeSubscriptionPlan(
       `/api/mobile/provider/subscriptions/${subscriptionUuid}/change-plan/${planUuid}`
     );
     return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function confirmSubscriptionCheckout(sessionId: string): Promise<ApiResponse<Record<string, never>>> {
+  try {
+    const res = await apiClient.post('/api/mobile/provider/subscriptions/confirm-checkout', {
+      session_id: sessionId,
+    });
+    if (res.data?.success === false) {
+      return {
+        success: false,
+        message: typeof res.data.message === 'string' ? res.data.message : 'Could not confirm subscription.',
+        errors: res.data.errors,
+      };
+    }
+    return {
+      success: true,
+      message: typeof res.data?.message === 'string' ? res.data.message : 'OK',
+      data: {},
+    };
   } catch (e) {
     return normalizeApiError(e);
   }

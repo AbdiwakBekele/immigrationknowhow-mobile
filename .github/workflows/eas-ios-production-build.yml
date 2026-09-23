@@ -1,0 +1,45 @@
+name: EAS iOS Production Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'docs/**'
+
+concurrency:
+  group: eas-ios-production-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Trigger iOS production build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Block committed Stripe secrets
+        run: npm run security:stripe
+
+      - name: Trigger EAS iOS production build
+        run: eas build --platform ios --profile production --non-interactive --no-wait

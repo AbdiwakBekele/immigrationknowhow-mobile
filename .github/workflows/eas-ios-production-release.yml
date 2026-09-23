@@ -1,0 +1,42 @@
+name: EAS iOS Production Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'ios-v*'
+
+concurrency:
+  group: eas-ios-production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and submit iOS production release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Block committed Stripe secrets
+        run: npm run security:stripe
+
+      - name: Build and wait for iOS production submission
+        run: eas build --platform ios --profile production --auto-submit --non-interactive --wait

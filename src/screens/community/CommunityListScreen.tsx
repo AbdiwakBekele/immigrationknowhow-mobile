@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -70,6 +70,7 @@ export function CommunityListScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [category, setCategory] = useState('feed');
+  const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
   const [sharePost, setSharePost] = useState<CommunityPostPayload | null>(null);
   const [engagement, setEngagement] = useState<Record<number, CommunityFeedEngagement>>({});
@@ -77,67 +78,81 @@ export function CommunityListScreen() {
 
   const sectionTitle = useMemo(() => COMMUNITY_SECTION_LABELS[category] ?? 'Community', [category]);
 
-  const load = async (opts: { refresh?: boolean; page?: number; append?: boolean } = {}) => {
-    const { refresh = false, page: pageToLoad = 1, append = false } = opts;
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchDraft.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [searchDraft]);
 
-    if (refresh) {
-      setRefreshing(true);
-    } else if (append) {
-      if (loadingMore || !hasMore) return;
-      setLoadingMore(true);
-    } else {
-      setLoading(true);
-    }
+  const load = useCallback(
+    async (opts: { refresh?: boolean; page?: number; append?: boolean; activeSearch?: string } = {}) => {
+      const { refresh = false, page: pageToLoad = 1, append = false } = opts;
+      const activeSearch = opts.activeSearch ?? search;
 
-    const res = await communityApi.listCommunityPosts({
-      page: pageToLoad,
-      ...(category !== 'feed' ? { category } : {}),
-      search: search.trim(),
-    });
+      if (refresh) {
+        setRefreshing(true);
+      } else if (append) {
+        if (loadingMore || !hasMore) return;
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
 
-    if (refresh) setRefreshing(false);
-    else if (append) setLoadingMore(false);
-    else setLoading(false);
-
-    if (!res.success) return;
-
-    const pageData = res.data?.posts;
-    const nextPosts = pageData?.data ?? [];
-    const currentPage = pageData?.current_page ?? pageToLoad;
-    const lastPage = pageData?.last_page ?? currentPage;
-
-    setPage(currentPage);
-    setHasMore(currentPage < lastPage);
-
-    if (append) {
-      setPosts((prev) => {
-        const seen = new Set(prev.map((p) => p.id));
-        return [...prev, ...nextPosts.filter((p) => !seen.has(p.id))];
+      const res = await communityApi.listCommunityPosts({
+        page: pageToLoad,
+        ...(category !== 'feed' ? { category } : {}),
+        ...(activeSearch ? { search: activeSearch } : {}),
       });
-      setEngagement((eng) => mergeEngagement(nextPosts, eng));
-    } else {
-      setPosts(nextPosts);
-      setEngagement(
-        nextPosts.reduce<Record<number, CommunityFeedEngagement>>((acc, post) => {
-          acc[post.id] = buildEngagement(post);
-          return acc;
-        }, {}),
-      );
-    }
-  };
+
+      if (refresh) setRefreshing(false);
+      else if (append) setLoadingMore(false);
+      else setLoading(false);
+
+      if (!res.success) return;
+
+      const pageData = res.data?.posts;
+      const nextPosts = pageData?.data ?? [];
+      const currentPage = pageData?.current_page ?? pageToLoad;
+      const lastPage = pageData?.last_page ?? currentPage;
+
+      setPage(currentPage);
+      setHasMore(currentPage < lastPage);
+
+      if (append) {
+        setPosts((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...nextPosts.filter((p) => !seen.has(p.id))];
+        });
+        setEngagement((eng) => mergeEngagement(nextPosts, eng));
+      } else {
+        setPosts(nextPosts);
+        setEngagement(
+          nextPosts.reduce<Record<number, CommunityFeedEngagement>>((acc, post) => {
+            acc[post.id] = buildEngagement(post);
+            return acc;
+          }, {}),
+        );
+      }
+    },
+    [category, hasMore, loadingMore, search],
+  );
 
   useFocusEffect(
     useCallback(() => {
       setPage(1);
       setHasMore(true);
       void load({ page: 1 });
-    }, [category]),
+      // Intentionally depend on category/search so results refresh when either changes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [category, search]),
   );
 
   const onSearchSubmit = () => {
-    setPage(1);
-    setHasMore(true);
-    void load({ page: 1 });
+    setSearch(searchDraft.trim());
+  };
+
+  const clearSearch = () => {
+    setSearchDraft('');
+    setSearch('');
   };
 
   const loadMore = () => {
@@ -231,12 +246,17 @@ export function CommunityListScreen() {
           <TextInput
             placeholder={`Search in ${sectionTitle}...`}
             placeholderTextColor={colors.text.muted}
-            value={search}
-            onChangeText={setSearch}
+            value={searchDraft}
+            onChangeText={setSearchDraft}
             onSubmitEditing={onSearchSubmit}
             returnKeyType="search"
             style={styles.searchInput}
           />
+          {searchDraft.length > 0 ? (
+            <Pressable onPress={clearSearch} hitSlop={8} accessibilityLabel="Clear search">
+              <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+            </Pressable>
+          ) : null}
         </View>
         <Pressable onPress={onSearchSubmit} style={({ pressed }) => [styles.searchButton, pressed && styles.searchButtonPressed]}>
           <Text style={styles.searchButtonText}>Search</Text>
@@ -253,6 +273,7 @@ export function CommunityListScreen() {
         data={loading ? [] : posts}
         keyExtractor={(p) => String(p.id)}
         ListHeaderComponent={listHeader}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -274,7 +295,11 @@ export function CommunityListScreen() {
           loading ? null : (
             <View style={styles.emptyWrap}>
               <Ionicons name="chatbubbles-outline" size={40} color={colors.text.muted} />
-              <Text style={styles.emptyText}>No posts found for this section. Try another category or search.</Text>
+              <Text style={styles.emptyText}>
+                {search
+                  ? 'No posts match your search. Try another term or category.'
+                  : 'No posts found for this section. Try another category or search.'}
+              </Text>
             </View>
           )
         }

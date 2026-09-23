@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { AppScreen } from '../../components/AppScreen';
 import { AdvertiserScreenLayout } from '../../components/advertiser/AdvertiserScreenLayout';
@@ -16,10 +15,13 @@ import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
 import { shadows } from '../../theme/shadows';
 import { ProfileAvatarPicker } from '../../components/account/ProfileAvatarPicker';
+import { DeleteAccountSection } from '../../components/account/DeleteAccountSection';
 import { RoleAccountSection } from '../../components/account/RoleAccountSection';
+import * as rolesApi from '../../api/rolesApi';
+import { pickProfileAvatarFromLibrary } from '../../utils/profileAvatarPicker';
 
 export function ProfileScreen() {
-  const { user, role, signOut, refreshMe } = useAuth();
+  const { user, role, signOut, confirmSignOut, refreshMe } = useAuth();
   const isAdvertiserPortal = role === 'advertiser';
   const advertiserUi = useAdvertiserStyles();
   const [profileUser, setProfileUser] = useState<profileApi.MobileProfileData['user'] | null>(null);
@@ -38,6 +40,7 @@ export function ProfileScreen() {
   const [country, setCountry] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [preferredLanguage, setPreferredLanguage] = useState('en');
+  const [roleMeta, setRoleMeta] = useState<rolesApi.RoleMeta | null>(null);
 
   if (role === 'provider') {
     return <ProviderProfileScreen />;
@@ -53,6 +56,13 @@ export function ProfileScreen() {
     setCountry((nextUser?.country ?? '').trim());
     setPostalCode((nextUser?.postal_code ?? '').trim());
     setPreferredLanguage((String(nextUser?.preferred_language ?? '').trim() || 'en').toLowerCase());
+  }, []);
+
+  const loadRoleMeta = useCallback(async () => {
+    const res = await rolesApi.getRoleMeta();
+    if (res.success) {
+      setRoleMeta(res.data);
+    }
   }, []);
 
   const load = useCallback(async (isRefresh = false) => {
@@ -73,7 +83,8 @@ export function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       void load(false);
-    }, [load])
+      void loadRoleMeta();
+    }, [load, loadRoleMeta])
   );
 
   const displayUser = profileUser ?? user;
@@ -100,56 +111,51 @@ export function ProfileScreen() {
   );
 
   const onSave = async () => {
+    if (saving) return;
     setSaving(true);
     setSaveMessage(null);
     setError(null);
-    const payload = {
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      email: email.trim(),
-      phone: phone.trim() || null,
-      city: city.trim() || null,
-      state: state.trim() || null,
-      country: country.trim().toUpperCase() || null,
-      postal_code: postalCode.trim() || null,
-      preferred_language: preferredLanguage.trim().toLowerCase() || 'en',
-    };
-    const res = await profileApi.updateProfile(payload);
-    setSaving(false);
-    if (!res.success) {
-      setError(friendlyApiErrorMessage(res));
-      return;
+    try {
+      const payload = {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim() || null,
+        city: city.trim() || null,
+        state: state.trim() || null,
+        country: country.trim().toUpperCase() || null,
+        postal_code: postalCode.trim() || null,
+        preferred_language: preferredLanguage.trim().toLowerCase() || 'en',
+      };
+      const res = await profileApi.updateProfile(payload);
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setProfileUser(res.data.user);
+      hydrateForm(res.data.user);
+      setSaveMessage('Saved');
+      await refreshMe();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to save your profile right now.';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setProfileUser(res.data.user);
-    hydrateForm(res.data.user);
-    setSaveMessage('Saved');
-    await refreshMe();
   };
 
   const onPickAvatar = async () => {
+    if (avatarBusy) return;
     setAvatarBusy(true);
     setSaveMessage(null);
     setError(null);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-      if (result.canceled || !result.assets?.length) {
-        setAvatarBusy(false);
+      const picked = await pickProfileAvatarFromLibrary();
+      if (!picked) {
         return;
       }
 
-      const asset = result.assets[0];
-      const res = await profileApi.uploadAvatar({
-        uri: asset.uri,
-        name: asset.fileName?.trim() || `avatar-${Date.now()}.jpg`,
-        type: asset.mimeType?.trim() || 'image/jpeg',
-        file: (asset as { file?: Blob }).file,
-      });
-      setAvatarBusy(false);
+      const res = await profileApi.uploadAvatar(picked);
       if (!res.success) {
         setError(friendlyApiErrorMessage(res));
         return;
@@ -158,25 +164,33 @@ export function ProfileScreen() {
       setSaveMessage('Profile photo updated');
       await refreshMe();
     } catch (err) {
-      setAvatarBusy(false);
       const message = err instanceof Error ? err.message : 'Unable to pick a photo right now.';
       setError(message);
+    } finally {
+      setAvatarBusy(false);
     }
   };
 
   const onRemoveAvatar = async () => {
+    if (avatarBusy) return;
     setAvatarBusy(true);
     setSaveMessage(null);
     setError(null);
-    const res = await profileApi.deleteAvatar();
-    setAvatarBusy(false);
-    if (!res.success) {
-      setError(friendlyApiErrorMessage(res));
-      return;
+    try {
+      const res = await profileApi.deleteAvatar();
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setProfileUser(res.data.user);
+      setSaveMessage('Profile photo removed');
+      await refreshMe();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to remove your profile photo right now.';
+      setError(message);
+    } finally {
+      setAvatarBusy(false);
     }
-    setProfileUser(res.data.user);
-    setSaveMessage('Profile photo removed');
-    await refreshMe();
   };
 
   const body = (
@@ -241,8 +255,13 @@ export function ProfileScreen() {
         <View style={styles.actionsWrap}>
           <AppButton title="Save changes" onPress={() => void onSave()} loading={saving} disabled={!hasDirtyFields} />
           <View style={styles.actionsSpacer} />
-          <AppButton title="Log out" onPress={() => void signOut()} variant="ghost" />
+          <AppButton title="Log out" onPress={confirmSignOut} variant="ghost" />
         </View>
+
+        <DeleteAccountSection
+          hasMultipleRoles={Boolean(roleMeta?.can_switch || (roleMeta?.has_seeker && roleMeta?.has_provider))}
+          onDeleted={() => signOut()}
+        />
       </ScrollView>
   );
 

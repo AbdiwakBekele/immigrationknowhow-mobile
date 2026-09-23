@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,12 +17,15 @@ import { typography } from '../../theme/typography';
 import { backgroundCheckBody, backgroundCheckHeadline } from '../../utils/providerUi';
 import * as profileApi from '../../api/profileApi';
 import { friendlyApiErrorMessage } from '../../api/userFriendlyMessage';
+import { DeleteAccountSection } from '../../components/account/DeleteAccountSection';
 import { RoleAccountSection } from '../../components/account/RoleAccountSection';
+import * as rolesApi from '../../api/rolesApi';
+import { pickProfileAvatarFromLibrary } from '../../utils/profileAvatarPicker';
 
 export function ProviderProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList, 'ProfileHome'>>();
   const tabNavigation = navigation.getParent<BottomTabNavigationProp<ProviderBottomTabParamList>>();
-  const { user, signOut, refreshMe } = useAuth();
+  const { user, signOut, confirmSignOut, refreshMe } = useAuth();
   const [dash, setDash] = useState<providerDashboardApi.ProviderDashboardData | null>(null);
   const [profileUser, setProfileUser] = useState<profileApi.MobileProfileData['user'] | null>(null);
   const [providerProfile, setProviderProfile] = useState<profileApi.ProviderProfile | null>(null);
@@ -41,6 +43,7 @@ export function ProviderProfileScreen() {
   const [hourlyRate, setHourlyRate] = useState('');
   const [specializations, setSpecializations] = useState('');
   const [serviceAreas, setServiceAreas] = useState('');
+  const [roleMeta, setRoleMeta] = useState<rolesApi.RoleMeta | null>(null);
 
   const hydrateForm = useCallback((provider: profileApi.ProviderProfile | null | undefined) => {
     setBusinessName(String(provider?.business_name ?? '').trim());
@@ -74,10 +77,18 @@ export function ProviderProfileScreen() {
     hydrateForm(profileRes.data.provider);
   }, [hydrateForm]);
 
+  const loadRoleMeta = useCallback(async () => {
+    const res = await rolesApi.getRoleMeta();
+    if (res.success) {
+      setRoleMeta(res.data);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       void load(false);
-    }, [load])
+      void loadRoleMeta();
+    }, [load, loadRoleMeta])
   );
 
   const prov = dash?.provider;
@@ -107,67 +118,62 @@ export function ProviderProfileScreen() {
     );
   }, [providerProfile, businessName, tagline, bio, website, yearsExperience, hourlyRate, specializations, serviceAreas]);
 
-  const openDashboardScreen = (screen: keyof ProviderDashboardStackParamList) => {
+  const openDashboardScreen = (screen: 'ProviderBackgroundCheck') => {
     tabNavigation?.navigate('Dashboard', { screen });
   };
 
   const onSave = async () => {
+    if (saving) return;
     setSaving(true);
     setSaveMessage(null);
     setError(null);
-    const specs = specializations
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const areas = serviceAreas
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const res = await profileApi.updateProviderProfile({
-      business_name: businessName.trim(),
-      tagline: tagline.trim() || null,
-      bio: bio.trim() || null,
-      website: website.trim() || null,
-      years_experience: yearsExperience.trim() ? Number(yearsExperience.trim()) : null,
-      hourly_rate: hourlyRate.trim() ? Number(hourlyRate.trim()) : null,
-      specializations: specs,
-      service_areas: areas,
-    });
-    setSaving(false);
-    if (!res.success) {
-      setError(friendlyApiErrorMessage(res));
-      return;
+    try {
+      const specs = specializations
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const areas = serviceAreas
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const res = await profileApi.updateProviderProfile({
+        business_name: businessName.trim(),
+        tagline: tagline.trim() || null,
+        bio: bio.trim() || null,
+        website: website.trim() || null,
+        years_experience: yearsExperience.trim() ? Number(yearsExperience.trim()) : null,
+        hourly_rate: hourlyRate.trim() ? Number(hourlyRate.trim()) : null,
+        specializations: specs,
+        service_areas: areas,
+      });
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setProfileUser(res.data.user);
+      setProviderProfile(res.data.provider);
+      hydrateForm(res.data.provider);
+      setSaveMessage('Saved');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to save your provider profile right now.';
+      setError(message);
+    } finally {
+      setSaving(false);
     }
-    setProfileUser(res.data.user);
-    setProviderProfile(res.data.provider);
-    hydrateForm(res.data.provider);
-    setSaveMessage('Saved');
   };
 
   const onPickAvatar = async () => {
+    if (avatarBusy) return;
     setAvatarBusy(true);
     setSaveMessage(null);
     setError(null);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-      if (result.canceled || !result.assets?.length) {
-        setAvatarBusy(false);
+      const picked = await pickProfileAvatarFromLibrary();
+      if (!picked) {
         return;
       }
 
-      const asset = result.assets[0];
-      const res = await profileApi.uploadAvatar({
-        uri: asset.uri,
-        name: asset.fileName?.trim() || `avatar-${Date.now()}.jpg`,
-        type: asset.mimeType?.trim() || 'image/jpeg',
-        file: (asset as { file?: Blob }).file,
-      });
-      setAvatarBusy(false);
+      const res = await profileApi.uploadAvatar(picked);
       if (!res.success) {
         setError(friendlyApiErrorMessage(res));
         return;
@@ -176,25 +182,33 @@ export function ProviderProfileScreen() {
       setSaveMessage('Profile photo updated');
       await refreshMe();
     } catch (err) {
-      setAvatarBusy(false);
       const message = err instanceof Error ? err.message : 'Unable to pick a photo right now.';
       setError(message);
+    } finally {
+      setAvatarBusy(false);
     }
   };
 
   const onRemoveAvatar = async () => {
+    if (avatarBusy) return;
     setAvatarBusy(true);
     setSaveMessage(null);
     setError(null);
-    const res = await profileApi.deleteAvatar();
-    setAvatarBusy(false);
-    if (!res.success) {
-      setError(friendlyApiErrorMessage(res));
-      return;
+    try {
+      const res = await profileApi.deleteAvatar();
+      if (!res.success) {
+        setError(friendlyApiErrorMessage(res));
+        return;
+      }
+      setProfileUser(res.data.user);
+      setSaveMessage('Profile photo removed');
+      await refreshMe();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to remove your profile photo right now.';
+      setError(message);
+    } finally {
+      setAvatarBusy(false);
     }
-    setProfileUser(res.data.user);
-    setSaveMessage('Profile photo removed');
-    await refreshMe();
   };
 
   return (
@@ -302,11 +316,16 @@ export function ProviderProfileScreen() {
           <InputField label="Service areas" value={serviceAreas} onChangeText={setServiceAreas} placeholder="Dallas, Houston" />
         </View>
 
-        <View style={{ marginTop: spacing['3xl'], marginBottom: spacing['3xl'] }}>
+        <View style={{ marginTop: spacing['3xl'] }}>
           <AppButton title="Save changes" onPress={() => void onSave()} loading={saving} disabled={!hasDirtyFields} />
           <View style={{ height: spacing.md }} />
-          <AppButton title="Log out" onPress={() => void signOut()} variant="ghost" />
+          <AppButton title="Log out" onPress={confirmSignOut} variant="ghost" />
         </View>
+
+        <DeleteAccountSection
+          hasMultipleRoles={Boolean(roleMeta?.can_switch || (roleMeta?.has_seeker && roleMeta?.has_provider))}
+          onDeleted={() => signOut()}
+        />
       </ScrollView>
     </AppScreen>
   );

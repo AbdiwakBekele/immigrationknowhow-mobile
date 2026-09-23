@@ -20,11 +20,13 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import { useAuth } from '../../context/AuthContext';
+import { useContinueAsGuest } from '../../hooks/useContinueAsGuest';
 import type { AuthStackParamList } from '../../navigation/AuthStack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 export function SignInScreen() {
   const { signIn } = useAuth();
+  const continueAsGuest = useContinueAsGuest();
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,7 +61,7 @@ export function SignInScreen() {
           <View style={styles.header}>
             <BrandWordmark width={248} />
             <Text style={styles.title}>Welcome back</Text>
-            <Text style={styles.subtitle}>Sign in to continue to your account.</Text>
+            <Text style={styles.subtitle}>Browse eBooks and service providers without an account, or sign in below.</Text>
           </View>
 
           <View style={styles.card}>
@@ -96,6 +98,18 @@ export function SignInScreen() {
             </Pressable>
 
             <AppButton title="Sign In" onPress={onSubmit} loading={loading} />
+
+            <View style={styles.orRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>or</Text>
+              <View style={styles.orLine} />
+            </View>
+
+            <AppButton
+              title="Continue as Guest"
+              variant="ghost"
+              onPress={() => void continueAsGuest()}
+            />
           </View>
 
           <Pressable onPress={() => navigation.navigate('SignUp')} style={styles.footerLink} hitSlop={12}>
@@ -171,6 +185,22 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
+  },
+  orRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginVertical: spacing.lg,
+  },
+  orLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
+  orText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
+    fontWeight: typography.fontWeight.medium,
   },
   footerLink: {
     marginTop: spacing['2xl'],

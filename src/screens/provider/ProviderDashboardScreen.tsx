@@ -24,6 +24,7 @@ import * as authApi from '../../api/authApi';
 import { useAuth } from '../../context/AuthContext';
 import type { ProviderTabParamList } from '../../navigation/ProviderTabs';
 import type { ProviderDashboardStackParamList } from './ProviderDashboardStack';
+import { PRICING_LABELS } from '../../config/pricingLabels';
 import {
   backgroundCheckBody,
   backgroundCheckHeadline,
@@ -242,7 +243,6 @@ export function ProviderDashboardScreen() {
   const [sendingVerification, setSendingVerification] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
   const emailNotVerified = !authUser?.email_verified_at;
-
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -513,9 +513,7 @@ export function ProviderDashboardScreen() {
 
         {!dashboard?.subscription_checkout_configured && (
           <View style={styles.subBanner}>
-            <Text style={styles.subBannerText}>
-              Subscription billing is not fully configured. You can review your plan in the app or complete setup in the web portal.
-            </Text>
+            <Text style={styles.subBannerText}>{PRICING_LABELS.subscriptionBillingUnavailable}</Text>
             <Pressable onPress={() => navigation.navigate('ProviderSubscription')} style={{ marginTop: spacing.md }}>
               <Text style={styles.subBannerLink}>Plan & subscription</Text>
             </Pressable>
@@ -601,6 +599,7 @@ export function ProviderDashboardScreen() {
         <Card>
           <QuickLink label="My profile" onPress={() => navigation.navigate('Profile')} />
           <QuickLink label="My library" onPress={() => navigation.navigate('ProviderHub', { screen: 'Library' })} />
+          <QuickLink label="DV Lottery" onPress={() => navigation.navigate('ProviderHub', { screen: 'DvLottery' })} />
           <QuickLink label="Edit listing details" onPress={() => navigation.navigate('Profile')} />
           {needsCertificateUpload && requiresCertificateUpload ? (
             <QuickLink label="Upload certificate" onPress={() => navigation.navigate('Profile')} highlight />

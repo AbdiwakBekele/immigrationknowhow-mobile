@@ -20,11 +20,13 @@ import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { shadows } from '../../theme/shadows';
 import { useAuth } from '../../context/AuthContext';
+import { useContinueAsGuest } from '../../hooks/useContinueAsGuest';
 import * as authApi from '../../api/authApi';
 import type { RegisterPayload } from '../../api/authApi';
 import { PicklistField } from '../onboarding/components/PicklistField';
 import type { AuthStackParamList } from '../../navigation/AuthStack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { AccountMatchingNotice } from '../../components/auth/AccountMatchingNotice';
 import type { IonIconName } from '../../navigation/tabBar';
 
 type RoleOption = { value: 'user' | 'provider' | 'advertiser'; label: string; description: string; icon: IonIconName };
@@ -52,6 +54,7 @@ const ROLES: RoleOption[] = [
 
 export function SignUpScreen() {
   const { signUp } = useAuth();
+  const continueAsGuest = useContinueAsGuest();
   const navigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
 
   const [role, setRole] = useState<RoleOption['value']>('user');
@@ -152,8 +155,18 @@ export function SignUpScreen() {
           <View style={styles.header}>
             <BrandWordmark width={248} />
             <Text style={styles.title}>Create your account</Text>
-            <Text style={styles.subtitle}>{"Choose how you'll use ImmigrationKnowHow."}</Text>
+            <Text style={styles.subtitle}>{"Choose how you'll use ImmigrationKnowHow, or browse without an account."}</Text>
           </View>
+
+          <AppButton
+            title="Continue as Guest"
+            variant="ghost"
+            onPress={() => void continueAsGuest()}
+            style={styles.guestButton}
+          />
+          <Text style={styles.guestHint}>Browse eBooks and service providers — no account needed.</Text>
+
+          <AccountMatchingNotice />
 
           <View style={styles.roleList}>
             <Text style={styles.roleSectionLabel}>Account type</Text>
@@ -270,6 +283,7 @@ export function SignUpScreen() {
               Already have an account? <Text style={styles.footerBold}>Sign in</Text>
             </Text>
           </Pressable>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </AppScreen>
@@ -401,6 +415,16 @@ const styles = StyleSheet.create({
   footerBold: {
     color: colors.primary[700],
     fontWeight: typography.fontWeight.semibold,
+  },
+  guestButton: {
+    marginBottom: spacing.sm,
+  },
+  guestHint: {
+    textAlign: 'center',
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
+    marginBottom: spacing.xl,
+    lineHeight: 20,
   },
   metaLoading: {
     color: colors.text.secondary,

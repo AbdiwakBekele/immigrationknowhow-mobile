@@ -1,5 +1,15 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,18 +19,21 @@ import {
   libraryItemHasAudio,
   libraryItemHasPdf,
 } from '../../components/library/LibraryBookCard';
-import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { radii } from '../../theme/layout';
 import * as libraryApi from '../../api/libraryApi';
+import * as ebookShareApi from '../../api/ebookShareApi';
+import { EbookShareCampaignBanner } from '../../components/library/EbookShareCampaignBanner';
 import type { LibraryStackParamList } from './LibraryStack';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 const CARD_GAP = spacing.md;
 const NUM_COLUMNS = 2;
+const PAGE_SIZE = 100;
 
+type LibraryTab = 'all' | 'purchased' | 'available';
 type LibraryFilter = 'all' | 'ebook' | 'audio' | `category:${string}`;
 
 function matchesFilter(item: any, filter: LibraryFilter): boolean {
@@ -34,34 +47,103 @@ function matchesFilter(item: any, filter: LibraryFilter): boolean {
   return true;
 }
 
+function extractMyPage(payload: any) {
+  const raw = payload?.items;
+  const items = Array.isArray(raw?.data) ? raw.data : [];
+  return {
+    items,
+    page: Number(raw?.current_page ?? 1),
+    lastPage: Number(raw?.last_page ?? 1),
+    total: Number(raw?.total ?? items.length),
+  };
+}
+
+function extractBrowsePage(payload: any) {
+  const bucket = payload?.items;
+  const items = Array.isArray(bucket?.data) ? bucket.data : [];
+  const meta = bucket?.meta ?? {};
+  return {
+    items,
+    page: Number(meta.current_page ?? 1),
+    lastPage: Number(meta.last_page ?? 1),
+    total: Number(meta.total ?? items.length),
+  };
+}
+
 export function LibraryMyScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<LibraryStackParamList>>();
-  const { role } = useAuth();
-  const isProvider = role === 'provider';
-  const [tab, setTab] = useState<'purchased' | 'available'>('available');
+  const [tab, setTab] = useState<LibraryTab>('all');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [items, setItems] = useState<any[]>([]);
-  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [shareCampaign, setShareCampaign] = useState<any>(null);
+  const loadingMoreRef = useRef(false);
 
   const screenWidth = Dimensions.get('window').width;
   const cardWidth = (screenWidth - spacing.xl * 2 - CARD_GAP) / NUM_COLUMNS;
 
-  const load = async () => {
-    setLoading(true);
-    const res = await libraryApi.getMyLibrary(tab, 1);
-    setLoading(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchDraft.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [searchDraft]);
+
+  const load = useCallback(async (nextPage = 1, append = false) => {
+    if (append) {
+      if (loadingMoreRef.current || nextPage > lastPage) return;
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
+
+    const res =
+      tab === 'all'
+        ? await libraryApi.browseLibrary({
+            per_page: PAGE_SIZE,
+            page: nextPage,
+            ...(search ? { search } : {}),
+          })
+        : await libraryApi.getMyLibrary(tab, nextPage, PAGE_SIZE, search || undefined);
+
+    if (append) {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    } else {
+      setLoading(false);
+    }
+
     if (!res.success) return;
-    const raw = res.data?.section === tab ? res.data?.items : res.data?.items;
-    const coll = raw?.data ?? [];
-    setItems(coll);
-  };
+
+    const parsed = tab === 'all' ? extractBrowsePage(res.data) : extractMyPage(res.data);
+    setPage(parsed.page);
+    setLastPage(parsed.lastPage);
+    setTotal(parsed.total);
+    setItems((prev) => {
+      if (!append) return parsed.items;
+      const seen = new Set(prev.map((item) => String(item.slug ?? item.id)));
+      return [...prev, ...parsed.items.filter((item) => !seen.has(String(item.slug ?? item.id)))];
+    });
+  }, [lastPage, search, tab]);
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [tab]),
+      setPage(1);
+      setLastPage(1);
+      setTotal(0);
+      void load(1, false);
+      void ebookShareApi.getShareCampaign().then((res) => {
+        if (res.success) setShareCampaign(res.data);
+      });
+      // Reload when tab or server search term changes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab, search]),
   );
 
   const filterOptions = useMemo(() => {
@@ -85,13 +167,8 @@ export function LibraryMyScreen() {
   }, [items]);
 
   const visibleItems = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items.filter((item) => {
-      const title = String(item?.title ?? '').toLowerCase();
-      const searchMatch = q === '' || title.includes(q);
-      return searchMatch && matchesFilter(item, filter);
-    });
-  }, [items, query, filter]);
+    return items.filter((item) => matchesFilter(item, filter));
+  }, [items, filter]);
 
   const activeFilterLabel = useMemo(
     () => filterOptions.find((option) => option.key === filter)?.label ?? 'All',
@@ -99,15 +176,32 @@ export function LibraryMyScreen() {
   );
 
   const emptyMessage =
-    query.trim() !== '' || filter !== 'all'
+    search !== '' || filter !== 'all'
       ? 'No titles match your search or filter.'
       : tab === 'purchased'
         ? 'No purchased titles yet.'
-        : 'No titles available right now.';
+        : tab === 'available'
+          ? 'No unpurchased titles right now.'
+          : 'No titles available right now.';
 
-  return (
-    <AppScreen style={{ paddingHorizontal: isProvider ? spacing.lg : spacing.xl, paddingBottom: spacing.xl }}>
+  const listHeader = (
+    <>
+      {(shareCampaign?.eligible && (shareCampaign?.can_start || (shareCampaign?.rewarded && shareCampaign?.coupon_code))) ? (
+        <EbookShareCampaignBanner
+          campaign={shareCampaign}
+          onPress={() => navigation.navigate('EbookShareCampaign')}
+        />
+      ) : null}
       <View style={s.tabRow}>
+        <Pressable
+          onPress={() => {
+            setTab('all');
+            setFilter('all');
+          }}
+          style={[s.tab, tab === 'all' && s.tabActive]}
+        >
+          <Text style={[s.tabText, tab === 'all' && s.tabTextActive]}>All books</Text>
+        </Pressable>
         <Pressable
           onPress={() => {
             setTab('available');
@@ -131,13 +225,27 @@ export function LibraryMyScreen() {
         <View style={s.searchInputWrap}>
           <Ionicons name="search-outline" size={18} color={colors.text.muted} />
           <TextInput
-            value={query}
-            onChangeText={setQuery}
+            value={searchDraft}
+            onChangeText={setSearchDraft}
             placeholder="Search by book name"
             placeholderTextColor={colors.text.muted}
             autoCapitalize="none"
+            returnKeyType="search"
+            onSubmitEditing={() => setSearch(searchDraft.trim())}
             style={s.searchInput}
           />
+          {searchDraft.length > 0 ? (
+            <Pressable
+              onPress={() => {
+                setSearchDraft('');
+                setSearch('');
+              }}
+              hitSlop={8}
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={18} color={colors.text.muted} />
+            </Pressable>
+          ) : null}
         </View>
         <Pressable
           onPress={() => setFilterOpen(true)}
@@ -154,35 +262,78 @@ export function LibraryMyScreen() {
         </Pressable>
       </View>
       {filter !== 'all' ? <Text style={s.filterSummary}>Showing: {activeFilterLabel}</Text> : null}
+      {!loading && total > 0 ? (
+        <Text style={s.countText}>
+          Showing {visibleItems.length} of {total} title{total === 1 ? '' : 's'}
+        </Text>
+      ) : null}
+    </>
+  );
+
+  return (
+    <AppScreen style={{ flex: 1, paddingHorizontal: spacing.xl, paddingBottom: spacing.xl }}>
       {loading ? (
-        <ActivityIndicator style={{ marginTop: spacing['3xl'] }} color={colors.primary[600]} />
+        <>
+          {listHeader}
+          <ActivityIndicator style={{ marginTop: spacing['3xl'] }} color={colors.primary[600]} />
+        </>
       ) : visibleItems.length === 0 ? (
-        <View style={s.empty}>
-          <Text style={s.emptyText}>{emptyMessage}</Text>
-        </View>
+        <>
+          {listHeader}
+          <View style={s.empty}>
+            <Text style={s.emptyText}>{emptyMessage}</Text>
+          </View>
+        </>
       ) : (
         <FlatList
-          style={{ marginTop: spacing.lg }}
+          style={{ flex: 1 }}
           data={visibleItems}
-          numColumns={isProvider ? 1 : NUM_COLUMNS}
-          key={isProvider ? 'list' : 'grid'}
-          columnWrapperStyle={isProvider ? undefined : { gap: CARD_GAP }}
-          contentContainerStyle={isProvider ? s.listContent : undefined}
+          numColumns={NUM_COLUMNS}
+          key="library-grid"
+          columnWrapperStyle={{ gap: CARD_GAP }}
+          contentContainerStyle={{ paddingBottom: spacing.xl }}
           keyExtractor={(it) => String(it.slug ?? it.id)}
+          ListHeaderComponent={listHeader}
+          // Same catalog on iOS + Android; avoid clipped rows that skip onEndReached on Android grids.
+          removeClippedSubviews={false}
+          onEndReachedThreshold={0.2}
+          onEndReached={() => {
+            if (page < lastPage && !loadingMoreRef.current) void load(page + 1, true);
+          }}
+          ListFooterComponent={
+            <View style={s.footer}>
+              {loadingMore ? (
+                <ActivityIndicator style={{ marginVertical: spacing.lg }} color={colors.primary[600]} />
+              ) : page < lastPage ? (
+                <Pressable
+                  style={s.loadMoreButton}
+                  onPress={() => {
+                    if (!loadingMoreRef.current) void load(page + 1, true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Load more books"
+                >
+                  <Text style={s.loadMoreText}>Load more books</Text>
+                </Pressable>
+              ) : total > 0 ? (
+                <Text style={s.loadMoreHint}>All {total} titles loaded</Text>
+              ) : null}
+            </View>
+          }
           renderItem={({ item }) => {
             const cover = resolveMediaUrl(item.cover_image_url);
             return (
               <LibraryBookCard
                 item={item}
                 coverUri={cover}
-                variant={isProvider ? 'compact' : 'grid'}
-                width={isProvider ? undefined : cardWidth}
-                owned={tab === 'purchased'}
+                variant="grid"
+                width={cardWidth}
+                owned={tab === 'purchased' || Boolean(item.has_access)}
                 onPress={() => item.slug && navigation.navigate('LibraryDetail', { slug: item.slug })}
               />
             );
           }}
-          ItemSeparatorComponent={() => <View style={{ height: isProvider ? spacing.sm : CARD_GAP }} />}
+          ItemSeparatorComponent={() => <View style={{ height: CARD_GAP }} />}
         />
       )}
       <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
@@ -248,8 +399,11 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  listContent: {
-    gap: spacing.sm,
+  countText: {
+    marginTop: spacing.sm,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.muted,
+    fontWeight: typography.fontWeight.medium,
   },
   searchInputWrap: {
     flex: 1,
@@ -297,6 +451,30 @@ const s = StyleSheet.create({
     marginTop: spacing.sm,
     fontSize: typography.fontSize.xs,
     color: colors.text.secondary,
+  },
+  footer: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  loadMoreButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[50] ?? '#EFF6FF',
+  },
+  loadMoreText: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.sm,
+  },
+  loadMoreHint: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    textAlign: 'center',
   },
   modalBackdrop: {
     flex: 1,

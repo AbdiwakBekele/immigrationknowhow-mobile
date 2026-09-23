@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -45,6 +46,17 @@ import {
   userSelectedPetSitterService,
 } from './onboardingConstants';
 import { SeekerOnboardingContent } from './SeekerOnboardingContent';
+import { purchaseProviderSubscription, resetApplePurchaseInProgress, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
+import { BASE_URL } from '../../config/api';
+import { iapLogStep } from '../../utils/appleIapDebug';
+import { PRICING_LABELS } from '../../config/pricingLabels';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
+import { formatSubscriptionPrice } from '../../utils/money';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
+import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
+import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
+import { isAnnualBillingCycle, isMonthlyBillingCycle } from '../../utils/providerSubscription';
 
 const MAX_USER_SERVICES = 8;
 
@@ -84,7 +96,7 @@ export function OnboardingHomeScreen({
   onCheckoutRequired?: (checkoutUrl: string) => void;
 } = {}) {
   const navigation = useNavigation<NativeStackNavigationProp<OnboardingStackParamList>>();
-  const { refreshMe, applyUser, setActiveRole, signOut } = useAuth();
+  const { refreshMe, applyUser, setActiveRole, confirmSignOut } = useAuth();
 
   const completeOnboardingSession = useCallback(
     async (completedUser?: AuthUser | null) => {
@@ -104,9 +116,11 @@ export function OnboardingHomeScreen({
 
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState<onboardingApi.OnboardingMeta | null>(null);
+  const useAppleIap = shouldUseAppleIap();
   const [step, setStep] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState<string | null>(null);
 
   // Phone (shared UX)
   const [dialCountry, setDialCountry] = useState('US');
@@ -457,7 +471,7 @@ export function OnboardingHomeScreen({
       navigation.goBack();
       return;
     }
-    await signOut();
+    confirmSignOut();
   }
 
   const goBackStep = () => {
@@ -859,6 +873,12 @@ export function OnboardingHomeScreen({
     }
     setBusy(true);
     setError(null);
+    setProcessingMessage('Saving your provider profile…');
+    console.log('[Onboarding] ├── complete.start', {
+      apiBase: BASE_URL,
+      planUuid: planUuid || null,
+      planCount: selectablePlans.length,
+    });
     const res = await onboardingApi.complete({
       address_line_1: pStreet.trim(),
       address_line_2: pLine2.trim() || undefined,
@@ -887,29 +907,79 @@ export function OnboardingHomeScreen({
       },
       ...(selectablePlans.length > 0 ? { subscription: { plan_uuid: planUuid } } : {}),
     });
-    setBusy(false);
     if (!res.success) {
+      console.log('[Onboarding] └── complete.failed', { message: friendlyApiErrorMessage(res) });
+      setBusy(false);
+      setProcessingMessage(null);
       setError(friendlyApiErrorMessage(res));
       return;
     }
-    const payload = res.data as { checkout_url?: string; user?: AuthUser } | undefined;
-    const checkout = payload?.checkout_url;
-    if (checkout && typeof checkout === 'string') {
-      if (payload?.user) {
-        applyUser({
-          ...payload.user,
-          onboarding_completed: payload.user.onboarding_completed ?? true,
-        });
-      }
-      if (onCheckoutRequired) {
-        onCheckoutRequired(checkout);
+    const payload = res.data as {
+      checkout_url?: string;
+      requires_apple_iap?: boolean;
+      plan_uuid?: string;
+      apple_product_id?: string;
+      user?: AuthUser;
+    } | undefined;
+
+    if (payload?.requires_apple_iap && shouldUseAppleIap()) {
+      const iapPlanUuid = payload.plan_uuid;
+      const appleProductId = payload.apple_product_id?.trim();
+      console.log('[Onboarding] ├── complete.requires_apple_iap', {
+        planUuid: iapPlanUuid,
+        appleProductId: appleProductId ?? null,
+      });
+      if (!iapPlanUuid || !appleProductId) {
+        console.log('[Onboarding] └── iap.missing_product_config');
+        setBusy(false);
+        setProcessingMessage(null);
+        setError(PRICING_LABELS.planUnavailable);
         return;
       }
-      navigation.navigate('StripeCheckout', { checkoutUrl: checkout });
+      setProcessingMessage('Processing…');
+      iapLogStep('onboarding.starting_provider_purchase', {
+        planUuid: iapPlanUuid,
+        appleProductId,
+      });
+      try {
+        const selectedPlan = selectablePlans.find((plan) => plan.uuid === iapPlanUuid);
+        await purchaseProviderSubscription(iapPlanUuid, appleProductId, selectedPlan?.price_cents);
+        console.log('[Onboarding] ├── iap.purchase_done — finalizing session');
+        setProcessingMessage('Processing…');
+        await completeOnboardingSession(payload.user ?? null);
+        console.log('[Onboarding] └── onboarding.complete.success');
+        onFlowComplete?.();
+      } catch (e) {
+        const message = mapAppleIapUserMessage(e, 'provider-onboarding');
+        console.log('[Onboarding] └── iap.purchase_failed', { message });
+        setError(message ?? 'Subscription purchase could not be completed.');
+      } finally {
+        setBusy(false);
+        setProcessingMessage(null);
+      }
+      return;
+    }
+
+    const checkout = payload?.checkout_url;
+    if (checkout && typeof checkout === 'string') {
+      setBusy(false);
+      setProcessingMessage(null);
+      const safeUrl = resolveSafeStripeCheckoutUrl(checkout);
+      if (!safeUrl) {
+        alertPaymentsUnavailable();
+        return;
+      }
+      if (onCheckoutRequired) {
+        onCheckoutRequired(safeUrl);
+        return;
+      }
+      navigation.navigate('StripeCheckout', { checkoutUrl: safeUrl, variant: 'onboarding' });
       return;
     }
     await completeOnboardingSession(payload?.user ?? null);
     onFlowComplete?.();
+    setBusy(false);
+    setProcessingMessage(null);
   }
 
   const coverageUsesStateList = PROVIDER_COVERAGE_USES_STATE_LIST.includes(
@@ -918,10 +988,18 @@ export function OnboardingHomeScreen({
 
   const selectablePlans = useMemo(() => {
     const plans = meta?.subscriptionPlans ?? [];
-    const stripeReady = !!meta?.stripeBillingReady;
+    const stripeReady = meta?.stripeBillingReady;
+    const appleIapConfigured = meta?.appleIapConfigured === true;
     const selectedType = providerPrimaryService.trim();
     return plans.filter((p) => {
-      if ((p.price_cents ?? 0) > 0 && !stripeReady) {
+      if (
+        !isPaidBillingAvailable({
+          priceCents: p.price_cents ?? 0,
+          stripeReady,
+          appleProductId: p.apple_product_id,
+          appleIapConfigured,
+        })
+      ) {
         return false;
       }
       const raw = p as onboardingApi.SubscriptionPlanOption & {
@@ -941,7 +1019,18 @@ export function OnboardingHomeScreen({
       }
       return String(optVal) === selectedType;
     });
-  }, [meta, providerPrimaryService]);
+  }, [meta, providerPrimaryService, useAppleIap]);
+
+  const onboardingPromoPriceLine = useMemo(() => {
+    const monthly = selectablePlans.find((plan) => (plan.price_cents ?? 0) > 0 && isMonthlyBillingCycle(plan.billing_cycle));
+    const yearly = selectablePlans.find((plan) => (plan.price_cents ?? 0) > 0 && isAnnualBillingCycle(plan.billing_cycle));
+    if (monthly && yearly) {
+      return `${formatSubscriptionPrice(monthly.price_cents ?? 0, monthly.currency ?? 'USD', monthly.billing_cycle)} or ${formatSubscriptionPrice(yearly.price_cents ?? 0, yearly.currency ?? 'USD', yearly.billing_cycle)}`;
+    }
+    const only = monthly ?? yearly;
+    if (!only) return null;
+    return formatSubscriptionPrice(only.price_cents ?? 0, only.currency ?? 'USD', only.billing_cycle);
+  }, [selectablePlans]);
 
   useEffect(() => {
     if (step !== 7 || selectablePlans.length !== 1 || planUuid) {
@@ -1311,11 +1400,19 @@ export function OnboardingHomeScreen({
       return (
         <>
           <SectionLabel flushTop>Subscription</SectionLabel>
-          <Text style={styles.mutedBlock}>
-            Choose a plan to publish your profile. Free plans activate instantly; paid plans open Stripe checkout in your browser.
-          </Text>
+          <PaidFeatureBadge label="Requires subscription" />
+          {meta?.providerSubscriptionPromo?.trial_eligible &&
+          (meta.providerSubscriptionPromo.trial_months ?? 0) > 0 ? (
+            <Text style={styles.promoBox}>
+              New providers get {meta.providerSubscriptionPromo.trial_months} months free
+              {onboardingPromoPriceLine ? `, then ${onboardingPromoPriceLine} depending on your plan` : ' depending on your plan'}.
+            </Text>
+          ) : null}
           {selectablePlans.length === 0 ? (
-            <Text style={styles.warnBox}>No plans are available right now. Please contact support.</Text>
+            <Text style={styles.warnBox}>
+              No subscription plans are available for purchase right now. Free plans may still work once billing is
+              configured on the server.
+            </Text>
           ) : (
             selectablePlans.map((plan) => {
               const selected = planUuid === plan.uuid;
@@ -1331,8 +1428,14 @@ export function OnboardingHomeScreen({
                     <Text style={styles.planPrice}>
                       {(plan.price_cents ?? 0) <= 0
                         ? 'Free'
-                        : `$${((plan.price_cents ?? 0) / 100).toFixed(0)} / ${plan.billing_cycle ?? 'period'}`}
+                        : formatSubscriptionPrice(plan.price_cents ?? 0, plan.currency ?? 'USD', plan.billing_cycle)}
                     </Text>
+                    {(plan.price_cents ?? 0) > 0 ? (
+                      <Text style={styles.planDesc}>
+                        Duration:{' '}
+                        {isAnnualBillingCycle(plan.billing_cycle) ? '1 year' : '1 month'}
+                      </Text>
+                    ) : null}
                   </View>
                   <Ionicons
                     name={selected ? 'radio-button-on' : 'radio-button-off'}
@@ -1343,6 +1446,34 @@ export function OnboardingHomeScreen({
               );
             })
           )}
+          <SubscriptionLegalFooter
+            onRestore={() => {
+              void (async () => {
+                setBusy(true);
+                setError(null);
+                setProcessingMessage('Restoring purchases…');
+                try {
+                  resetApplePurchaseInProgress();
+                  const restored = await restoreApplePurchasesOnDevice();
+                  if (restored.provider_subscription_active) {
+                    console.log('[Onboarding] ├── restore.provider_subscription_active — finishing onboarding');
+                    await completeOnboardingSession(null);
+                    onFlowComplete?.();
+                    return;
+                  }
+                  setError(
+                    restored.errors[0] ??
+                      'No active provider subscription found. Complete purchase or try again.',
+                  );
+                } catch (e) {
+                  setError(mapAppleIapUserMessage(e, 'provider-onboarding-restore') ?? 'Could not restore purchases.');
+                } finally {
+                  setBusy(false);
+                  setProcessingMessage(null);
+                }
+              })();
+            }}
+          />
         </>
       );
     }
@@ -1446,6 +1577,16 @@ export function OnboardingHomeScreen({
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal visible={Boolean(processingMessage)} transparent animationType="fade">
+        <View style={styles.processingOverlay}>
+          <View style={styles.processingCard}>
+            <ActivityIndicator size="large" color={colors.primary[600]} />
+            <Text style={styles.processingText}>{processingMessage}</Text>
+            <Text style={styles.processingHint}>Please wait. Do not close the app.</Text>
+          </View>
+        </View>
+      </Modal>
     </AppScreen>
   );
 }
@@ -1628,6 +1769,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     color: colors.text.secondary,
   },
+  promoBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: '#ecfdf5',
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    color: '#065f46',
+    fontSize: typography.fontSize.sm,
+  },
   planCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1667,5 +1818,33 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
     marginBottom: spacing.sm,
+  },
+  processingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  processingCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radii.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
+    ...shadows.soft,
+  },
+  processingText: {
+    textAlign: 'center',
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.md,
+  },
+  processingHint: {
+    textAlign: 'center',
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
   },
 });

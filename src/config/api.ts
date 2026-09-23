@@ -1,6 +1,8 @@
 // Override for device/emulator testing: set EXPO_PUBLIC_API_URL in `.env` (e.g. your LAN IP).
- //Expo web on the same PC can use `http://immigrationknowhow.test` when Herd is running.
+//Expo web on the same PC can use `http://immigrationknowhow.test` when Herd is running.
 const LOCAL_HERD_BASE = 'https://hub.immigrantknowhow.com';
+// const LOCAL_HERD_BASE = 'https://ludsy0wkpz.sharedwithexpose.com';
+
 
 const envBase = typeof process !== 'undefined' ? process.env.EXPO_PUBLIC_API_URL?.trim() : '';
 export const BASE_URL = (envBase || LOCAL_HERD_BASE).replace(/\/+$/, '');
@@ -9,3 +11,7 @@ export const BASE_URL = (envBase || LOCAL_HERD_BASE).replace(/\/+$/, '');
  * Set to `false` for one-line `[API] → / ←` only.
  */
 export const API_DETAILED_LOGS = true;
+/**
+ * When `true` and `__DEV__`, Apple IAP logs each StoreKit step with timing to Metro (`[AppleIAP]`).
+ */
+export const IAP_DETAILED_LOGS = true;

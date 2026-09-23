@@ -28,6 +28,15 @@ export async function getDvLottery(): Promise<ApiResponse<{ content: DvLotteryCo
       data: { content: (res.data?.data?.content ?? {}) as DvLotteryContent },
     };
   } catch (e) {
-    return normalizeApiError(e);
+    try {
+      const publicRes = await apiClient.get('/api/public/dv-lottery');
+      return {
+        success: true,
+        message: 'OK',
+        data: { content: (publicRes.data ?? {}) as DvLotteryContent },
+      };
+    } catch {
+      return normalizeApiError(e);
+    }
   }
 }

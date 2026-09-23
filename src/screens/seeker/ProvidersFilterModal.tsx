@@ -77,6 +77,7 @@ export function ProvidersFilterModal({
   onClose,
   onApply,
   onClear,
+  useServiceProviderLabel = false,
 }: {
   visible: boolean;
   draft: ProviderFilters;
@@ -86,13 +87,22 @@ export function ProvidersFilterModal({
   onClose: () => void;
   onApply: () => void;
   onClear: () => void;
+  useServiceProviderLabel?: boolean;
 }) {
+  const filterTitle = useServiceProviderLabel ? 'Filter service providers' : 'Filter providers';
+  const remoteHint = useServiceProviderLabel
+    ? 'Service providers who serve clients remotely'
+    : 'Providers who serve clients remotely';
+  const consultHint = useServiceProviderLabel
+    ? 'Service providers offering a free initial consult'
+    : 'Providers offering a free initial consult';
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.card} onPress={() => {}}>
           <View style={styles.header}>
-            <Text style={styles.title}>Filter providers</Text>
+            <Text style={styles.title}>{filterTitle}</Text>
             <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close filters">
               <Ionicons name="close" size={20} color={colors.text.primary} />
             </Pressable>
@@ -115,7 +125,7 @@ export function ProvidersFilterModal({
             <TextInput
               value={draft.location}
               onChangeText={(location) => onChange({ ...draft, location })}
-              placeholder="City or state"
+              placeholder="City, state, or ZIP code"
               placeholderTextColor={colors.text.muted}
               style={styles.textInput}
               autoCapitalize="words"
@@ -136,7 +146,7 @@ export function ProvidersFilterModal({
             <View style={styles.toggleRow}>
               <View style={styles.toggleText}>
                 <Text style={styles.toggleLabel}>Remote only</Text>
-                <Text style={styles.toggleHint}>Providers who serve clients remotely</Text>
+                <Text style={styles.toggleHint}>{remoteHint}</Text>
               </View>
               <Switch
                 value={draft.remote_only}
@@ -149,7 +159,7 @@ export function ProvidersFilterModal({
             <View style={styles.toggleRow}>
               <View style={styles.toggleText}>
                 <Text style={styles.toggleLabel}>Free consultation</Text>
-                <Text style={styles.toggleHint}>Providers offering a free initial consult</Text>
+                <Text style={styles.toggleHint}>{consultHint}</Text>
               </View>
               <Switch
                 value={draft.free_consultation}

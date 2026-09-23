@@ -1,14 +1,17 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import type { AuthUser, UserRole } from '../types/user';
 import * as authApi from '../api/authApi';
 import { friendlyApiErrorMessage } from '../api/userFriendlyMessage';
 import { clearActiveRole, getActiveRole, setActiveRole as persistActiveRole } from '../services/activeRoleStorage';
+import { clearGuestMode, getGuestMode, setGuestMode } from '../services/guestModeStorage';
 import { clearToken, getToken, setToken } from '../services/tokenStorage';
 import { setUnauthorizedHandler } from '../api/client';
 
 type AuthState = {
   isBootstrapping: boolean;
   isAuthenticated: boolean;
+  isGuest: boolean;
   token: string | null;
   user: AuthUser | null;
   role: UserRole | null;
@@ -19,6 +22,9 @@ type AuthContextValue = AuthState & {
   signIn: (email: string, password: string) => Promise<{ ok: true } | { ok: false; message: string }>;
   signUp: (payload: authApi.RegisterPayload) => Promise<{ ok: true } | { ok: false; message: string }>;
   signOut: () => Promise<void>;
+  confirmSignOut: () => void;
+  enterGuestMode: () => Promise<void>;
+  exitGuestMode: () => Promise<void>;
   refreshMe: () => Promise<void>;
   applyUser: (user: AuthUser) => void;
   setActiveRole: (role: UserRole) => Promise<void>;
@@ -46,6 +52,7 @@ function resolveActiveRole(user: AuthUser | null, storedRole: UserRole | null): 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOutInProgress = useRef(false);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
   const [token, setTokenState] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [activeRole, setActiveRoleState] = useState<UserRole | null>(null);
@@ -88,14 +95,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const stored = await getToken();
-        if (!stored) return;
-        setTokenState(stored);
-        await refreshMe();
+        if (stored) {
+          setTokenState(stored);
+          await refreshMe();
+          return;
+        }
+        const guest = await getGuestMode();
+        setIsGuest(guest);
       } finally {
         setIsBootstrapping(false);
       }
     })();
   }, [refreshMe]);
+
+  const enterGuestMode = useCallback(async () => {
+    await setGuestMode(true);
+    setIsGuest(true);
+  }, []);
+
+  const exitGuestMode = useCallback(async () => {
+    await clearGuestMode();
+    setIsGuest(false);
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const res = await authApi.login({ email, password });
@@ -104,6 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await setToken(res.data.token);
     setTokenState(res.data.token);
     setUser(res.data.user);
+    await clearGuestMode();
+    setIsGuest(false);
     await syncActiveRole(res.data.user);
     return { ok: true as const };
   }, [syncActiveRole]);
@@ -115,6 +138,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await setToken(res.data.token);
     setTokenState(res.data.token);
     setUser(res.data.user);
+    await clearGuestMode();
+    setIsGuest(false);
     await syncActiveRole(res.data.user);
     return { ok: true as const };
   }, [syncActiveRole]);
@@ -130,13 +155,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       await clearToken();
       await clearActiveRole();
+      await clearGuestMode();
       setTokenState(null);
       setUser(null);
       setActiveRoleState(null);
+      setIsGuest(false);
     } finally {
       signOutInProgress.current = false;
     }
   }, []);
+
+  const confirmSignOut = useCallback(() => {
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log out', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  }, [signOut]);
 
   const setActiveRole = useCallback(
     async (nextRole: UserRole) => {
@@ -160,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       isBootstrapping,
       isAuthenticated,
+      isGuest,
       token,
       user,
       role,
@@ -167,12 +202,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
+      confirmSignOut,
+      enterGuestMode,
+      exitGuestMode,
       refreshMe,
       applyUser,
       setActiveRole,
       hasRole,
     }),
-    [isBootstrapping, isAuthenticated, token, user, role, activeRole, signIn, signUp, signOut, refreshMe, applyUser, setActiveRole, hasRole]
+    [isBootstrapping, isAuthenticated, isGuest, token, user, role, activeRole, signIn, signUp, signOut, confirmSignOut, enterGuestMode, exitGuestMode, refreshMe, applyUser, setActiveRole, hasRole]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

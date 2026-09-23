@@ -6,6 +6,7 @@ import {
   Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,10 +17,20 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '../../components/AppScreen';
+import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
+import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
+import { SubscriptionLegalFooter } from '../../components/pricing/SubscriptionLegalFooter';
+import { IAP_DISPLAY_PRICES_CENTS } from '../../config/iapCatalog';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import * as aiApi from '../../api/aiAssistantApi';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
+import { PRICING_LABELS } from '../../config/pricingLabels';
+import { purchaseAiAssistantSubscription, restoreApplePurchasesOnDevice } from '../../services/appleIapService';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
+import { formatMoney, formatPerUnit } from '../../utils/money';
 import type { ChatMessage } from '../../api/aiAssistantApi';
 import { setAiAssistantFabSuppressed } from '../../navigation/aiAssistantFabVisibility';
 import type { StripeCheckoutParams } from '../onboarding/StripeCheckoutScreen';
@@ -28,6 +39,9 @@ type LocalMessage = ChatMessage & { pending?: boolean };
 
 /** Must match Laravel validation on POST /api/mobile/ai-assistant/ask */
 const MIN_QUESTION_LENGTH = 6;
+
+const POST_PURCHASE_REFRESH_ERROR =
+  'Purchase completed, but we could not refresh your access. Please tap Restore Purchases or try again.';
 
 type AiAssistantNav = NativeStackNavigationProp<{
   StripeCheckout: StripeCheckoutParams;
@@ -42,6 +56,8 @@ export function AiAssistantScreen() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [subscribing, setSubscribing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const listRef = useRef<FlatList<LocalMessage>>(null);
 
   const load = async () => {
@@ -63,28 +79,104 @@ export function AiAssistantScreen() {
     }, []),
   );
 
-  const subscribe = async () => {
+  const monthlyPrice = Number(state?.monthly_price ?? IAP_DISPLAY_PRICES_CENTS.AI_ASSISTANT_MONTHLY / 100);
+  const currency = state?.currency ?? 'USD';
+  const monthlyPriceCents = Math.round(monthlyPrice * 100);
+  const billingReady = isPaidBillingAvailable({
+    priceCents: monthlyPriceCents,
+    stripeReady: state?.stripe_billing_configured,
+    appleProductId: state?.apple_product_id,
+    appleIapConfigured: state?.apple_iap_configured,
+  });
+
+  const refreshEntitlement = async (): Promise<boolean> => {
+    const res = await aiApi.getAiAssistant();
+    if (res.success) {
+      setState(res.data.state);
+      setMessages(res.data.state.chat_messages ?? []);
+      return Boolean(res.data.state.is_addon_active);
+    }
+    return false;
+  };
+
+  const restore = async () => {
+    if (subscribing || restoring) return;
+
     setErr(null);
-    const res = await aiApi.checkoutAiAssistant();
-    if (!res.success) {
-      setErr(res.message);
-      return;
-    }
-    if (res.data.already_subscribed) {
-      const nextState = res.data.state ?? (await aiApi.getAiAssistant()).data?.state;
-      if (nextState) {
-        setState(nextState);
-        setMessages(nextState.chat_messages ?? []);
+    setRestoring(true);
+    try {
+      if (shouldUseAppleIap()) {
+        await restoreApplePurchasesOnDevice();
       }
+      const active = await refreshEntitlement();
+      if (!active) {
+        setErr('No active subscription was found to restore.');
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message === 'Purchase cancelled.') {
+        return;
+      }
+      const message = mapAppleIapUserMessage(e, 'ai-assistant-restore');
+      if (message) setErr(message);
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  const subscribe = async () => {
+    if (subscribing || restoring) return;
+
+    if (!billingReady) {
+      setErr(PRICING_LABELS.subscriptionUnavailable);
       return;
     }
-    const url = res.data.checkout_url;
-    if (url) {
-      navigation.navigate('StripeCheckout', {
-        checkoutUrl: url,
-        variant: 'aiAssistant',
-        checkoutSessionId: res.data.checkout_session_id || undefined,
-      });
+
+    setErr(null);
+    setSubscribing(true);
+    try {
+      if (shouldUseAppleIap()) {
+        const productId = String(state?.apple_product_id ?? '').trim();
+        await purchaseAiAssistantSubscription(productId, monthlyPriceCents);
+        const active = await refreshEntitlement();
+        if (!active) {
+          setErr(POST_PURCHASE_REFRESH_ERROR);
+        }
+        return;
+      }
+
+      const res = await aiApi.checkoutAiAssistant();
+      if (!res.success) {
+        setErr(res.message);
+        return;
+      }
+      if (res.data.already_subscribed) {
+        const refreshed = await aiApi.getAiAssistant();
+        const nextState = res.data.state ?? (refreshed.success ? refreshed.data.state : undefined);
+        if (nextState) {
+          setState(nextState);
+          setMessages(nextState.chat_messages ?? []);
+        }
+        return;
+      }
+      const url = res.data.checkout_url;
+      const safeUrl = resolveSafeStripeCheckoutUrl(url);
+      if (safeUrl) {
+        navigation.navigate('StripeCheckout', {
+          checkoutUrl: safeUrl,
+          variant: 'aiAssistant',
+          checkoutSessionId: res.data.checkout_session_id || undefined,
+        });
+      } else if (url) {
+        alertPaymentsUnavailable();
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message === 'Purchase cancelled.') {
+        return;
+      }
+      const message = mapAppleIapUserMessage(e, 'ai-assistant-subscribe');
+      if (message) setErr(message);
+    } finally {
+      setSubscribing(false);
     }
   };
 
@@ -142,21 +234,36 @@ export function AiAssistantScreen() {
   if (!active) {
     return (
       <AppScreen style={styles.gateScreen}>
-        <View style={styles.gateCard}>
-          <Ionicons name="sparkles" size={40} color={colors.primary[600]} />
-          <Text style={styles.gateTitle}>AI Assistant</Text>
-          <Text style={styles.gateBody}>
-            Get instant answers about immigration programs, USCIS processes, and more. One subscription covers both
-            service seeker and provider accounts.
-          </Text>
-          <Text style={styles.gatePrice}>
-            {state?.currency ?? 'USD'} {state?.monthly_price ?? '4.99'} / month
-          </Text>
-          <Pressable onPress={() => void subscribe()} style={styles.gateCta}>
-            <Text style={styles.gateCtaText}>Subscribe now</Text>
-          </Pressable>
-          {!!err && <Text style={styles.error}>{err}</Text>}
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.gateScroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.gateCard}>
+            <Ionicons name="sparkles" size={40} color={colors.primary[600]} />
+            <PaidFeatureBadge label="Requires subscription" />
+            <Text style={styles.gateTitle}>AI Assistant Monthly</Text>
+            <Text style={styles.gateSubtitle}>Available with optional monthly subscription</Text>
+            <Text style={styles.gatePrice}>{formatPerUnit(monthlyPrice, currency, 'month')}</Text>
+            <Text style={styles.gateDuration}>Duration: 1 month</Text>
+            <Text style={styles.gateBody}>
+              Monthly access to the AI immigration assistant. Auto-renewable subscription.
+            </Text>
+            <PaymentCtaButton
+              label={`Subscribe — ${formatMoney(monthlyPrice, currency)}/month`}
+              onPress={() => void subscribe()}
+              disabled={!billingReady || restoring}
+              loading={subscribing}
+              loadingLabel={PRICING_LABELS.subscribing}
+              style={styles.gateCta}
+            />
+            {!billingReady ? (
+              <Text style={styles.unavailableText}>{PRICING_LABELS.subscriptionUnavailable}</Text>
+            ) : null}
+            <SubscriptionLegalFooter onRestore={() => void restore()} restoring={restoring} />
+            {!!err && <Text style={styles.error}>{err}</Text>}
+          </View>
+        </ScrollView>
       </AppScreen>
     );
   }
@@ -178,7 +285,7 @@ export function AiAssistantScreen() {
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Ionicons name="sparkles-outline" size={48} color={colors.text.tertiary} />
+            <Ionicons name="sparkles-outline" size={48} color={colors.text.muted} />
             <Text style={styles.emptyTitle}>Ask me anything</Text>
             <Text style={styles.emptyBody}>
               Ask about immigration programs, USCIS processes, client education, library resources, or marketplace providers.
@@ -220,7 +327,7 @@ export function AiAssistantScreen() {
           value={input}
           onChangeText={setInput}
           placeholder={`Ask a question (at least ${MIN_QUESTION_LENGTH} characters)…`}
-          placeholderTextColor={colors.text.tertiary}
+          placeholderTextColor={colors.text.muted}
           multiline
           style={styles.textInput}
           editable={!sending}
@@ -370,8 +477,12 @@ const styles = StyleSheet.create({
   },
   gateScreen: {
     flex: 1,
+  },
+  gateScroll: {
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
   },
   gateCard: {
     alignItems: 'center',
@@ -380,42 +491,62 @@ const styles = StyleSheet.create({
     padding: spacing['2xl'],
     borderWidth: 1,
     borderColor: colors.border,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
   gateTitle: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     fontSize: typography.fontSize['2xl'],
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
+    textAlign: 'center',
+  },
+  gateSubtitle: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
+  },
+  gatePrice: {
+    marginTop: spacing.lg,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+    textAlign: 'center',
+  },
+  gateDuration: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
   },
   gateBody: {
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
     fontSize: typography.fontSize.md,
     color: colors.text.secondary,
     textAlign: 'center',
     lineHeight: 22,
   },
-  gatePrice: {
-    marginTop: spacing.lg,
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
-  },
   gateCta: {
     marginTop: spacing.lg,
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing['2xl'],
     borderRadius: 14,
+    paddingHorizontal: spacing.lg,
+    width: '100%',
   },
-  gateCtaText: {
-    color: '#fff',
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
+  unavailableText: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   error: {
     marginTop: spacing.md,
     color: colors.danger,
     textAlign: 'center',
+    fontSize: typography.fontSize.sm,
+    lineHeight: 20,
   },
   errorBanner: {
     paddingHorizontal: spacing.md,

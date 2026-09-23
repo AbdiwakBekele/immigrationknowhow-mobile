@@ -10,6 +10,7 @@ export type SubscriptionPlanOption = {
   price_cents: number;
   currency?: string;
   billing_cycle?: string;
+  apple_product_id?: string | null;
   features?: unknown[];
   is_featured?: boolean;
   /** When set, plan is scoped to this service type (`Onboarding/Index.vue` eligibility). */
@@ -38,6 +39,12 @@ export type OnboardingMeta = {
   steps: Array<{ key: string; title: string; description: string }>;
   subscriptionPlans: SubscriptionPlanOption[];
   stripeBillingReady: boolean;
+  appleIapConfigured?: boolean;
+  ios_requires_apple_iap?: boolean;
+  providerSubscriptionPromo?: {
+    trial_months: number;
+    trial_eligible: boolean;
+  } | null;
 };
 
 export async function meta(params?: { country?: string; step?: number; intent?: 'provider' }): Promise<ApiResponse<OnboardingMeta>> {

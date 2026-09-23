@@ -2,7 +2,7 @@
   "expo": {
     "name": "IKH",
     "slug": "mobile-ikh",
-    "version": "1.0.0",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,10 +17,8 @@
       "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "IKH needs camera access so users can take photos for profile pictures, documents, certificates, and service-related uploads.",
         "NSPhotoLibraryUsageDescription": "IKH needs photo library access so users can select and upload profile pictures, documents, certificates, and service-related images.",
         "NSPhotoLibraryAddUsageDescription": "IKH may save selected or processed images when required by the user.",
-        "NSMicrophoneUsageDescription": "IKH may need microphone access if users record or upload videos with audio.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -34,8 +32,10 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_AUDIO",
-        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
@@ -50,13 +50,31 @@
       "bundler": "metro"
     },
     "plugins": [
+      "expo-dev-client",
       "expo-secure-store",
-      "expo-font"
+      "expo-font",
+      "expo-iap",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "IKH needs photo library access so users can select and upload profile pictures, documents, certificates, and service-related images.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "./plugins/withGradlePluginRepos.js"
     ],
     "extra": {
       "eas": {
-        "projectId": "710e80e5-4c19-4d06-a4a8-1a061c5db28e"
+        "projectId": "d1497186-9595-44d5-953e-20354d19112e"
       }
+    },
+    "owner": "georgeact",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d1497186-9595-44d5-953e-20354d19112e"
     }
   }
 }

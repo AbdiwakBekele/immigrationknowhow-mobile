@@ -19,9 +19,21 @@ export async function getLibraryItem(slug: string): Promise<ApiResponse<any>> {
   }
 }
 
-export async function getMyLibrary(section: 'purchased' | 'available', page = 1): Promise<ApiResponse<any>> {
+export async function getMyLibrary(
+  section: 'purchased' | 'available',
+  page = 1,
+  perPage = 100,
+  search?: string,
+): Promise<ApiResponse<any>> {
   try {
-    const res = await apiClient.get('/api/mobile/library/my', { params: { section, page } });
+    const res = await apiClient.get('/api/mobile/library/my', {
+      params: {
+        section,
+        page,
+        per_page: perPage,
+        ...(search?.trim() ? { search: search.trim() } : {}),
+      },
+    });
     return { success: true, message: res.data?.message ?? 'OK', data: res.data?.data };
   } catch (e) {
     return normalizeApiError(e);
@@ -59,6 +71,20 @@ export async function libraryGrantFree(slug: string): Promise<ApiResponse<any>> 
   try {
     const res = await apiClient.post(`/api/mobile/library/items/${encodeURIComponent(slug)}/grant-free`);
     return res.data;
+  } catch (e) {
+    return normalizeApiError(e);
+  }
+}
+
+export async function redeemEbookCoupon(
+  slug: string,
+  code?: string,
+): Promise<ApiResponse<{ has_access: boolean }>> {
+  try {
+    const res = await apiClient.post(`/api/mobile/library/items/${encodeURIComponent(slug)}/redeem-coupon`, {
+      ...(code?.trim() ? { code: code.trim() } : {}),
+    });
+    return res.data?.success === false ? normalizeApiError({ response: { data: res.data } }) : res.data;
   } catch (e) {
     return normalizeApiError(e);
   }

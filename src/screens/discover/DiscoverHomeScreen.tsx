@@ -15,7 +15,6 @@ import { shadows } from '../../theme/shadows';
 import type { SeekerDiscoverStackParamList } from './SeekerDiscoverStack';
 import type { SeekerBottomTabParamList } from '../../navigation/SeekerBottomTabs';
 import { MyLibraryEntryCard } from '../../components/discover/MyLibraryEntryCard';
-import { useDvLottery } from '../../context/DvLotteryContext';
 
 type Ion = ComponentProps<typeof Ionicons>['name'];
 
@@ -80,7 +79,6 @@ const discoverLinks: Array<{ title: string; screen: keyof SeekerDiscoverStackPar
 
 export function DiscoverHomeScreen() {
   const navigation = useNavigation<DiscoverNav>();
-  const { showInMenu: dvInMenu } = useDvLottery();
 
   return (
     <AppScreen variant="gradient" constrained style={styles.screen}>
@@ -107,21 +105,19 @@ export function DiscoverHomeScreen() {
         ))}
 
         <Text style={styles.sectionLabel}>Library & learning</Text>
-        {dvInMenu ? (
-          <Pressable
-            onPress={() => navigation.navigate(dvCard.screen)}
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: colors.primary[50] }]}>
-              <Ionicons name={dvCard.icon} size={24} color={colors.primary[600]} />
-            </View>
-            <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>{dvCard.title}</Text>
-              <Text style={styles.cardSubtitle}>{dvCard.subtitle}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.text.muted} />
-          </Pressable>
-        ) : null}
+        <Pressable
+          onPress={() => navigation.navigate(dvCard.screen)}
+          style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        >
+          <View style={[styles.iconWrap, { backgroundColor: colors.primary[50] }]}>
+            <Ionicons name={dvCard.icon} size={24} color={colors.primary[600]} />
+          </View>
+          <View style={styles.cardText}>
+            <Text style={styles.cardTitle}>{dvCard.title}</Text>
+            <Text style={styles.cardSubtitle}>{dvCard.subtitle}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={colors.text.muted} />
+        </Pressable>
         <MyLibraryEntryCard
           onPress={() => navigation.navigate('Library')}
           title="My Library"

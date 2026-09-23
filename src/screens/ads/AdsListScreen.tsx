@@ -24,8 +24,17 @@ import { shadows } from '../../theme/shadows';
 import { spacing } from '../../theme/spacing';
 import { typography } from '../../theme/typography';
 import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
-import { adStatusLabel, adStatusStyle, formatAdPrice } from '../../utils/adUi';
+import { adStatusLabel, adStatusStyle, formatAdPricePerUnit } from '../../utils/adUi';
+import { OneTimePaywallNote } from '../../components/pricing/OneTimePaywallNote';
+import { PaidFeatureBadge } from '../../components/pricing/PaidFeatureBadge';
+import { PaymentCtaButton } from '../../components/pricing/PaymentCtaButton';
+import { IAP_DISPLAY_PRICES_CENTS } from '../../config/iapCatalog';
 import * as adsApi from '../../api/adsApi';
+import { alertPaymentsUnavailable, resolveSafeStripeCheckoutUrl } from '../../api/paymentApi';
+import { purchaseAdPublish } from '../../services/appleIapService';
+import { PRICING_LABELS } from '../../config/pricingLabels';
+import { mapAppleIapUserMessage } from '../../utils/appleIapErrors';
+import { isPaidBillingAvailable, shouldUseAppleIap } from '../../utils/platformPayments';
 import type { AdsStackParamList } from './AdsStack';
 
 type AdItem = {
@@ -36,6 +45,7 @@ type AdItem = {
   status: string;
   price_cents?: number;
   currency?: string;
+  apple_product_id?: string | null;
   analytics?: { views?: number; clicks?: number; ctr?: number };
 };
 
@@ -56,7 +66,17 @@ export function AdsListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [payingUuid, setPayingUuid] = useState<string | null>(null);
   const [ads, setAds] = useState<AdItem[]>([]);
-  const [postingPrice, setPostingPrice] = useState<{ amount_cents?: number; currency?: string } | null>(null);
+  const [postingPrice, setPostingPrice] = useState<{
+    amount_cents?: number;
+    currency?: string;
+    free_limit?: number;
+    free_remaining?: number;
+    next_ad_price_cents?: number;
+    apple_product_id?: string | null;
+    stripe_billing_configured?: boolean;
+  } | null>(null);
+
+  const useAppleIap = shouldUseAppleIap();
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -96,29 +116,90 @@ export function AdsListScreen() {
     ]);
   };
 
-  const startCheckout = async (uuid: string) => {
-    setPayingUuid(uuid);
-    const res = await adsApi.checkoutAd(uuid);
-    setPayingUuid(null);
-    if (!res.success) {
-      Alert.alert('Ads', res.message);
-      return;
-    }
-    const checkoutUrl = res.data?.checkout_url;
-    if (checkoutUrl) {
-      navigation.navigate('StripeCheckout', { checkoutUrl, variant: 'default', adUuid: uuid });
+  const resolveAdAppleProductId = (item: AdItem): string | null => {
+    const fromItem =
+      typeof item.apple_product_id === 'string' && item.apple_product_id.trim() !== ''
+        ? item.apple_product_id.trim()
+        : null;
+    if (fromItem) return fromItem;
+    const fromPosting =
+      typeof postingPrice?.apple_product_id === 'string' && postingPrice.apple_product_id.trim() !== ''
+        ? postingPrice.apple_product_id.trim()
+        : null;
+    return fromPosting;
+  };
+
+  const canPayForAd = (item: AdItem): boolean => {
+    const priceCents = item.price_cents ?? postingPrice?.next_ad_price_cents ?? postingPrice?.amount_cents ?? 0;
+    return isPaidBillingAvailable({
+      priceCents,
+      stripeReady: postingPrice?.stripe_billing_configured,
+      appleProductId: resolveAdAppleProductId(item),
+    });
+  };
+
+  const startCheckout = async (item: AdItem) => {
+    setPayingUuid(item.uuid);
+    try {
+      if (useAppleIap) {
+        const appleProductId = resolveAdAppleProductId(item);
+        if (!canPayForAd(item)) {
+          Alert.alert(
+            'Ads',
+            __DEV__
+              ? 'Ad publish product is not configured.'
+              : PRICING_LABELS.itemUnavailable,
+          );
+          return;
+        }
+        const priceCents = item.price_cents ?? postingPrice?.next_ad_price_cents ?? postingPrice?.amount_cents ?? IAP_DISPLAY_PRICES_CENTS.AD_PUBLISH;
+        await purchaseAdPublish(item.uuid, appleProductId!, priceCents);
+        await load(true);
+        Alert.alert('Ads', 'Payment received. Your ad will be reviewed before publishing.');
+        return;
+      }
+
+      const res = await adsApi.checkoutAd(item.uuid);
+      if (!res.success) {
+        Alert.alert('Ads', res.message);
+        return;
+      }
+      const checkoutUrl = res.data?.checkout_url;
+      const safeUrl = resolveSafeStripeCheckoutUrl(checkoutUrl);
+      if (safeUrl) {
+        navigation.navigate('StripeCheckout', { checkoutUrl: safeUrl, variant: 'default', adUuid: item.uuid });
+      } else if (checkoutUrl) {
+        alertPaymentsUnavailable();
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message === 'Purchase cancelled.') {
+        return;
+      }
+      const message = mapAppleIapUserMessage(e, 'ad-publish');
+      if (message) {
+        Alert.alert('Ads', message);
+      }
+    } finally {
+      setPayingUuid(null);
     }
   };
 
-  const publishFee = formatAdPrice(postingPrice?.amount_cents, postingPrice?.currency);
+  const publishFee = formatAdPricePerUnit(postingPrice?.amount_cents, postingPrice?.currency);
+  const freeRemaining = postingPrice?.free_remaining ?? 0;
+  const freeLimit = postingPrice?.free_limit ?? 0;
 
   const listHeader = (
     <View style={styles.header}>
       <Text style={styles.pageTitle}>My ads</Text>
-      <Text style={styles.subtitle}>
-        {publishFee
-          ? `One-time publish fee: ${publishFee} per ad. Create, edit, and pay to publish sponsored ads.`
-          : 'Create, edit, and manage your sponsored ads.'}
+      <PaidFeatureBadge label="Paid ads require purchase" />
+      <Text style={[styles.subtitle, { marginTop: spacing.sm }]}>
+        {freeRemaining > 0
+          ? `${freeRemaining} of ${freeLimit} complimentary publish ${freeRemaining === 1 ? 'slot' : 'slots'} remaining.${
+              publishFee ? ` After that, paid ads are $9.99 each (one-time purchase).` : ''
+            }`
+          : publishFee
+            ? `Publish Ad — $9.99 one-time purchase after free slots are used. Create, edit, and pay to publish sponsored ads.`
+            : 'Create, edit, and manage your sponsored ads.'}
       </Text>
     </View>
   );
@@ -170,7 +251,14 @@ export function AdsListScreen() {
               multiColumn={listColumns > 1}
               stackActions={stackActions}
               paying={payingUuid === item.uuid}
-              onPay={() => void startCheckout(item.uuid)}
+              billingReady={canPayForAd(item)}
+              publishFeeLabel={
+                formatAdPricePerUnit(
+                  item.price_cents ?? postingPrice?.amount_cents,
+                  item.currency ?? postingPrice?.currency,
+                ) ?? publishFee
+              }
+              onPay={() => void startCheckout(item)}
               onEdit={() => navigation.navigate('AdsEdit', { uuid: item.uuid })}
               onDelete={() => confirmDelete(item)}
             />
@@ -186,6 +274,8 @@ function AdCard({
   multiColumn,
   stackActions,
   paying,
+  billingReady,
+  publishFeeLabel,
   onPay,
   onEdit,
   onDelete,
@@ -194,12 +284,14 @@ function AdCard({
   multiColumn: boolean;
   stackActions: boolean;
   paying: boolean;
+  billingReady: boolean;
+  publishFeeLabel?: string | null;
   onPay: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const st = adStatusStyle(item.status);
-  const price = formatAdPrice(item.price_cents, item.currency);
+  const price = formatAdPricePerUnit(item.price_cents, item.currency) ?? publishFeeLabel;
   const views = item.analytics?.views ?? 0;
   const clicks = item.analytics?.clicks ?? 0;
   const ctr = item.analytics?.ctr ?? 0;
@@ -238,7 +330,12 @@ function AdCard({
             {item.description}
           </Text>
         )}
-        {price ? <Text style={styles.adPrice}>{price} publish fee</Text> : null}
+        {price ? (
+          <>
+            <Text style={styles.adPrice}>{price}</Text>
+            <Text style={styles.adPaidHint}>One-time purchase (not a subscription)</Text>
+          </>
+        ) : null}
 
         {item.status === 'suspended' ? (
           <View style={styles.suspendedNotice}>
@@ -277,20 +374,22 @@ function AdCard({
         </View>
 
         {item.status === 'pending_payment' ? (
-          <Pressable
-            onPress={onPay}
-            disabled={paying}
-            style={[styles.payButton, paying && styles.payButtonDisabled]}
-          >
-            {paying ? (
-              <ActivityIndicator color={colors.text.inverse} />
-            ) : (
-              <>
-                <Ionicons name="card-outline" size={18} color={colors.text.inverse} />
-                <Text style={styles.payButtonText}>Pay & Publish</Text>
-              </>
-            )}
-          </Pressable>
+          <View style={styles.payBlock}>
+            <OneTimePaywallNote
+              title={PRICING_LABELS.publishAd}
+              description="One-time purchase to publish a paid ad after the free ad limit is used."
+              priceCents={item.price_cents ?? IAP_DISPLAY_PRICES_CENTS.AD_PUBLISH}
+              currency={item.currency ?? 'USD'}
+            />
+            <PaymentCtaButton
+              label={!billingReady ? PRICING_LABELS.unavailable : PRICING_LABELS.publishAd}
+              onPress={onPay}
+              disabled={paying || !billingReady}
+              loading={paying}
+              loadingLabel={PRICING_LABELS.processing}
+              style={[styles.payButtonInBlock, shadows.soft]}
+            />
+          </View>
         ) : null}
       </View>
     </View>
@@ -483,11 +582,14 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   adPrice: {
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+  },
+  adPaidHint: {
+    marginTop: 2,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
   },
   suspendedNotice: {
     marginTop: spacing.sm,
@@ -579,23 +681,21 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.sm,
   },
-  payButton: {
+  payBlock: {
     marginTop: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.md,
-    borderRadius: radii.lg,
-    ...shadows.soft,
+    gap: spacing.xs,
   },
-  payButtonDisabled: {
-    opacity: 0.7,
-  },
-  payButtonText: {
-    color: colors.text.inverse,
-    fontWeight: typography.fontWeight.semibold,
+  payPrice: {
+    textAlign: 'center',
     fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  payOneTimeNote: {
+    marginTop: 0,
+    marginBottom: spacing.xs,
+  },
+  payButtonInBlock: {
+    marginTop: 0,
   },
 });
